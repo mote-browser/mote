@@ -40,7 +40,7 @@ Mote is not signed with an Apple Developer ID or notarized yet, so the first tim
 2. Open **System Settings › Privacy & Security** and scroll down to **Security**.
 3. Next to "Mote.app" was blocked to protect your Mac, click **Open Anyway** and confirm with your password.
 
-<!-- screenshot: Privacy & Security › Open Anyway -->
+<img width="482" height="188" alt="security" src="https://github.com/user-attachments/assets/f5a945f5-9dc8-4636-9548-94c533585f64" />
 
 You only need to do this once. If you prefer the terminal, this does the same:
 
