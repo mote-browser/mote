@@ -30,6 +30,24 @@ Mote is the browser built around the engine you already have. It is native, it o
 - **Passwords in the macOS keychain.** Import them from Chrome, Arc, Dia, Brave or Edge in one click.
 - **No account, no sync, no telemetry.** Your history and bookmarks are files on your Mac.
 
+## Install
+
+Download [Mote.dmg](https://github.com/mote-browser/mote/releases/latest/download/Mote.dmg) and drag Mote to Applications.
+
+Mote is not signed with an Apple Developer ID or notarized yet, so the first time you open it macOS blocks it. To let it through:
+
+1. Open Mote once. macOS says it cannot verify the app. Click **Done**.
+2. Open **System Settings › Privacy & Security** and scroll down to **Security**.
+3. Next to "Mote.app" was blocked to protect your Mac, click **Open Anyway** and confirm with your password.
+
+<!-- screenshot: Privacy & Security › Open Anyway -->
+
+You only need to do this once. If you prefer the terminal, this does the same:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Mote.app
+```
+
 ## Build it
 
 ```sh
@@ -40,8 +58,6 @@ make fresh      # open it in a clean test profile
 ```
 
 Needs Xcode 26. About 27,000 lines of Swift, with no dependencies beyond what Apple ships. SwiftUI and AppKit for the app, WKWebView for pages, and `Packages/MoteKit` for the logic that is unit-tested on its own. Run `make test` for the suite.
-
-Builds are not notarized yet, so the first launch needs right-click › Open.
 
 ## License
 
