@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="2000" height="1180" alt="Mote, a quiet browser for the Mac" src="UPLOAD-hero.webp" />
+<img width="2000" height="1180" alt="hero" src="https://github.com/user-attachments/assets/89bb46b8-239e-40a8-9429-eeb15a031c1c" />
 
 **The whole web. A fraction of the weight.**
 
@@ -14,18 +14,18 @@ Every Mac already has a great web engine. It is WebKit, the one Safari runs on. 
 
 Mote is the browser built around the engine you already have. It is native, it opens instantly, and the whole app is about the size of a photo.
 
-<img width="1600" height="900" alt="The whole browser, about the size of a photo" src="UPLOAD-weight.webp" />
+<img width="1600" height="900" alt="weight" src="https://github.com/user-attachments/assets/bd15de41-2460-4d89-8a19-6905dc45a15c" />
 
 ## What you get
 
-<img width="2000" height="820" alt="One field for an address, a few words or an open tab" src="UPLOAD-field.webp" />
+<img width="2000" height="820" alt="field" src="https://github.com/user-attachments/assets/c8fe17fe-7f2d-4a38-b162-908e895566ea" />
 
 - **One field** for addresses, searches and open tabs. Nothing you type leaves the Mac until you press Return.
 - **Ads and trackers blocked** at the network level, before the page loads.
 - **Chrome extensions** from the Chrome Web Store, running on WebKit.
 - **Reading mode, floating video** and a click to hide any cookie banner for good.
 
-<img width="2000" height="820" alt="Your passwords stay in your keychain" src="UPLOAD-keychain.webp" />
+<img width="2000" height="820" alt="keychain" src="https://github.com/user-attachments/assets/85b7b58a-1348-4981-b27c-d3a5e03df360" />
 
 - **Passwords in the macOS keychain.** Import them from Chrome, Arc, Dia, Brave or Edge in one click.
 - **No account, no sync, no telemetry.** Your history and bookmarks are files on your Mac.
