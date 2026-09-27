@@ -1,0 +1,70 @@
+---
+// Favicons for the made-up sites in the mock windows, drawn like real ones:
+// a small rounded square in the site's colour with a simple mark. Real
+// brands stay out of it, except GitHub for the repository's own tab.
+interface Props {
+  site: "notes" | "kettle" | "weather" | "tally" | "shelf" | "post" | "frames" | "github" | "mote" | "sidetrack";
+  class?: string;
+}
+
+const { site, class: className = "size-4" } = Astro.props;
+
+const marks = {
+  // Field Notes: a serif F on terracotta.
+  notes: {
+    ground: "#c9704f",
+    mark: `<text x="8" y="12" font-family="Georgia, serif" font-size="10.5" text-anchor="middle" fill="#fff8f2">F</text>`,
+  },
+  // Kettle, recipes: a pot on saffron.
+  kettle: {
+    ground: "#e2a93b",
+    mark: `<path d="M4.5 7h7v3.2a2.3 2.3 0 0 1-2.3 2.3H6.8a2.3 2.3 0 0 1-2.3-2.3zM3.5 7h9M7 5.3h2" stroke="#fff" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,
+  },
+  // Nimbus, weather: a sun behind a cloud on sky blue.
+  weather: {
+    ground: "#3b82f6",
+    mark: `<circle cx="9.8" cy="6.2" r="2.3" fill="#ffd166"/><path d="M5 12h6.2a2.1 2.1 0 0 0 0-4.2 3 3 0 0 0-5.7.6A1.8 1.8 0 0 0 5 12z" fill="#fff"/>`,
+  },
+  // Tally, planning: a check on violet.
+  tally: {
+    ground: "#6d5bd0",
+    mark: `<path d="m4.8 8.3 2.2 2.2 4.3-4.6" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  },
+  // Shelf, reading list: a bookmark on green.
+  shelf: {
+    ground: "#2f9e74",
+    mark: `<path d="M5.5 4h5v8.2L8 10.5l-2.5 1.7z" fill="#fff"/>`,
+  },
+  // Post, mail: an envelope on ink blue.
+  post: {
+    ground: "#2563eb",
+    mark: `<path d="M4 5.5h8v5.5H4z" fill="none" stroke="#fff" stroke-width="1.2"/><path d="m4.2 5.8 3.8 3 3.8-3" fill="none" stroke="#fff" stroke-width="1.2"/>`,
+  },
+  // Frames, video: a play mark on red.
+  frames: {
+    ground: "#e5484d",
+    mark: `<path d="M6.3 4.8v6.4L11.3 8z" fill="#fff"/>`,
+  },
+  // Sidetrack, music: a note on near-black.
+  sidetrack: {
+    ground: "#1f1f24",
+    mark: `<path d="M9.6 4.2v5.6a1.7 1.7 0 1 1-1-1.5V5.4l3-.9v1.3z" fill="#ff7ab6"/>`,
+  },
+  github: {
+    ground: "#f4f4f5",
+    mark: `<path transform="translate(2.4 2.4) scale(0.7)" fill="#17171a" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>`,
+  },
+  // Our own site: the pebble on cream.
+  mote: {
+    ground: "#fff3e6",
+    mark: `<path transform="translate(2.6 2.7) scale(0.0192)" fill="#e7a58e" d="M234 32C404 0 564 100 560 270C556 420 454 530 284 540C124 550 0 470 2 318C4 170 94 58 234 32Z"/>`,
+  },
+};
+
+const { ground, mark } = marks[site];
+---
+
+<svg class={className} viewBox="0 0 16 16" aria-hidden="true">
+  <rect width="16" height="16" rx="3.5" fill={ground}></rect>
+  <Fragment set:html={mark} />
+</svg>

@@ -1,0 +1,191 @@
+@import "tailwindcss";
+@import "lenis/dist/lenis.css";
+
+/* Fonts come from Astro's font API (astro.config.mjs) as CSS variables. */
+@theme inline {
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Neutrals follow the app's Palette (Design.swift); the warm tones are the
+   pebble's, from Mote.icon. Easings are the app's springs, as curves: fast to
+   start, gentle to land. */
+@theme {
+  --color-paper: #ffffff;
+  --color-frame: #e9e7e4;
+  --color-card: #f5f3f0;
+  --color-warm: #f3eee8;
+  --color-ink: #17171a;
+  --color-muted: #17171a99;
+  --color-faint: #17171a5c;
+  --color-hairline: #17171a14;
+  --color-night: #0d0c0c;
+
+  --color-cream: #fff3e6;
+  --color-peach: #f6c6a8;
+  --color-coral: #e7a58e;
+  --color-sand: #f4dcc0;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --animate-rise: rise 1s var(--ease-out) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 0.4em;
+      filter: blur(8px);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The night shows through where the page lifts off the footer. */
+  body {
+    @apply bg-night font-sans text-ink;
+    overflow-x: clip;
+  }
+
+  ::selection {
+    @apply bg-peach text-ink;
+  }
+}
+
+@utility display {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -0.052em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+@utility kbd {
+  @apply inline-flex rounded-md bg-white px-1.5 py-0.5 font-mono text-xs font-medium text-muted shadow-[0_0_0_1px_var(--color-hairline),0_1px_0_var(--color-hairline)];
+}
+
+/* The page is a sheet over the footer: it scrolls away and the footer, stuck
+   to the bottom of the screen underneath, is uncovered. */
+@utility sheet {
+  position: relative;
+  z-index: 1;
+  overflow: clip;
+  border-radius: 0 0 36px 36px;
+  background: var(--color-paper);
+  box-shadow: 0 30px 60px -20px #00000080;
+}
+
+/* Scroll-linked effects. Each follows its element through the viewport on a
+   CSS view timeline, on the compositor. Where there are no scroll timelines
+   (Firefox, for now) or motion is reduced, the page simply shows at rest. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /* Rises into place as it enters; --d delays it a step, for staggers. */
+    .rise {
+      animation: settle linear both;
+      animation-timeline: view();
+      animation-range: entry calc(var(--d, 0) * 12%) entry calc(80% + var(--d, 0) * 12%);
+    }
+
+    /* A headline that comes into focus. */
+    .focus {
+      animation: focus linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 38%;
+    }
+
+    /* Words that darken as they pass the middle of the screen. */
+    .ink > span {
+      animation: ink linear both;
+      animation-timeline: view();
+      animation-range: cover 30% cover 48%;
+    }
+
+    /* A section that starts as a card and opens out to the full width. */
+    .open {
+      animation: open linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+
+    /* A strike drawn across as it passes. */
+    .strike::after {
+      animation: strike linear both;
+      animation-timeline: view();
+      animation-range: cover 35% cover 50%;
+    }
+
+    /* The footer's content, each piece in turn as the page lifts away:
+       --e is its place in the order, and it finishes that much sooner. */
+    .emerge {
+      animation: emerge both;
+      animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1);
+      animation-timeline: scroll(root);
+      animation-range: calc(100% - (80 - var(--e, 0) * 8) * 1svh) calc(100% - (30 - var(--e, 0) * 7) * 1svh);
+    }
+  }
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    translate: 0 72px;
+    scale: 0.96;
+  }
+}
+
+@keyframes focus {
+  from {
+    opacity: 0.15;
+    translate: 0 48px;
+    filter: blur(12px);
+  }
+}
+
+@keyframes ink {
+  from {
+    color: var(--ink-from, #17171a2e);
+  }
+}
+
+@keyframes open {
+  from {
+    clip-path: inset(0 max(16px, 4vw) round 40px);
+  }
+  to {
+    clip-path: inset(0 0 round 0);
+  }
+}
+
+@keyframes strike {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+@keyframes emerge {
+  from {
+    opacity: 0;
+    translate: 0 48px;
+    filter: blur(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}

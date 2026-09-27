@@ -1,0 +1,1298 @@
+/* The opening story (Story.astro), on the scene engine (scene.css): every
+   moving piece is a .part that plays between --from and --to, fractions of
+   the story's scroll.
+
+     0–.10     the page shrinks into the card; the window forms around it
+     .10–.20   the intro settles, then leaves
+     .17–.50   the manifesto scrolls through the card; the tab fills as read
+     .50–.68   a new tab: the composer, a search, the suggestions
+     .66–.79   the page arrives
+     .80–.86   the sidebar folds away
+     .90–1     the window steps back for the last line
+
+   Without html[data-story] — no scripts, or reduced motion — this is a plain
+   page: the intro, the manifesto, the closing line. */
+
+.story {
+  --gutter: 12px;
+  --side: 8px;
+  --rim: 8px;
+  --length: 900svh;
+  background: var(--color-paper);
+}
+
+@media (min-width: 640px) {
+  .story {
+    --gutter: 28px;
+  }
+}
+
+@media (min-width: 900px) {
+  .story {
+    --side: 240px;
+  }
+}
+
+/* Static page. */
+
+.story-camera,
+.story-page,
+.story-card {
+  position: relative;
+}
+
+.story-page {
+  isolation: isolate;
+  overflow: clip;
+  background:
+    radial-gradient(120% 70% at 50% 45%, #fbf8f5 0%, transparent 60%),
+    linear-gradient(to bottom, var(--color-card), #ebe7e2);
+}
+
+.story-window,
+.story-lights,
+.story-bar,
+.story-newtab,
+.story-article,
+.story-captions,
+.story-hint {
+  display: none;
+}
+
+.story-light,
+.story-glow {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  width: 100%;
+  height: 100svh;
+  pointer-events: none;
+}
+
+.story-light {
+  opacity: 0;
+  transition: opacity 1.6s var(--ease-out);
+  mask-image: linear-gradient(to bottom, transparent 18%, #000 36%, #000 70%, transparent 88%);
+}
+
+.story-light.is-lit {
+  opacity: 1;
+}
+
+/* Painted before the shader is ready, and in its place where there's no WebGL. */
+.story-glow {
+  background: linear-gradient(
+    172deg,
+    transparent 44%,
+    #f6c6a855 48%,
+    #fff3e6 50.5%,
+    #9fb4ff44 52.5%,
+    transparent 57%
+  );
+  filter: blur(18px);
+  transition: opacity 1.6s var(--ease-out);
+}
+
+.story-glow:has(+ .story-light.is-lit) {
+  opacity: 0;
+}
+
+.story-intro {
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px var(--gutter) 72px;
+  text-align: center;
+}
+
+.story-pebble {
+  width: 64px;
+  margin-bottom: 36px;
+  filter: drop-shadow(0 14px 22px #d9876a4d);
+  animation:
+    pebble-in 1.4s var(--ease-spring) both,
+    drift 7s ease-in-out 1.4s infinite;
+}
+
+@keyframes pebble-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+@keyframes drift {
+  50% {
+    translate: 0 -6px;
+    rotate: -4deg;
+  }
+}
+
+.story-headline {
+  font-size: clamp(40px, 6.4vw, 92px);
+}
+
+.story-word {
+  display: inline-block;
+  animation: var(--animate-rise);
+  animation-delay: calc(200ms + var(--i) * 110ms);
+}
+
+.story-lede {
+  max-width: 36ch;
+  margin-top: 28px;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.5;
+  color: var(--color-muted);
+  text-wrap: balance;
+  animation: var(--animate-rise);
+  animation-delay: 650ms;
+}
+
+.story-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 36px;
+  animation: var(--animate-rise);
+  animation-delay: 750ms;
+}
+
+.story-meta {
+  margin-top: 20px;
+  font: 400 12px/1.4 var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--color-faint);
+  animation: var(--animate-rise);
+  animation-delay: 850ms;
+}
+
+.story-reel {
+  padding: 0 var(--gutter) 96px;
+}
+
+.story-essay {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  max-width: 18em;
+  margin-inline: auto;
+  font-size: clamp(28px, 3.4vw, 48px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.story-closing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 72px var(--gutter) 120px;
+  text-align: center;
+
+  & h2 {
+    font-size: clamp(36px, 4.6vw, 64px);
+  }
+}
+
+/* What the window just did, and the keys for it. */
+.story-closing-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 16px;
+  color: var(--color-muted);
+
+  & kbd {
+    display: inline-grid;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    place-items: center;
+    border-radius: 7px;
+    background: linear-gradient(#fff, #f4f2ef);
+    box-shadow:
+      inset 0 -1px 0 #17171a14,
+      0 0 0 1px #17171a17,
+      0 2px 0 #17171a0f;
+    font: 500 13px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--color-ink);
+  }
+
+  & kbd:first-of-type {
+    margin-left: 5px;
+  }
+}
+
+/* The story. */
+
+:root[data-story] {
+  .story-stage {
+    contain: layout paint;
+
+    /* The window, a little high to leave room for the captions under it,
+       and the card inside it, as ChromeLayout places them. */
+    --win-w: min(100cqw - 2 * var(--gutter), 1280px);
+    --win-h: min(100cqh - 210px, 800px);
+    --win-x: calc((100cqw - var(--win-w)) / 2);
+    --win-y: calc((100cqh - var(--win-h)) / 2 - 20px);
+    --card-t: calc(var(--win-y) + var(--rim));
+    --card-b: calc(100cqh - var(--win-y) - var(--win-h) + var(--rim));
+    --card-l: calc(var(--win-x) + var(--side));
+    --card-r: calc(var(--win-x) + var(--rim));
+    --card-folded: calc(var(--win-x) + var(--rim));
+    --card-h: calc(100cqh - var(--card-t) - var(--card-b));
+    --card-shift: calc((var(--side) - var(--rim)) / 2);
+  }
+
+  .story-camera,
+  .story-page {
+    position: absolute;
+    inset: 0;
+  }
+
+  .story-light,
+  .story-glow {
+    height: 100%;
+  }
+
+  /* The mock is a picture, not an interface: nothing in it can be selected
+     or clicked, and it never stands in the way of the buttons under it. */
+  .story-window,
+  .story-lights,
+  .story-card,
+  .story-captions {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* The window: the frame, the traffic lights, the sidebar. */
+  /* Clips what's inside, so the sidebar slides under its edge as it folds. */
+  .story-window {
+    position: absolute;
+    top: var(--win-y);
+    left: var(--win-x);
+    display: block;
+    overflow: clip;
+    width: var(--win-w);
+    height: var(--win-h);
+    border-radius: 16px;
+    corner-shape: superellipse(1.4);
+    background: #ececec;
+    box-shadow:
+      0 0 0 0.5px #0000002e,
+      0 40px 90px -40px #3b2a2066,
+      0 12px 30px -18px #3b2a2033;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+
+  /* The card's hairline and shadow, which the clipped page can't cast. */
+  .story-shade {
+    position: absolute;
+    top: var(--rim);
+    bottom: var(--rim);
+    left: var(--side);
+    right: var(--rim);
+    border-radius: 10px;
+    box-shadow:
+      0 0 0 1px #00000016,
+      0 0.5px 1.5px #0000000f,
+      0 4px 12px #0000000d;
+  }
+
+  .story-lights {
+    position: absolute;
+    top: calc(var(--win-y) + 20px);
+    left: calc(var(--win-x) + 20px);
+    display: flex;
+    gap: 8px;
+
+    & i {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff5f57;
+      box-shadow: inset 0 0 0 0.5px #0000001f;
+
+      &:nth-child(2) {
+        background: #febc2e;
+      }
+
+      &:nth-child(3) {
+        background: #28c840;
+      }
+    }
+  }
+
+  .story-side {
+    display: flex;
+    flex-direction: column;
+    width: var(--side);
+    height: 100%;
+    padding: 50px 10px 10px;
+    overflow: hidden;
+
+    @media (width < 900px) {
+      display: none;
+    }
+  }
+
+  .story-pins {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+
+    & span {
+      display: grid;
+      height: 36px;
+      place-items: center;
+      border-radius: 10px;
+      background: #0000000e;
+      font-size: 12.7px;
+      font-weight: 500;
+      color: #8c8c8c;
+    }
+  }
+
+  .story-tabs {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .story-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    overflow: hidden;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #1717179e;
+    white-space: nowrap;
+  }
+
+  .story-row.is-first {
+    color: #171717;
+  }
+
+  /* The active tab's ground (Lifted), and how far the page has been read. */
+  .story-lift {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow:
+      inset 0 0 0 0.5px #00000016,
+      0 0.5px 1px #00000012,
+      0 2px 6px #0000000a;
+  }
+
+  .story-read {
+    position: absolute;
+    inset: 0;
+    background: #1717170d;
+    transform-origin: left;
+  }
+
+  .story-swap {
+    position: absolute;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .story-new {
+    color: #8c8c8c;
+  }
+
+  .story-foot {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    margin-top: auto;
+    place-items: center;
+    color: #17171a99;
+  }
+
+  /* The sidebar fills in once the window has formed (.is-framed), on the
+     app's spring, a row after another. */
+  :is(.story-lights, .story-pins span, .story-row, .story-lift, .story-foot) {
+    transition:
+      opacity 0.5s var(--ease-out),
+      translate 0.7s var(--ease-spring),
+      filter 0.5s var(--ease-out);
+    transition-delay: calc(80ms + var(--i, 0) * 40ms);
+  }
+
+  .story-stage:not(.is-framed) :is(.story-lights, .story-pins span, .story-row, .story-lift, .story-foot) {
+    opacity: 0;
+    translate: -12px 0;
+    filter: blur(4px);
+    transition-delay: 0s;
+  }
+
+  /* The page: clipped to the card, holding our own site, then whatever the
+     window shows. */
+  .story-intro {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    padding-top: 0;
+  }
+
+  /* The card is laid out at its folded size, the whole window's width. With
+     the sidebar out, the page's clip hides its left part and its contents
+     are moved right to sit in the middle of what shows; folding only
+     unclips and moves them back, so nothing is laid out again. */
+  .story-card {
+    position: absolute;
+    top: var(--card-t);
+    bottom: var(--card-b);
+    left: var(--card-folded);
+    right: var(--card-r);
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+
+  .story-bar {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 3;
+    display: block;
+    height: 36px;
+    background: #fff;
+    box-shadow: 0 1px 0 #e8e8e8;
+  }
+
+  .story-view {
+    position: absolute;
+    inset: 0;
+  }
+
+  .story-bar-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 100%;
+    padding: 0 6px;
+  }
+
+  .door {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: 8px;
+    color: #17171799;
+  }
+
+  .story-address {
+    position: relative;
+    flex: 1;
+    height: 28px;
+    margin: 0 6px;
+  }
+
+  .address {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-left: 6px;
+    font-size: 13px;
+    color: #171717e0;
+
+    & > i {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border-radius: 50%;
+      color: #8c8c8c;
+    }
+
+    &.is-blank {
+      padding-left: 8px;
+      color: #8c8c8c;
+    }
+  }
+
+  .story-load {
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 100%;
+    height: 2px;
+    background: #17171773;
+    transform-origin: left;
+    opacity: 0;
+  }
+
+  .story-reel {
+    position: absolute;
+    inset: 36px 0 0;
+    padding: 0;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, transparent 4%, #000 20%, #000 78%, transparent 94%);
+  }
+
+  /* A short centred block that scrolls up through the card. */
+  .story-essay {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    gap: 0.55em;
+    width: min(24em, 100% - 64px);
+    max-width: none;
+    font-family: var(--font-sans);
+    font-size: clamp(19px, 2.3vw, 34px);
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+
+    & p {
+      color: #17171a;
+      animation-name: spot;
+    }
+  }
+
+  /* A new tab: the composer (Omnibox.swift). */
+  .story-newtab {
+    position: absolute;
+    inset: 36px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: calc(var(--card-h) * 0.42 - 150px);
+    background: #fff;
+  }
+
+  .story-newtab-pebble {
+    width: 58px;
+    margin-bottom: 26px;
+    filter: drop-shadow(0 5px 10px #8c54382e);
+  }
+
+  .composer {
+    position: relative;
+    width: min(600px, 100% - 64px);
+    height: 104px;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px #e8e8e8,
+      0 1px 1px #0000000a,
+      0 10px 24px #00000012;
+  }
+
+  .composer-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 52px;
+    padding: 0 16px;
+    font-size: 15px;
+    color: #171717;
+  }
+
+  .composer-typed {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .composer-foot {
+    position: absolute;
+    inset: auto 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .composer-engine {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    border-radius: 14px;
+    background: #0000000a;
+    box-shadow: inset 0 0 0 1px #00000016;
+    font-size: 12px;
+    color: #8c8c8c;
+  }
+
+  .composer-send {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 50%;
+    background: #0000000e;
+    color: #8c8c8c;
+  }
+
+  .suggestions {
+    position: absolute;
+    top: 112px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px #e8e8e8,
+      0 10px 24px #0000001a;
+
+    & > span {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 9px;
+      white-space: nowrap;
+    }
+
+    & i {
+      display: grid;
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      place-items: center;
+      border-radius: 3.3px;
+      background: #1717170f;
+      font-size: 8.4px;
+      font-style: normal;
+      font-weight: 500;
+      color: #8c8c8c;
+    }
+
+    & b {
+      font-size: 13px;
+      font-weight: 400;
+      color: #171717;
+    }
+
+    & em {
+      overflow: hidden;
+      font-size: 12px;
+      font-style: normal;
+      color: #8c8c8c;
+      text-overflow: ellipsis;
+    }
+  }
+
+  /* The page that arrives: someone else's site. */
+  .story-article {
+    position: absolute;
+    inset: 36px 0 0;
+    display: block;
+    padding: clamp(24px, 6%, 64px) clamp(24px, 14%, 180px);
+    overflow: hidden;
+    background: #fbfaf7;
+    font-family: Georgia, "Times New Roman", serif;
+    color: #2b2724;
+
+    & .article-site {
+      font: 600 12px/1 -apple-system, system-ui, sans-serif;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #9c5b43;
+    }
+
+    & h3 {
+      margin-top: 28px;
+      font-size: clamp(30px, 3.4vw, 48px);
+      font-weight: 400;
+      line-height: 1.05;
+    }
+
+    & .article-by {
+      margin-top: 12px;
+      font: 400 13px/1 -apple-system, system-ui, sans-serif;
+      color: #8c847e;
+    }
+
+    & .article-image {
+      height: clamp(120px, 22%, 220px);
+      margin: 28px 0;
+      border-radius: 6px;
+      background:
+        radial-gradient(60% 90% at 25% 30%, #fff3e6, transparent 60%),
+        radial-gradient(70% 90% at 80% 40%, #f6c6a8, transparent 60%),
+        radial-gradient(80% 90% at 55% 100%, #c9d8c0, transparent 60%),
+        #e7c9ae;
+    }
+
+    & p:not([class]) {
+      max-width: 36em;
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    & p + p:not([class]) {
+      margin-top: 1em;
+    }
+  }
+
+  .story-captions {
+    position: absolute;
+    top: calc(var(--win-y) + var(--win-h) + 34px);
+    left: 0;
+    right: 0;
+    display: block;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .story-caption {
+    position: absolute;
+    inset: 0 0 auto;
+    font-size: clamp(18px, 1.7vw, 24px);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    text-align: center;
+  }
+
+  /* Midway between the window, once it has stepped back (scaled 0.84 about
+     its centre and raised 9cqh, see step-back), and the foot of the stage. */
+  .story-closing {
+    position: absolute;
+    top: calc((var(--win-y) + var(--win-h) * 0.92 - 9cqh + 100cqh) / 2);
+    left: 0;
+    right: 0;
+    padding: 0;
+    translate: 0 -50%;
+  }
+
+  .story-hint {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    font: 500 11px/1 var(--font-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+    translate: -50% 0;
+
+    &::after {
+      content: "";
+      width: 1px;
+      height: 36px;
+      background: linear-gradient(to bottom, var(--color-faint), transparent);
+      animation: hint 2.4s var(--ease-out) infinite;
+      transform-origin: top;
+    }
+  }
+
+  /* Choreography. Each piece: which stretch of the scroll, which keyframes. */
+
+  .story-page {
+    animation-name: page;
+  }
+
+  .story-window {
+    --from: 0.04;
+    --to: 0.1;
+    animation-name: show;
+  }
+
+  .story-intro {
+    --to: 0.2;
+    animation-name: intro;
+  }
+
+  .story-hint {
+    --to: 0.04;
+    animation-name: hide;
+  }
+
+  .story-bar {
+    --from: 0.08;
+    --to: 0.11;
+    animation-name: show;
+  }
+
+  .story-essay {
+    --from: 0.17;
+    --to: 0.5;
+    animation-name: essay;
+  }
+
+  .story-read {
+    --from: 0.17;
+    --to: 0.55;
+    animation-name: read;
+  }
+
+  .story-new {
+    --from: 0.5;
+    --to: 0.54;
+    animation-name: press-new;
+  }
+
+  .story-opened {
+    --from: 0.525;
+    --to: 0.545;
+    animation-name: show;
+  }
+
+  .story-lift {
+    --from: 0.53;
+    --to: 0.55;
+    animation-name: lift;
+  }
+
+  .story-row.is-first {
+    --from: 0.53;
+    --to: 0.55;
+    animation-name: dim;
+  }
+
+  .story-newtab {
+    --from: 0.54;
+    --to: 0.69;
+    animation-name: visit;
+  }
+
+  .address.is-ours {
+    --from: 0.535;
+    --to: 0.545;
+    animation-name: hide;
+  }
+
+  .address.is-blank {
+    --from: 0.54;
+    --to: 0.69;
+    animation-name: visit;
+  }
+
+  .address.is-theirs {
+    --from: 0.68;
+    --to: 0.69;
+    animation-name: show;
+  }
+
+  .composer-typed {
+    --from: 0.57;
+    --to: 0.62;
+    animation-name: type;
+  }
+
+  .composer-send {
+    --from: 0.575;
+    --to: 0.585;
+    animation-name: armed;
+  }
+
+  .suggestions {
+    --from: 0.6;
+    --to: 0.63;
+    animation-name: drop;
+  }
+
+  .suggestions .is-picked {
+    --from: 0.63;
+    --to: 0.645;
+    animation-name: pick;
+  }
+
+  .story-swap {
+    --from: 0.68;
+    --to: 0.69;
+    animation-name: hide;
+
+    &.is-after {
+      animation-name: show;
+    }
+  }
+
+  .story-load {
+    --from: 0.67;
+    --to: 0.74;
+    animation-name: load;
+  }
+
+  .story-article {
+    --from: 0.68;
+    --to: 0.72;
+    animation-name: arrive;
+  }
+
+  /* The fold: the sidebar, the card, its shadow, the page's clip and the
+     toolbar all move over the same stretch on the same curve (the clip's is
+     set in its keyframes), so they go as one. */
+  :is(.story-side, .story-shade, .story-view, .story-bar-row) {
+    --from: 0.8;
+    --to: 0.86;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .story-side {
+    animation-name: fold;
+  }
+
+  .story-shade {
+    animation-name: shade-fold;
+  }
+
+  .story-view {
+    animation-name: view-fold;
+  }
+
+  .story-bar-row {
+    animation-name: make-room;
+  }
+
+  .story-caption {
+    animation-name: caption;
+  }
+
+  .story-camera {
+    --from: 0.9;
+    --to: 0.97;
+    animation-name: step-back;
+  }
+
+  .story-closing {
+    --from: 0.92;
+    --to: 0.98;
+    animation-name: rise-in;
+  }
+}
+
+/* On a phone there's no sidebar to fold: the toolbar keeps only the
+   address, centred between the traffic lights and the other edge, and the
+   caption about folding is left out. */
+@media (width < 900px) {
+  :root[data-story] .story-bar-row {
+    animation: none;
+    padding: 0 64px;
+  }
+
+  :root[data-story] .story-bar-row .door {
+    display: none;
+  }
+
+  :root[data-story] .story-address {
+    margin: 0;
+  }
+
+  :root[data-story] .address,
+  :root[data-story] .address.is-blank {
+    justify-content: center;
+    padding-left: 0;
+  }
+
+  :root[data-story] .story-caption:last-child,
+  :root[data-story] .story-closing-hint {
+    display: none;
+  }
+}
+
+@keyframes show {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes hide {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes visit {
+  0% {
+    opacity: 0;
+    visibility: hidden;
+  }
+  15%,
+  88% {
+    opacity: 1;
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* The page layer: full screen, then the card; the card widens when the
+   sidebar folds (.80–.86 of the scroll). */
+@keyframes page {
+  0% {
+    clip-path: inset(0 0 0 0 round 0);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.25, 1);
+  }
+  10%,
+  80% {
+    clip-path: inset(var(--card-t) var(--card-r) var(--card-b) var(--card-l) round 10px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  86%,
+  100% {
+    clip-path: inset(var(--card-t) var(--card-r) var(--card-b) var(--card-folded) round 10px);
+  }
+}
+
+@keyframes intro {
+  0% {
+    scale: 1;
+    animation-timing-function: cubic-bezier(0.55, 0, 0.25, 1);
+  }
+  50%,
+  70% {
+    opacity: 1;
+    scale: 0.8;
+    translate: var(--card-shift) 0;
+    filter: blur(0);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  }
+  100% {
+    opacity: 0;
+    scale: 0.76;
+    translate: var(--card-shift) -5cqh;
+    filter: blur(12px);
+    visibility: hidden;
+  }
+}
+
+@keyframes essay {
+  0% {
+    translate: -50% var(--card-h);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    translate: -50% -100%;
+    opacity: 0;
+  }
+}
+
+/* A line of the manifesto, faint until it reaches the middle. */
+@keyframes spot {
+  0%,
+  100% {
+    color: #17171a33;
+  }
+  40%,
+  60% {
+    color: #17171a;
+  }
+}
+
+@keyframes read {
+  0% {
+    scale: 0 1;
+  }
+  85% {
+    scale: 1 1;
+    opacity: 1;
+  }
+  95%,
+  100% {
+    scale: 1 1;
+    opacity: 0;
+  }
+}
+
+/* The New tab row sits in the slot the new tab will take; it's clicked,
+   then moves down under the tab it opened. */
+@keyframes press-new {
+  0% {
+    background: transparent;
+    translate: 0 -34px;
+  }
+  30%,
+  60% {
+    background: #0000000e;
+    color: #171717bf;
+    translate: 0 -34px;
+  }
+  100% {
+    background: transparent;
+    translate: 0 0;
+  }
+}
+
+/* Lifted glides from the first tab to the new one (five rows down). */
+@keyframes lift {
+  to {
+    translate: 0 170px;
+  }
+}
+
+@keyframes dim {
+  to {
+    color: #1717179e;
+  }
+}
+
+@keyframes type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes armed {
+  to {
+    background: #171717;
+    color: #fff;
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+    scale: 0.98;
+  }
+}
+
+@keyframes pick {
+  to {
+    background: #efefef;
+  }
+}
+
+/* Hidden until the load starts, then running across and fading out. */
+@keyframes load {
+  0% {
+    opacity: 0;
+    scale: 0.08 1;
+  }
+  6% {
+    opacity: 1;
+    scale: 0.1 1;
+  }
+  80% {
+    opacity: 1;
+    scale: 1 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1 1;
+  }
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+
+@keyframes fold {
+  to {
+    opacity: 0;
+    translate: -40px 0;
+  }
+}
+
+@keyframes shade-fold {
+  to {
+    left: var(--rim);
+  }
+}
+
+@keyframes view-fold {
+  from {
+    translate: var(--card-shift) 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+/* The toolbar starts where the sidebar ends; folded, it clears the traffic
+   lights, as the app's does. */
+@keyframes make-room {
+  from {
+    translate: calc(var(--side) - var(--rim)) 0;
+  }
+  to {
+    translate: 70px 0;
+  }
+}
+
+@keyframes caption {
+  0% {
+    opacity: 0;
+    translate: 0 14px;
+    filter: blur(6px);
+  }
+  18%,
+  82% {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -10px;
+    filter: blur(6px);
+  }
+}
+
+@keyframes step-back {
+  to {
+    scale: 0.84;
+    translate: 0 -9cqh;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 calc(-50% + 24px);
+    filter: blur(8px);
+    visibility: hidden;
+  }
+}
+
+@keyframes hint {
+  0% {
+    scale: 1 0;
+  }
+  50% {
+    scale: 1 1;
+    opacity: 1;
+  }
+  100% {
+    scale: 1 1;
+    opacity: 0;
+  }
+}

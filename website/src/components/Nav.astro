@@ -1,0 +1,352 @@
+---
+// The nav: a small glass island. Once the opening has made room for it, it
+// appears as a dot at the top of the screen and opens out, the way the
+// app's pebble opens into its window. Over the dark sections it turns light.
+import { site } from "../site";
+import Icon from "./Icon.astro";
+import Pebble from "./Pebble.astro";
+---
+
+<nav class="island" aria-label="Mote">
+  <div class="island-body">
+    <a href="#top" class="island-brand">
+      <span class="island-mark"><Pebble id="nav-pebble" class="size-full" /></span>
+      <span class="island-name">Mote</span>
+    </a>
+    <span class="island-links">
+      <a href={site.repo} class="island-link">
+        <Icon name="github" class="size-[15px]" />
+        <span class="max-sm:sr-only">GitHub</span>
+      </a>
+      <a href={site.download} class="island-download">Download</a>
+    </span>
+  </div>
+</nav>
+
+<style>
+  .island {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    z-index: 50;
+    translate: -50% 0;
+  }
+
+  .island-body {
+    --ink: #ffffff;
+    --soft: #ffffffa6;
+    --ground: #17171add;
+    --button: #ffffff;
+    --button-ink: #17171a;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    height: 46px;
+    padding: 0 5px 0 16px;
+    overflow: hidden;
+    border-radius: 23px;
+    background: var(--ground);
+    box-shadow:
+      inset 0 1px 0 #ffffff26,
+      inset 0 0 0 0.5px #ffffff1a,
+      0 12px 32px -12px #0000008c;
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    font-size: 14px;
+    color: var(--ink);
+    transition:
+      clip-path 0.7s var(--ease-spring),
+      opacity 0.3s var(--ease-out),
+      scale 0.5s var(--ease-spring),
+      background 0.5s var(--ease-out),
+      color 0.5s var(--ease-out),
+      box-shadow 0.5s var(--ease-out);
+  }
+
+  /* Over the dark sections: light glass. */
+  .island.is-light .island-body {
+    --ink: #17171a;
+    --soft: #17171a99;
+    --ground: #fffffff0;
+    --button: #17171a;
+    --button-ink: #ffffff;
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      inset 0 0 0 0.5px #17171a14,
+      0 12px 32px -12px #00000066;
+  }
+
+  .island-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  /* The pebble, never quite still, but never asking to be looked at: a slow
+     sway, a faint warmth, and now and then a glint across it like the icon's
+     glass. */
+  .island-mark {
+    position: relative;
+    display: block;
+    width: 21px;
+    height: 21px;
+    animation:
+      rock 9s ease-in-out infinite,
+      breathe 5s ease-in-out infinite alternate;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 8% 6%;
+      border-radius: 50%;
+      background: linear-gradient(115deg, transparent 38%, #ffffff99 50%, transparent 62%);
+      background-size: 300% 100%;
+      mix-blend-mode: soft-light;
+      animation: glint 10s ease-in-out infinite;
+    }
+  }
+
+  .island-name {
+    transition: filter 0.3s var(--ease-out);
+  }
+
+  .island-brand:hover .island-name {
+    filter: brightness(1.25);
+  }
+
+  .island-brand:hover .island-mark {
+    animation:
+      hop 0.6s var(--ease-spring),
+      breathe 5s ease-in-out infinite alternate;
+  }
+
+  @keyframes rock {
+    0%,
+    100% {
+      rotate: -2deg;
+    }
+    50% {
+      rotate: 2deg;
+    }
+  }
+
+  @keyframes breathe {
+    from {
+      filter: drop-shadow(0 0 1px #f6c6a826);
+    }
+    to {
+      filter: drop-shadow(0 0 4px #f6c6a859);
+    }
+  }
+
+  @keyframes glint {
+    0%,
+    85% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  @keyframes hop {
+    40% {
+      translate: 0 -2px;
+      scale: 1.06;
+    }
+  }
+
+  /* The name, with a faint warm reflection passing through it once in a
+     while. */
+  .island-name {
+    background: linear-gradient(
+        100deg,
+        var(--ink) 42%,
+        color-mix(in srgb, var(--ink) 55%, var(--color-peach)) 50%,
+        var(--ink) 58%
+      )
+      0 0 / 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    animation: shine 14s ease-in-out 3s infinite;
+  }
+
+  @keyframes shine {
+    0%,
+    88% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  .island-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* GitHub: a soft pill grows in behind it, and its mark turns a little. */
+  .island-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 18px;
+    color: var(--soft);
+    transition: color 0.25s var(--ease-out);
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: color-mix(in srgb, var(--ink) 10%, transparent);
+      opacity: 0;
+      scale: 0.85;
+      transition:
+        opacity 0.25s var(--ease-out),
+        scale 0.45s var(--ease-spring);
+    }
+
+    & > * {
+      position: relative;
+    }
+
+    & :global(svg) {
+      transition: rotate 0.5s var(--ease-spring);
+    }
+
+    &:hover {
+      color: var(--ink);
+
+      &::before {
+        opacity: 1;
+        scale: 1;
+      }
+
+      & :global(svg) {
+        rotate: -12deg;
+      }
+    }
+
+    &:active::before {
+      scale: 0.94;
+    }
+  }
+
+  /* Download, with a sheen that crosses it on hover. */
+  .island-download {
+    position: relative;
+    display: grid;
+    height: 36px;
+    padding: 0 16px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 18px;
+    background: var(--button);
+    font-weight: 500;
+    color: var(--button-ink);
+    transition:
+      scale 0.4s var(--ease-spring),
+      box-shadow 0.4s var(--ease-out),
+      background 0.5s var(--ease-out),
+      color 0.5s var(--ease-out);
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 30%, #f6c6a880 50%, transparent 70%);
+      translate: -120% 0;
+    }
+
+    &:hover {
+      scale: 1.04;
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--button) 18%, transparent);
+    }
+
+    &:hover::after {
+      translate: 120% 0;
+      transition: translate 1.4s cubic-bezier(0.45, 0, 0.25, 1);
+    }
+
+    &:active {
+      scale: 0.97;
+    }
+  }
+
+  /* Hidden: a dot at the middle of where the island will be, clipped out of
+     the full shape, so opening is only unclipping. The contents come in
+     after the shape has opened. */
+  :global(:root.js) .island:not(.is-shown) .island-body {
+    clip-path: inset(0 calc(50% - 23px) round 23px);
+    opacity: 0;
+    scale: 0.6;
+    pointer-events: none;
+    transition-duration: 0.35s, 0.25s, 0.35s, 0.5s, 0.5s, 0.5s;
+  }
+
+  .island-body {
+    clip-path: inset(0 0 round 23px);
+  }
+
+  .island-body > * {
+    transition:
+      opacity 0.35s var(--ease-out) 0.25s,
+      filter 0.35s var(--ease-out) 0.25s;
+  }
+
+  :global(:root.js) .island:not(.is-shown) .island-body > * {
+    opacity: 0;
+    filter: blur(4px);
+    transition-delay: 0s;
+  }
+</style>
+
+<script>
+  const island = document.querySelector<HTMLElement>(".island")!;
+
+  // Shown once the page has scrolled past a third of the first screen.
+  let queued = false;
+  const update = () => {
+    queued = false;
+    island.classList.toggle("is-shown", scrollY > innerHeight * 0.35);
+  };
+  addEventListener(
+    "scroll",
+    () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(update);
+    },
+    { passive: true },
+  );
+  update();
+
+  // Light over dark ground: a dark section ([data-dark]) under the island,
+  // or the page ([data-sheet]) lifted clear of it to show the footer. Only a
+  // thin strip at the island's height is watched.
+  const under = new Set<Element>();
+  const sheet = document.querySelector("[data-sheet]")!;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) under.add(entry.target);
+        else under.delete(entry.target);
+      }
+      const dark = [...under].some((element) => element !== sheet) || !under.has(sheet);
+      island.classList.toggle("is-light", dark);
+    },
+    { rootMargin: "-30px 0px -94% 0px" },
+  );
+  for (const element of [sheet, ...document.querySelectorAll("[data-dark]")]) observer.observe(element);
+</script>

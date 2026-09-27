@@ -1,0 +1,427 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* MoteCore in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* MoteCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A60000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = Mote;
+		};
+		D10000000000000000000002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A60000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = Mote;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* Mote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000006 /* MoteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000007 /* MoteUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoteUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000002 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000003 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000004 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000005 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000008 /* Mote.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Mote.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000009 /* MoteTests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MoteTests.xcconfig; sourceTree = "<group>"; };
+		A1000000000000000000000A /* MoteUITests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MoteUITests.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A20000000000000000000002 /* Exceptions for "Mote" folder in "Mote" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				"Mote-Passkeys.entitlements",
+				Mote.entitlements,
+			);
+			target = A50000000000000000000001 /* Mote */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A20000000000000000000001 /* Mote */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A20000000000000000000002 /* Exceptions for "Mote" folder in "Mote" target */,
+			);
+			path = Mote;
+			sourceTree = "<group>";
+		};
+		A20000000000000000000003 /* MoteTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MoteTests;
+			sourceTree = "<group>";
+		};
+		A20000000000000000000004 /* MoteUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MoteUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* MoteCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000012 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A30000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* Mote */,
+				A20000000000000000000003 /* MoteTests */,
+				A20000000000000000000004 /* MoteUITests */,
+				A30000000000000000000002 /* Configs */,
+				A30000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A30000000000000000000002 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000002 /* Base.xcconfig */,
+				A10000000000000000000003 /* Debug.xcconfig */,
+				A10000000000000000000004 /* Release.xcconfig */,
+				A10000000000000000000005 /* Version.xcconfig */,
+				A10000000000000000000008 /* Mote.xcconfig */,
+				A10000000000000000000009 /* MoteTests.xcconfig */,
+				A1000000000000000000000A /* MoteUITests.xcconfig */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
+		A30000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000001 /* Mote.app */,
+				A10000000000000000000006 /* MoteTests.xctest */,
+				A10000000000000000000007 /* MoteUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* Mote */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Mote" */;
+			buildPhases = (
+				A40000000000000000000001 /* Sources */,
+				A40000000000000000000002 /* Frameworks */,
+				A40000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A20000000000000000000001 /* Mote */,
+			);
+			name = Mote;
+			packageProductDependencies = (
+				C10000000000000000000001 /* MoteCore */,
+			);
+			productName = Mote;
+			productReference = A10000000000000000000001 /* Mote.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* MoteTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000003 /* Build configuration list for PBXNativeTarget "MoteTests" */;
+			buildPhases = (
+				A40000000000000000000011 /* Sources */,
+				A40000000000000000000012 /* Frameworks */,
+				A40000000000000000000013 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D20000000000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A20000000000000000000003 /* MoteTests */,
+			);
+			name = MoteTests;
+			productName = MoteTests;
+			productReference = A10000000000000000000006 /* MoteTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A50000000000000000000003 /* MoteUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000004 /* Build configuration list for PBXNativeTarget "MoteUITests" */;
+			buildPhases = (
+				A40000000000000000000021 /* Sources */,
+				A40000000000000000000022 /* Frameworks */,
+				A40000000000000000000023 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D20000000000000000000002 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A20000000000000000000004 /* MoteUITests */,
+			);
+			name = MoteUITests;
+			productName = MoteUITests;
+			productReference = A10000000000000000000007 /* MoteUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A60000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					A50000000000000000000002 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A50000000000000000000001;
+					};
+					A50000000000000000000003 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A50000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "Mote" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A30000000000000000000001;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/MoteKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A30000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* Mote */,
+				A50000000000000000000002 /* MoteTests */,
+				A50000000000000000000003 /* MoteUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000013 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A40000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000011 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D20000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* Mote */;
+			targetProxy = D10000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		D20000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* Mote */;
+			targetProxy = D10000000000000000000002 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A80000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000003 /* Debug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A80000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000004 /* Release.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		A80000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000008 /* Mote.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A80000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000008 /* Mote.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		A80000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000009 /* MoteTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A80000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000000000000000000009 /* MoteTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		A80000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000000A /* MoteUITests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		A80000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000000A /* MoteUITests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A70000000000000000000001 /* Build configuration list for PBXProject "Mote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000001 /* Debug */,
+				A80000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Mote" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000003 /* Debug */,
+				A80000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000003 /* Build configuration list for PBXNativeTarget "MoteTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000005 /* Debug */,
+				A80000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000004 /* Build configuration list for PBXNativeTarget "MoteUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000007 /* Debug */,
+				A80000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/MoteKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/MoteKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C10000000000000000000001 /* MoteCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/MoteKit" */;
+			productName = MoteCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A60000000000000000000001 /* Project object */;
+}

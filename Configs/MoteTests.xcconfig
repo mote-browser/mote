@@ -1,0 +1,7 @@
+// Integration tests, hosted in the app so they can use its types and WebKit.
+
+PRODUCT_NAME = MoteTests
+PRODUCT_BUNDLE_IDENTIFIER = $(MOTE_BUNDLE_ID).tests
+GENERATE_INFOPLIST_FILE = YES
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/Mote.app/Contents/MacOS/Mote
+BUNDLE_LOADER = $(TEST_HOST)

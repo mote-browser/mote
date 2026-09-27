@@ -1,0 +1,134 @@
+---
+// A pill button. On hover it lifts a little and its icon moves: a download
+// arrow dips as if dropping into place, the GitHub mark turns; the dark one
+// also has a warm sheen crossing it.
+import type { HTMLAttributes } from "astro/types";
+
+interface Props extends HTMLAttributes<"a"> {
+  tone?: "dark" | "light" | "outline";
+}
+
+const { tone = "dark", class: className, ...rest } = Astro.props;
+---
+
+<a class:list={["button", `is-${tone}`, className]} {...rest}>
+  <slot />
+</a>
+
+<style>
+  .button {
+    position: relative;
+    display: inline-flex;
+    height: 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px;
+    overflow: hidden;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    transition:
+      translate 0.4s var(--ease-spring),
+      scale 0.4s var(--ease-spring),
+      box-shadow 0.5s var(--ease-out),
+      background-color 0.3s var(--ease-out),
+      color 0.3s var(--ease-out);
+
+    & :global(svg) {
+      position: relative;
+      transition: rotate 0.5s var(--ease-spring);
+    }
+
+    &:hover {
+      translate: 0 -2px;
+    }
+
+    &:active {
+      translate: 0 0;
+      scale: 0.97;
+      transition-duration: 0.12s;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-coral);
+      outline-offset: 3px;
+    }
+  }
+
+  .is-dark {
+    background: var(--color-ink);
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 #ffffff26,
+      0 1px 2px #17171a26;
+
+    &:hover {
+      box-shadow:
+        inset 0 1px 0 #ffffff26,
+        0 18px 34px -14px #17171aa6,
+        0 0 0 4px #17171a0d;
+    }
+  }
+
+  .is-light {
+    background: #fff;
+    color: var(--color-ink);
+    box-shadow:
+      0 0 0 1px var(--color-hairline),
+      0 1px 2px #17171a0d;
+
+    &:hover {
+      box-shadow:
+        0 0 0 1px #17171a33,
+        0 14px 28px -14px #17171a4d;
+    }
+  }
+
+  .is-outline {
+    color: #fff;
+    box-shadow: inset 0 0 0 1px #ffffff40;
+
+    &:hover {
+      background: #fff;
+      color: var(--color-ink);
+      box-shadow:
+        inset 0 0 0 1px #fff,
+        0 18px 34px -14px #000000cc;
+    }
+  }
+
+  /* A warm sheen crossing the filled buttons on hover. */
+  .is-dark::after,
+  .is-outline::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 30%, #f6c6a866 50%, transparent 70%);
+    translate: -110% 0;
+    pointer-events: none;
+  }
+
+  .is-dark:hover::after,
+  .is-outline:hover::after {
+    translate: 110% 0;
+    transition: translate 1.4s cubic-bezier(0.45, 0, 0.25, 1);
+  }
+
+  /* The icon: a download arrow dips, anything else turns a little. */
+  .button:hover :global(svg) {
+    rotate: -10deg;
+  }
+
+  .button:hover :global(svg[data-icon="download"]) {
+    rotate: 0deg;
+    animation: dip 0.6s var(--ease-spring);
+  }
+
+  @keyframes dip {
+    40% {
+      translate: 0 3px;
+    }
+  }
+</style>

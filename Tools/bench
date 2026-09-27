@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""Drive a running Mote from the shell, through its bench socket.
+
+Needs Settings › General › "Let a script drive Mote" on in that Mote. Tabs
+are named by the start of their id, as `tabs` prints it. --test talks to
+the test world ("Mote (test)"), --world NAME to "Mote (NAME)"; --yes skips
+an extension's install question, in a test world only.
+"""
+
+import json
+import os
+import socket
+import sys
+
+ON = ("on", "true", "1", "yes")
+
+# Each command: its arguments, then what it does. An argument is KEY[:kind],
+# in brackets when it may be left out, or a|b|c for one of some words.
+# Kinds: float, int, path (made absolute). Commands whose
+# arguments have a shape of their own are read by the functions in READERS.
+COMMANDS = {
+    "tabs": ("", "every tab, yours and the bench's"),
+    "open": ("url", "a bench tab at the end of the row → its id"),
+    "go": ("id url", "send a bench tab somewhere else"),
+    "wait": ("id [seconds:float]", "until the page has loaded"),
+    "sleep": ("id", "put a tab to sleep now, or say what keeps it awake"),
+    "select": ("id", "bring a tab to the front — test runs only"),
+    "text": ("id", "the page's text"),
+    "eval": ("id js [mote]", "run JavaScript and print what it gives back; mote: in Mote's own world"),
+    "click": ("id selector", "element.click() on the first match"),
+    "type": ("id selector text", "set a field's value as typing would"),
+    "submit": ("id selector", "the form around SELECTOR"),
+    "tap": ("id selector [mods…]", "a real mouse click on an element (or text=Words), shift/cmd/opt held — test runs only"),
+    "shot": ("id [path:path] [width:float]", "a PNG of the page → its path"),
+    "close": ("id", "a tab the bench opened, or all of them"),
+    "place": ("id to:int", "put a tab at another place in the row"),
+    "probe": ("", "the window's own state: panels, modal, windows"),
+    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, sidebar, spaces, hides, bar, folded, peek, "
+           "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
+    "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
+    "key": ("id text", "keys on a tab as real key events — test runs only"),
+    "keyeq": ("chars code:int [shift]", "test run: ⌘CHARS while the page has the keyboard — who took it"),
+    "resize": ("width:float height:float [steps:int]", "take the window to that size in steps, like a drag — test runs only"),
+    "hit": ("x:float y:float [double|middle]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
+            "window; double or middle: test run, that click there"),
+    "field": ("text [type] [go]", "test run: TEXT pasted into the address field (type: a key at a time), timed; go: then Return, timed "
+              "until the page is loading"),
+    "bookmark": ("url [new]", "test run: a bookmark picked from the list, timed until it loads (new: into a new tab)"),
+    "menu": ("[open]", "test run: the Bookmarks menu as it's about to open, and its first folder (open: its first bookmark picked)"),
+    "pull": ("dx:float [steps:int] [ms:float]", "test run: two fingers DX points sideways over the page (back is +) — where it went"),
+    "peek": ("url", "test run: the preview over the tab in front, as a shift-click opens it; close shuts it"),
+    "little": ("what", "a small window for a link URL (made unseen), or keep or close the last"),
+    "space": ("[space…]", "test run: the spaces; new NAME [fresh], go N, delete, swipe DX, hold DX, release, move N"),
+    "consent": ("[grant|revoke]", "test run: the bench switch's keychain mark, before and after"),
+    "window": ("", "test run: open the browser's window if a hidden run came up without it"),
+    "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
+    "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
+    "frames": ("[fold|peek|unpeek] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
+    "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
+    "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
+    "fold": ("path:path [width:float]", "test run: the folded tabs out over the page (ui folded on, ui peek on), drawn over red"),
+    "site": ("path:path [security]", "the site card for the tab on screen, drawn to a PNG"),
+    "extensions": ("", "installed extensions, running or not, with their warnings"),
+    "ext-add": ("id", "install from the Chrome Web Store, by id or link"),
+    "ext-folder": ("path:path", "install an unpacked extension"),
+    "ext-press": ("id", "press its button"),
+    "ext-page": ("id [path]", "one of its pages in a bench tab → tab id, for eval"),
+    "ext-popup": ("id js", "run JavaScript in its popup while it's open"),
+    "ext-shot": ("id path:path", "a picture of its popup while it's open"),
+    "ext-reload": ("id", "load it again (a folder one is copied in afresh)"),
+    "ext-pin": ("id [on|off]", "keep its button in the toolbar, or not"),
+    "ext-enable": ("id on|off", "switch it on or off"),
+    "ext-remove": ("id", "remove it"),
+    "ext-menu": ("path:path", "the puzzle button's menu, drawn to a PNG"),
+    "ext-answer": ("yes|no|ask", "test run: answer extensions' questions without asking; lists what was asked"),
+}
+
+KINDS = {"float": float, "int": int, "path": os.path.abspath}
+
+
+def shown(arguments):
+    """The arguments as help shows them: ID [SECONDS], without their kinds."""
+    def one(token):
+        bare = token.strip("[]").split(":")[0]
+        name = bare if "|" in bare else bare.upper()
+        return f"[{name}]" if token.startswith("[") else name
+    return " ".join(map(one, arguments.split()))
+
+
+def usage(verb):
+    return f"usage: bench {verb} {shown(COMMANDS[verb][0])}".rstrip()
+
+
+def read(verb, args):
+    """The request for `verb`, from its arguments as the table describes them."""
+    if verb in READERS:
+        return READERS[verb](args)
+    request, words = {}, list(args)
+    for token in COMMANDS[verb][0].split():
+        optional = token.startswith("[")
+        token = token.strip("[]")
+        choices = token.split("|") if "|" in token else None
+        if not words or (choices and words[0] not in choices):
+            if optional:
+                continue
+            sys.exit(usage(verb))
+        if choices:
+            request[CHOICES.get(verb, "action")] = words.pop(0)
+        else:
+            key, _, kind = token.partition(":")
+            request[key] = KINDS[kind](words.pop(0)) if kind else words.pop(0)
+    if words:
+        sys.exit(usage(verb))
+    return request
+
+
+# Where a word chosen from a list goes, when it isn't "action".
+CHOICES = {"ext-answer": "answer"}
+
+
+def with_mods(verb, fixed, allowed, always=False):
+    """Some fixed arguments, then any of some modifier words."""
+    def reader(args):
+        mods = [word for word in args[fixed:] if word in allowed]
+        if len(args) < fixed or len(args) != fixed + len(mods):
+            sys.exit(usage(verb))
+        request = {}
+        for token, word in zip(COMMANDS[verb][0].split(), args[:fixed]):
+            key, _, kind = token.partition(":")
+            request[key] = KINDS[kind](word) if kind else word
+        if mods or always:
+            request["mods"] = mods
+        return request
+    return reader
+
+
+def read_eval(args):
+    if len(args) not in (2, 3) or (len(args) == 3 and args[2] != "mote"):
+        sys.exit(usage("eval"))
+    return {"id": args[0], "js": args[1], **({"world": "mote"} if len(args) == 3 else {})}
+
+
+def read_site(args):
+    if not 1 <= len(args) <= 2:
+        sys.exit(usage("site"))
+    return {"path": os.path.abspath(args[0]), **({"security": args[1] == "security"} if len(args) == 2 else {})}
+
+
+def read_space(args):
+    shapes = {"delete": (), "release": (), "go": ("index", int), "move": ("index", int), "swipe": ("dx", float), "hold": ("dx", float)}
+    if not args:
+        return {}
+    if args[0] == "new":
+        fresh = args[-1] == "fresh"
+        return {"action": "new", "name": " ".join(args[1:-1] if fresh else args[1:]) or "Test", "fresh": fresh}
+    shape = shapes.get(args[0])
+    if shape is None or len(args) != 1 + len(shape[:1]):
+        sys.exit(usage("space"))
+    request = {"action": args[0]}
+    if shape:
+        request[shape[0]] = shape[1](args[1])
+    return request
+
+
+def read_ui(args):
+    if len(args) != 2:
+        sys.exit(usage("ui"))
+    key, value = args
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice") else value in ON}
+
+
+def read_hit(args):
+    if len(args) not in (2, 3) or (len(args) == 3 and args[2] not in ("double", "middle")):
+        sys.exit(usage("hit"))
+    request = {"x": float(args[0]), "y": float(args[1])}
+    if len(args) == 3:
+        request[args[2]] = True
+    return request
+
+
+def read_words(verb, first, words):
+    """A first argument, then any of some words, each true when given."""
+    def reader(args):
+        if len(args) < len(first) or any(word not in words for word in args[len(first):]):
+            sys.exit(usage(verb))
+        request = dict(zip(first, args))
+        for word in words:
+            request[word] = word in args[len(first):]
+        return request
+    return reader
+
+
+def read_switch(verb, needed):
+    """An optional id, then on or off (on when left out and not `needed`)."""
+    def reader(args):
+        count = len(args) - (1 if verb != "pages" else 0)
+        if count not in ((1,) if needed else (0, 1)):
+            sys.exit(usage(verb))
+        request = {"id": args[0]} if verb != "pages" else {}
+        request["on"] = (args[-1] if count else "on") in ON
+        return request
+    return reader
+
+
+def read_frames(args):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek")):
+        sys.exit(usage("frames"))
+    request = {"action": args[0] if args else "fold"}
+    if len(args) > 1:
+        request["seconds"] = float(args[1])
+    return request
+
+
+READERS = {
+    "tap": with_mods("tap", 2, ("shift", "cmd", "opt")),
+    "press": lambda args: with_mods("press", 2, ("cmd", "shift", "ctrl", "opt", "repeat"), always=True)(args) if len(args) >= 2 else sys.exit(usage("press")),
+    "keyeq": with_mods("keyeq", 2, ("shift",), always=True),
+    "eval": read_eval,
+    "site": read_site,
+    "space": read_space,
+    "ui": read_ui,
+    "hit": read_hit,
+    "field": read_words("field", ("text",), ("type", "go")),
+    "bookmark": read_words("bookmark", ("url",), ("new",)),
+    "menu": read_words("menu", (), ("open",)),
+    "ext-pin": read_switch("ext-pin", needed=False),
+    "ext-enable": read_switch("ext-enable", needed=True),
+    "pages": read_switch("pages", needed=True),
+    "frames": read_frames,
+    "close": lambda args: {"id": args[0]} if len(args) == 1 else sys.exit(usage("close")),
+    "ext-page": lambda args: {"id": args[0], "path": args[1] if len(args) > 1 else ""} if 1 <= len(args) <= 2 else sys.exit(usage("ext-page")),
+}
+
+
+def folder(world):
+    return os.path.expanduser(f"~/Library/Application Support/{f'Mote ({world})' if world else 'Mote'}")
+
+
+def ask(path, request):
+    """Sends one request and reads its one answer."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        try:
+            connection.connect(path)
+        except (FileNotFoundError, ConnectionRefusedError):
+            sys.exit("Mote isn't listening — is it open, with Settings › General › “Let a script drive Mote” on?")
+        connection.sendall((json.dumps(request) + "\n").encode())
+        received = b"".join(iter(lambda: connection.recv(1 << 16), b""))
+    return json.loads(received.split(b"\n", 1)[0] or b"{}")
+
+
+def world_of(argv):
+    """The world named by --test or --world NAME, and the arguments left."""
+    world = "test" if "--test" in argv else None
+    if "--world" in argv:
+        at = argv.index("--world")
+        if at + 1 >= len(argv):
+            sys.exit("usage: bench --world NAME COMMAND …")
+        world = "".join(c for c in argv[at + 1].lower() if c.isascii() and (c.isalnum() or c == "-"))
+        if world in ("", "1"):
+            world = "test"
+        argv = argv[:at] + argv[at + 2:]
+    return world, argv
+
+
+def show(verb, answer):
+    if verb == "text":
+        print(answer.get("text", ""))
+        if answer.get("truncated"):
+            print("\n[… truncated]", file=sys.stderr)
+    elif verb == "shot":
+        print(answer["path"])
+    elif verb in ("open", "ext-page"):
+        print(answer["id"])
+    elif verb in ("eval", "ext-popup"):
+        value = answer.get("value")
+        print(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, indent=2))
+    elif verb == "tabs":
+        for tab in answer.get("tabs", []):
+            mark = "⚗" if tab.get("bench") else ("●" if tab.get("active") else " ")
+            state = " …" if tab.get("loading") else (" z" if tab.get("asleep") else "")
+            print(f"{mark} {tab['id']}  {tab.get('title') or '—'}  {tab.get('url')}{state}")
+    else:
+        print(json.dumps(answer, ensure_ascii=False, indent=2))
+
+
+def main(argv):
+    world, argv = world_of(argv)
+    yes = "--yes" in argv
+    argv = [word for word in argv if word not in ("--test", "--yes")]
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__.strip() + "\n")
+        for verb, (arguments, what) in COMMANDS.items():
+            print(f"    Tools/bench {verb} {shown(arguments)}".ljust(52) + " " + what)
+        return 0
+    verb, args = argv[0], argv[1:]
+    if verb not in COMMANDS:
+        sys.exit(f"unknown command “{verb}” — see bench help")
+    request = {"do": verb, **read(verb, args)}
+    if verb in ("ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload"):
+        request["yes"] = yes
+    answer = ask(os.path.join(folder(world), "bench.sock"), request)
+    if "error" in answer:
+        sys.exit("error: " + str(answer["error"]))
+    show(verb, answer)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

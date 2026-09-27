@@ -1,0 +1,32 @@
+---
+// Privacy: a dark card that opens out to the full width as it arrives.
+const facts = [
+  { title: "No account", text: "Open it and start browsing. There's nothing to sign up for." },
+  { title: "Your keychain", text: "Passwords are encrypted by macOS and readable only by Mote." },
+  {
+    title: "One question a day",
+    text: "Besides the pages you open and their icons, the only thing Mote asks the internet is whether there's an update.",
+  },
+];
+---
+
+<section id="privacy" class="open bg-night text-white" data-dark>
+  <div class="mx-auto max-w-[1180px] px-4 py-36 sm:px-8 sm:py-52">
+    <h2 class="display focus max-w-[14ch] text-[clamp(40px,6vw,84px)]">
+      What you browse <span class="text-white/40">stays on your Mac.</span>
+    </h2>
+    <p class="focus mt-8 max-w-md text-[18px] leading-relaxed text-white/55">
+      No account to create, no sync, and no telemetry. There's nothing for us to see.
+    </p>
+    <div class="mt-24 grid gap-10 sm:mt-32 md:grid-cols-3">
+      {
+        facts.map((fact, i) => (
+          <div class="rise border-t border-white/12 pt-6" style={`--d: ${i}`}>
+            <h3 class="text-[20px] font-medium tracking-[-0.03em]">{fact.title}</h3>
+            <p class="mt-3 text-[16px] leading-relaxed text-white/55">{fact.text}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

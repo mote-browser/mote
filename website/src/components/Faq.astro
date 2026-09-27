@@ -1,0 +1,133 @@
+---
+// Plain <details>: opens and closes without a line of script.
+import { site } from "../site";
+
+const questions = [
+  {
+    q: "Is it really free?",
+    a: `Yes. Mote is free and open source under the GPL-3.0 license, and all of it is on <a href="${site.repo}">GitHub</a>.`,
+  },
+  {
+    q: "Why is it so small?",
+    a: "It uses WebKit, the engine that comes with macOS, instead of shipping a copy of its own. Engine updates arrive with macOS.",
+  },
+  {
+    q: "Will my extensions work?",
+    a: "Most Chrome extensions do, on macOS 15.4 or later. Add them from the Chrome Web Store.",
+  },
+  {
+    q: "Can I bring my passwords and bookmarks?",
+    a: "Yes, from Chrome, Arc, Dia, Brave or Edge, in one click. Nothing leaves your Mac on the way.",
+  },
+  {
+    q: "macOS says it can't check Mote for malicious software.",
+    a: "Builds aren't signed with an Apple Developer ID yet. The first time, Control-click Mote in Applications, choose Open, and confirm. After that it opens like any other app.",
+  },
+  {
+    q: "Which Macs does it run on?",
+    a: "Macs with Apple silicon, on macOS 14 or later.",
+  },
+];
+---
+
+<section id="faq">
+  <div class="mx-auto grid max-w-[1180px] gap-12 border-t border-hairline px-4 pt-24 pb-32 sm:px-8 sm:pt-32 sm:pb-44 lg:grid-cols-[1fr_1.4fr] lg:gap-24">
+    <h2 class="display focus text-[clamp(40px,5.6vw,76px)]">Questions.</h2>
+    <div class="rise">
+      {
+        questions.map(({ q, a }) => (
+          <details class="question">
+            <summary>
+              {q}
+              <span class="toggle" aria-hidden="true" />
+            </summary>
+            <p set:html={a} />
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .question {
+    border-bottom: 1px solid var(--color-hairline);
+
+    &:first-child {
+      border-top: 1px solid var(--color-hairline);
+    }
+
+    & summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 22px 0;
+      cursor: pointer;
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+
+    & p {
+      max-width: 60ch;
+      padding: 0 40px 24px 0;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--color-muted);
+
+      & :global(a) {
+        color: var(--color-ink);
+        text-decoration: underline;
+        text-decoration-color: var(--color-faint);
+        text-underline-offset: 3px;
+      }
+    }
+
+    /* Opens with a short slide where the browser can animate to auto height. */
+    &::details-content {
+      block-size: 0;
+      overflow: clip;
+      transition:
+        block-size 0.45s var(--ease-out),
+        content-visibility 0.45s allow-discrete;
+    }
+
+    &[open]::details-content {
+      block-size: auto;
+      block-size: calc-size(auto, size);
+    }
+  }
+
+  .toggle {
+    position: relative;
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+
+    &::before,
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 50% 0 auto;
+      height: 1.5px;
+      border-radius: 1px;
+      background: var(--color-muted);
+      translate: 0 -50%;
+      transition: rotate 0.35s var(--ease-out);
+    }
+
+    &::after {
+      rotate: 90deg;
+    }
+
+    details[open] &::after {
+      rotate: 0deg;
+    }
+  }
+</style>

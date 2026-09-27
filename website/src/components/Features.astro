@@ -1,0 +1,78 @@
+---
+// What's inside: the heading stays put on the left while the features pass
+// on the right, each darkening as it reaches the middle of the screen.
+const features = [
+  { title: "Blocked before it loads.", text: "Ads and trackers are stopped before the page starts to draw." },
+  { title: "Hide it once.", text: "Click any part of a page to hide it. It stays hidden next time, too." },
+  {
+    title: "Bring your passwords.",
+    text: "Import them from Chrome, Arc, Dia, Brave or Edge in one click. They live in your keychain.",
+  },
+  { title: "Your extensions, too.", text: "Chrome extensions run in Mote, on the engine Safari uses." },
+  { title: "Tabs that sleep.", text: "Restored tabs wait until you click them, so your Mac doesn't have to." },
+];
+---
+
+<section id="features" class="bg-warm">
+  <div class="mx-auto grid max-w-[1180px] gap-16 px-4 py-36 sm:px-8 sm:py-52 lg:grid-cols-[1fr_1.25fr] lg:gap-24">
+    <div>
+      <h2 class="display focus text-[clamp(40px,5.6vw,76px)] lg:sticky lg:top-[30vh]">
+        Everything you'd reach for. <span class="text-faint">Already inside.</span>
+      </h2>
+    </div>
+    <ul class="m-0 list-none p-0">
+      {
+        features.map((feature) => (
+          <li class="feature">
+            <h3>{feature.title}</h3>
+            <p>{feature.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .feature {
+    padding: 40px 0 44px;
+    border-top: 1px solid #17171a1a;
+
+    &:last-child {
+      border-bottom: 1px solid #17171a1a;
+    }
+
+    & h3 {
+      font-size: clamp(28px, 3vw, 40px);
+      font-weight: 500;
+      letter-spacing: -0.045em;
+      line-height: 1.05;
+    }
+
+    & p {
+      max-width: 30em;
+      margin-top: 14px;
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--color-muted);
+    }
+  }
+
+  /* Each one comes up to full strength as it crosses the middle. */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .feature {
+        animation: present linear both;
+        animation-timeline: view();
+        animation-range: cover 20% cover 45%;
+      }
+    }
+  }
+
+  @keyframes present {
+    from {
+      opacity: 0.18;
+      translate: 24px 0;
+    }
+  }
+</style>

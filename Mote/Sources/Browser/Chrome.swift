@@ -1,0 +1,273 @@
+import MoteCore
+import SwiftUI
+
+// The window's layout (see ChromeLayout): the tabs sit on the window's frame,
+// in a sidebar or a strip, and the page on a rounded card inset from the
+// window's edges, with the toolbar across its top.
+
+extension Browser {
+    /// Whether the bookmarks bar is on the card: on every page when asked for in
+    /// Settings, and always on a new tab, which has no page to cover.
+    var bookmarksShown: Bool {
+        guard !bookmarks.isEmpty, active?.immersed != true else { return false }
+        return prefs.bookmarksBar || active?.isBlank != false
+    }
+
+    /// Whether the address field is being edited in the toolbar, over a page. A
+    /// blank tab edits in its own composer, and ⌘K opens the palette instead.
+    var editingInBar: Bool {
+        editing && !field.switching && active?.isBlank == false
+    }
+
+    func layout(in window: CGSize) -> ChromeLayout {
+        ChromeLayout(
+            window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: prefs.sideWidth, folded: folded,
+            immersed: active?.immersed == true, bookmarked: bookmarksShown)
+    }
+}
+
+struct Chrome: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+
+    var body: some View {
+        GeometryReader { geo in
+            let layout = browser.layout(in: geo.size)
+            ZStack(alignment: .topLeading) {
+                // Black in full-screen video, so no band shows during the transition.
+                (layout.corner == 0 ? Color.black : Palette.frame)
+
+                // Kept in the tree while folded, just slid off the window: building the
+                // whole list again as it comes back would cost the first frames of the
+                // slide. It slides as one solid panel, beside the card.
+                if prefs.sidebar, browser.active?.immersed != true {
+                    let docked = layout.sidebar != nil
+                    Sidebar(browser: browser, prefs: prefs, showing: docked)
+                        .frame(width: prefs.sideWidth, height: geo.size.height)
+                        .offset(x: docked ? 0 : -prefs.sideWidth - ChromeLayout.gap)
+                        .allowsHitTesting(docked)
+                        .accessibilityHidden(!docked)
+                        .transition(.move(edge: .leading))
+                }
+
+                PageCard(browser: browser, prefs: prefs, layout: layout)
+                    .frame(width: layout.card.width, height: layout.card.height)
+                    .offset(x: layout.card.minX, y: layout.card.minY)
+
+                // Over the card, so the active tab covers the card's top edge and the
+                // two read as one surface.
+                if layout.strip != nil {
+                    TabBar(browser: browser)
+                        .frame(width: geo.size.width, height: ChromeLayout.strip)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // Over the card's edge, so the gap beside the page is what resizes the
+                // sidebar; no line is drawn for it.
+                if let side = layout.sidebar {
+                    ResizeGrip(prefs: prefs) { browser.toggleFold() }
+                        .frame(width: ResizeGrip.width, height: side.height)
+                        .offset(x: side.maxX - ResizeGrip.width + ResizeGrip.over)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .animation(Motion.glide, value: prefs.sidebar)
+        .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
+    }
+}
+
+// MARK: - Card
+
+/// The rounded card: the toolbar, the bookmarks bar, and the page.
+private struct PageCard: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+    let layout: ChromeLayout
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: layout.corner, style: .continuous)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if layout.toolbar > 0 {
+                Toolbar(browser: browser, prefs: prefs)
+                    .frame(height: layout.toolbar)
+                    .zIndex(1)
+            }
+            if layout.bookmarks > 0 {
+                BookmarksBar(browser: browser, bookmarks: browser.bookmarks, ruled: browser.active?.isBlank == false)
+                    .frame(height: layout.bookmarks)
+                    .transition(.opacity)
+            }
+            // The page takes its new size at once, without animating, and keeps to the
+            // card's far corner while the card's near edge slides over it or away; a
+            // picture of how it was dissolves on top (see `Browser.dissolvingPage`).
+            stage
+                .frame(width: layout.page.width, height: layout.page.height)
+                .transaction { $0.animation = nil }
+                .overlay(alignment: .bottomTrailing) {
+                    if let veil = browser.pageVeil {
+                        Image(nsImage: veil)
+                            .frame(width: veil.size.width, height: veil.size.height)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .clipped()
+        }
+        .background {
+            if layout.corner > 0 {
+                shape
+                    .fill(Palette.ground)
+                    .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
+                    .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+            } else {
+                Palette.ground
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            if layout.corner > 0 {
+                shape.strokeBorder(Palette.edge, lineWidth: 1).allowsHitTesting(false)
+            }
+        }
+        // Over the page, under the address field; outside the clip so a long list isn't cut.
+        .overlayPreferenceValue(AddressBar.Bounds.self) { anchor in
+            GeometryReader { proxy in
+                if let anchor, browser.editingInBar, !browser.field.offers.isEmpty {
+                    BarSuggestions(browser: browser, bar: proxy[anchor])
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -4)), removal: .opacity))
+                }
+            }
+        }
+        .animation(Motion.quick, value: browser.editingInBar && !browser.field.offers.isEmpty)
+        .animation(Motion.settle, value: browser.reviewing)
+    }
+
+    @ViewBuilder
+    private var stage: some View {
+        if let tab = browser.active {
+            ZStack(alignment: .topLeading) {
+                if tab.isBlank {
+                    NewTabPage(browser: browser, prefs: prefs)
+                } else {
+                    Page(tab: tab)
+                        .overlay {
+                            if prefs.showsLinks { LinkBubble(status: browser.linkStatus) }
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if browser.finder.showing {
+                                FindBar(finder: browser.finder)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                        }
+                        .overlay(alignment: .topLeading) {
+                            if let asked = browser.logins.choices, asked.tab == tab.id {
+                                AccountList(logins: browser.logins, choices: asked)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(Motion.quick, value: browser.logins.choices)
+                }
+                PeekLayer(browser: browser)
+                if browser.reviewing {
+                    // Not dimmed, so the page stays visible while reviewing hidden elements.
+                    ZStack(alignment: .topTrailing) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { browser.reviewing = false }
+                        HiddenElementsPanel(browser: browser)
+                            .padding(.top, 8)
+                            .padding(.trailing, 8)
+                            .transition(.scale(scale: 0.97, anchor: .topTrailing).combined(with: .opacity))
+                    }
+                    .transition(.opacity)
+                }
+            }
+        } else {
+            Palette.ground
+        }
+    }
+}
+
+// MARK: - Resize Grip
+
+/// The invisible handle between the sidebar and the card. Dragging it sets the
+/// sidebar's width, a double-click puts the default back, and letting go well
+/// short of the narrowest width folds the sidebar away, as in Arc.
+///
+/// AppKit rather than a SwiftUI gesture: the cursor has to win over the web
+/// view's cursor rects beside it, and the drag must keep tracking once the
+/// pointer leaves the handle.
+struct ResizeGrip: NSViewRepresentable {
+    /// Width of the handle, and how far of it lies over the card.
+    static let width: CGFloat = 10
+    static let over: CGFloat = 3
+    /// How far past the narrowest width a release folds the sidebar.
+    static let foldBeyond: CGFloat = 64
+
+    let prefs: Preferences
+    let fold: () -> Void
+
+    func makeNSView(context: Context) -> Grip { Grip() }
+
+    func updateNSView(_ grip: Grip, context: Context) {
+        grip.prefs = prefs
+        grip.fold = fold
+    }
+
+    final class Grip: NSView {
+        var prefs: Preferences?
+        var fold: () -> Void = {}
+        private var start: (x: CGFloat, width: CGFloat)?
+        private var wanted: CGFloat = 0
+
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .resizeLeftRight)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.invalidateCursorRects(for: self)
+        }
+
+        override func layout() {
+            super.layout()
+            window?.invalidateCursorRects(for: self)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let prefs else { return }
+            if event.clickCount == 2 {
+                start = nil
+                withAnimation(Motion.settle) { prefs.sideWidth = Metrics.side }
+                return
+            }
+            start = (event.locationInWindow.x, prefs.sideWidth)
+            wanted = prefs.sideWidth
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let prefs, let start else { return }
+            NSCursor.resizeLeftRight.set()
+            wanted = start.width + event.locationInWindow.x - start.x
+            let width = min(Metrics.sideMax, max(Metrics.sideMin, wanted))
+            guard width != prefs.sideWidth else { return }
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) { prefs.sideWidth = width }
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            defer { start = nil }
+            guard start != nil, wanted < Metrics.sideMin - ResizeGrip.foldBeyond else { return }
+            fold()
+        }
+    }
+}

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>$(MOTE_COPYRIGHT)</string>
+	<!-- Where the updater looks for appcast.json. Empty unless a release build
+	     sets MOTE_FEED_URL; an empty feed switches the updater off. -->
+	<key>MoteFeed</key>
+	<string>$(MOTE_FEED_URL)</string>
+	<!-- The public half of Mote's update key (Tools/release/keys); updates
+	     signed with anything else are refused. -->
+	<key>MoteUpdateKey</key>
+	<string>$(MOTE_UPDATE_KEY)</string>
+	<!-- Owning http and https is what sends a link clicked in Mail here. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Web address</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>http</string>
+				<string>https</string>
+			</array>
+		</dict>
+	</array>
+	<!-- macOS lists an app under Desktop & Dock › Default web browser only when
+	     it claims public.xhtml as well as public.html. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Web page</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.html</string>
+				<string>com.apple.web-internet-location</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>XHTML page</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.xhtml</string>
+			</array>
+		</dict>
+	</array>
+	<!-- A browser goes wherever it is pointed, including plain http and localhost. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<!-- Pages ask for these, not the app; macOS still needs the sentence for its prompt. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Websites you visit can ask to use your camera. Mote asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Websites you visit can ask to use your microphone. Mote asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Files you download are saved to your Downloads folder.</string>
+</dict>
+</plist>

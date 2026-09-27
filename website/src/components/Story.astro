@@ -1,0 +1,210 @@
+---
+// The opening: the page fills the screen, then shrinks into the card of a
+// Mote window — the site becomes the page Mote is showing. Its manifesto
+// scrolls by, then the same window is used for a moment: a new tab, a
+// search, a page arriving, the sidebar folded away.
+//
+// The window follows the app's own layout and colours (ChromeLayout.swift,
+// Sidebar.swift, Toolbar.swift, Omnibox.swift, Design.swift), in points.
+// Choreography is in story.css; the scroll engine is scene.css.
+import "../styles/scene.css";
+import "../styles/story.css";
+import { site } from "../site";
+import Button from "./Button.astro";
+import Favicon from "./Favicon.astro";
+import Icon from "./Icon.astro";
+import Pebble from "./Pebble.astro";
+
+const manifesto = [
+  "Every Mac comes with a great web engine.",
+  "Mote gives it a browser that feels at home.",
+  "Ads and trackers never make it to the page.",
+  "Tabs you left behind wait quietly until you need them.",
+  "Your passwords stay in your keychain.",
+  "No account. Nothing leaves your Mac.",
+];
+
+// The manifesto scrolls up through the card over .17–.50 of the story; each
+// line is at full strength while it crosses the middle, which, for a block
+// this short, happens between about .29 and .39.
+const spot = (i: number) => {
+  const at = 0.29 + (0.1 * i) / (manifesto.length - 1);
+  return `--from: ${(at - 0.02).toFixed(3)}; --to: ${(at + 0.02).toFixed(3)}`;
+};
+
+// The sidebar, with the app's "Site icons" setting on: pinned sites show
+// their icon, tabs their icon and title. The sites are made up.
+const pins = ["post", "tally", "sidetrack"] as const;
+const tabs = [
+  { title: "Mote", site: "mote" },
+  { title: "Weekly planning", site: "tally" },
+  { title: "Reading list", site: "shelf" },
+  { title: "Lisbon — 7-day forecast", site: "weather" },
+  { title: "Recipes for a slow Sunday", site: "kettle" },
+] as const;
+
+const captions = [
+  { text: "Start anywhere.", from: 0.52, to: 0.66 },
+  { text: "Pages arrive without the ads.", from: 0.66, to: 0.79 },
+  { text: "Then fold it all away.", from: 0.79, to: 0.9 },
+];
+---
+
+<div class="story scene">
+  <div class="story-stage scene-stage">
+    <div class="story-camera part">
+    <div class="story-window part" aria-hidden="true">
+      <span class="story-shade part"></span>
+      <div class="story-side part">
+        <div class="story-pins">
+          {
+            pins.map((site, i) => (
+              <span style={`--i: ${i}`}>
+                <Favicon site={site} class="size-[17px]" />
+              </span>
+            ))
+          }
+        </div>
+        <div class="story-tabs">
+          <span class="story-lift part"><i class="story-read part"></i></span>
+          {
+            tabs.map((tab, i) => (
+              <span class:list={["story-row", { "is-first part": i === 0 }]} style={`--i: ${i + 3}`}>
+                <Favicon site={tab.site} class="size-4 shrink-0" />
+                {tab.title}
+              </span>
+            ))
+          }
+          <span class="story-row story-opened part" style="--i: 8">
+            <span class="story-swap part">New tab</span>
+            <span class="story-swap is-after part"><Favicon site="notes" class="size-4 shrink-0" />On walking slowly</span>
+          </span>
+          <span class="story-row story-new part" style="--i: 9"><Icon name="plus" class="size-3" />New tab</span>
+        </div>
+        <span class="story-foot" style="--i: 10"><Icon name="bookmark" class="size-3.5" /></span>
+      </div>
+    </div>
+
+    <div class="story-page part">
+      <div class="story-glow"></div>
+      <canvas class="story-light" data-light></canvas>
+
+      <header class="story-intro part">
+        <Pebble id="hero-pebble" class="story-pebble" />
+        <h1 class="display story-headline">
+          <span class="story-word" style="--i: 0">The whole web.</span><br />
+          <span class="story-word" style="--i: 1">A fraction</span>{" "}
+          <span class="story-word" style="--i: 2">of the weight.</span>
+        </h1>
+        <p class="story-lede">Mote is the browser built around it. Native, open source, and under 6&nbsp;MB.</p>
+        <div class="story-actions">
+          <Button href={site.download}><Icon name="download" />Download for Mac</Button>
+          <Button href={site.repo} tone="light"><Icon name="github" />View on GitHub</Button>
+        </div>
+        <p class="story-meta">{site.requirements} · Free</p>
+      </header>
+
+      <div class="story-card part">
+        <div class="story-bar part" aria-hidden="true">
+          <div class="story-bar-row part">
+            <span class="door"><Icon name="sidebar" class="size-[14px]" /></span>
+            <span class="door ml-1"><Icon name="back" class="size-[14px]" /></span>
+            <span class="door opacity-30"><Icon name="forward" class="size-[14px]" /></span>
+            <span class="door"><Icon name="reload" class="size-[14px]" /></span>
+            <span class="story-address">
+              <span class="address part is-ours">
+                <i><Icon name="lock" class="size-[10px]" /></i>mote-browser.github.io
+              </span>
+              <span class="address part is-blank">
+                <Icon name="search" class="size-[12px]" />Search or enter address
+              </span>
+              <span class="address part is-theirs">
+                <i><Icon name="lock" class="size-[10px]" /></i>field-notes.blog
+              </span>
+            </span>
+            <i class="story-load part"></i>
+          </div>
+        </div>
+
+        <div class="story-view part">
+        <div class="story-reel">
+          <article class="story-essay part">
+            {manifesto.map((line, i) => (
+              <p class="part" style={spot(i)}>
+                {line}
+              </p>
+            ))}
+          </article>
+        </div>
+
+        <div class="story-newtab part" aria-hidden="true">
+          <Pebble id="newtab-pebble" class="story-newtab-pebble" />
+          <div class="composer">
+            <div class="composer-field">
+              <Icon name="search" class="size-[14px] text-[#8c8c8c]" />
+              <span class="composer-typed part">field notes walking</span>
+            </div>
+            <div class="composer-foot">
+              <span class="composer-engine"><Icon name="globe" class="size-[12px]" />DuckDuckGo</span>
+              <span class="composer-send part"><Icon name="up" class="size-[14px]" /></span>
+            </div>
+            <div class="suggestions part">
+              <span class="is-picked part">
+                <Icon name="search" class="size-[12px] shrink-0 text-[#8c8c8c]" /><b>field notes walking</b><em>Search</em>
+                <Icon name="enter" class="ml-auto size-[12px] text-[#d4d4d4]" />
+              </span>
+              <span><Favicon site="notes" class="size-[15px] shrink-0" /><b>field-notes.blog</b><em>Field Notes</em></span>
+              <span
+                ><Favicon site="notes" class="size-[15px] shrink-0" /><b>field-notes.blog/on-walking-slowly</b><em
+                  >On walking slowly</em
+                ></span
+              >
+            </div>
+          </div>
+        </div>
+
+        <article class="story-article part" aria-hidden="true">
+          <p class="article-site">Field Notes</p>
+          <h3>On walking slowly</h3>
+          <p class="article-by">Essay · 6 min read</p>
+          <div class="article-image"></div>
+          <p>
+            The best walks have no destination. You leave the house with a vague idea of a direction and let the streets
+            decide the rest.
+          </p>
+          <p>Somewhere past the third corner, the list in your head goes quiet, and you start noticing things again.</p>
+        </article>
+        </div>
+      </div>
+
+      <span class="story-hint part" aria-hidden="true">Scroll</span>
+    </div>
+    <!-- Above the page, as the window's own buttons are over the card when the sidebar is folded. -->
+    <span class="story-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+    </div>
+
+    <ol class="story-captions" aria-hidden="true">
+      {
+        captions.map((caption) => (
+          <li class="story-caption part" style={`--from: ${caption.from}; --to: ${caption.to}`}>
+            {caption.text}
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="story-closing part">
+      <h2 class="display">Just you and the page.</h2>
+      <p class="story-closing-hint">Fold the sidebar away any time with <kbd>⌘</kbd><kbd>S</kbd></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { follow } from "../scripts/story";
+
+  // Once the window has formed, its sidebar fills in, on a timer.
+  const story = document.querySelector<HTMLElement>(".story")!;
+  const stage = story.firstElementChild!;
+  follow(story, (progress) => stage.classList.toggle("is-framed", progress > 0.09));
+</script>

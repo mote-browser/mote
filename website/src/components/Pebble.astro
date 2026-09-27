@@ -1,0 +1,44 @@
+---
+// The logomark: the pebble from Mote.icon, filled with its warm light and
+// lit like the icon's glass.
+// `id` keeps each copy's gradient separate; two copies sharing one id break
+// in Safari when the first is hidden.
+interface Props {
+  id: string;
+  class?: string;
+}
+
+const { id, class: className } = Astro.props;
+---
+
+<svg class={className} viewBox="0 0 564 550" aria-hidden="true">
+  <defs>
+    <radialGradient id={`${id}-a`} cx="0.24" cy="0.2" r="0.62">
+      <stop offset="0" stop-color="#fff3e6"></stop>
+      <stop offset="1" stop-color="#fff3e6" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id={`${id}-b`} cx="0.82" cy="0.3" r="0.6">
+      <stop offset="0" stop-color="#f6c6a8"></stop>
+      <stop offset="1" stop-color="#f6c6a8" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id={`${id}-c`} cx="0.72" cy="0.9" r="0.7">
+      <stop offset="0" stop-color="#d4785c"></stop>
+      <stop offset="1" stop-color="#e7a58e" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id={`${id}-shine`} cx="0.3" cy="0.22" r="0.34">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.85"></stop>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+    </radialGradient>
+    <linearGradient id={`${id}-rim`} x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.9"></stop>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"></stop>
+      <stop offset="1" stop-color="#b86a50" stop-opacity="0.35"></stop>
+    </linearGradient>
+  </defs>
+  <path id={`${id}-p`} d="M234 32C404 0 564 100 560 270C556 420 454 530 284 540C124 550 0 470 2 318C4 170 94 58 234 32Z" fill="#ecc2a6"></path>
+  <use href={`#${id}-p`} fill={`url(#${id}-a)`}></use>
+  <use href={`#${id}-p`} fill={`url(#${id}-b)`}></use>
+  <use href={`#${id}-p`} fill={`url(#${id}-c)`}></use>
+  <use href={`#${id}-p`} fill={`url(#${id}-shine)`}></use>
+  <use href={`#${id}-p`} fill="none" stroke={`url(#${id}-rim)`} stroke-width="10"></use>
+</svg>

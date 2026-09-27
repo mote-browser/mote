@@ -1,0 +1,89 @@
+---
+// The last screen: dark, quiet, the pebble alive in the middle.
+import { site } from "../site";
+import Button from "./Button.astro";
+import Icon from "./Icon.astro";
+import Pebble from "./Pebble.astro";
+
+const columns = [
+  {
+    title: "Mote",
+    links: [
+      { label: "Features", href: "#features" },
+      { label: "Privacy", href: "#privacy" },
+      { label: "Open source", href: "#open-source" },
+      { label: "Questions", href: "#faq" },
+    ],
+  },
+  {
+    title: "Project",
+    links: [
+      { label: "GitHub", href: site.repo },
+      { label: "Releases", href: `${site.repo}/releases` },
+      { label: "Changelog", href: site.changelog },
+    ],
+  },
+];
+---
+
+<!-- Stuck to the bottom of the screen, under the page: the page scrolls away
+     and uncovers it. -->
+<footer class="sticky bottom-0 z-0 flex min-h-svh flex-col bg-night text-white">
+  <div class="flex flex-1 flex-col items-center justify-center px-4 pt-16 pb-8 text-center sm:pt-24 sm:pb-16">
+    <div class="rise-pebble relative size-[min(280px,40vw,26svh)]">
+      <canvas data-pebble class="absolute inset-0 size-full opacity-0 transition-opacity duration-1000 [&.is-lit]:opacity-100"></canvas>
+      <Pebble id="footer-pebble" class="absolute inset-[19%] transition-opacity duration-1000 [.is-lit+&]:opacity-0" />
+    </div>
+    <h2 class="emerge display mt-2 text-[clamp(40px,5.6vw,76px)] text-white" style="--e: 1">Give it a minute.</h2>
+    <p class="emerge mt-5 text-[18px] text-white/50" style="--e: 2">Free, open source, and under 5 MB to download.</p>
+    <div class="emerge mt-10" style="--e: 3">
+      <Button href={site.download} tone="outline"><Icon name="download" />Download for Mac</Button>
+    </div>
+    <p class="emerge mt-5 font-mono text-xs tracking-wide text-white/35" style="--e: 3">{site.requirements}</p>
+  </div>
+
+  <div
+    class="emerge mx-auto flex w-full max-w-[1180px] flex-col gap-6 border-t border-white/8 px-4 pt-8 pb-8 sm:gap-10 sm:pt-10 sm:pb-12 font-mono text-[12.5px] sm:flex-row sm:justify-between sm:px-8"
+    style="--e: 4"
+  >
+    <nav class="grid grid-cols-2 gap-x-12 gap-y-2 sm:gap-x-20">
+      {
+        columns.map((column) => (
+          <div class="flex flex-col gap-2">
+            <span class="mb-1 text-white/35 uppercase">{column.title}</span>
+            {column.links.map((link) => (
+              <a href={link.href} class="text-white/70 transition-colors hover:text-white">
+                {link.label}
+              </a>
+            ))}
+          </div>
+        ))
+      }
+    </nav>
+    <span class="text-white/35">© 2026 Mote</span>
+  </div>
+</footer>
+
+<style>
+  /* The pebble comes up out of the dark first: from small and dim, as if lit
+     from far away, while the page is still lifting. */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: scroll()) {
+      .rise-pebble {
+        animation: surface both;
+        animation-timing-function: cubic-bezier(0.2, 0.6, 0.3, 1);
+        animation-timeline: scroll(root);
+        animation-range: calc(100% - 95svh) calc(100% - 25svh);
+      }
+    }
+  }
+
+  @keyframes surface {
+    from {
+      opacity: 0;
+      scale: 0.55;
+      translate: 0 80px;
+      filter: blur(16px);
+    }
+  }
+</style>

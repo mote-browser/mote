@@ -1,0 +1,120 @@
+---
+// How big a browser is, to scale: the camera starts close on Mote's pebble
+// and pulls back to show it beside the others, a circle each, their areas
+// in proportion to the installed apps. The section holds still while it
+// zooms. Sizes measured in September 2026 (see the note); drawn by zoom.ts.
+import "../styles/scene.css";
+
+const bodies = [
+  { name: "Mote", mb: 5.9 },
+  { name: "Firefox", mb: 531 },
+  { name: "Chrome", mb: 755 },
+  { name: "Edge", mb: 1000 },
+  { name: "Dia", mb: 1390 },
+];
+---
+
+<section id="weight" class="scene weight" style="--length: 280svh">
+  <div class="scene-stage weight-stage">
+    <div class="weight-copy">
+      <h2 class="display">The whole browser. <span class="text-faint">About the size of a photo.</span></h2>
+      <p>Mote uses the WebKit engine that's already part of macOS. The others each bring their own.</p>
+    </div>
+    <canvas class="weight-canvas" data-bodies={JSON.stringify(bodies)}></canvas>
+    <p class="weight-note">
+      Area to scale with each app's installed size on Apple silicon, September 2026: Mote 0.1, Firefox 156, Chrome 154,
+      Edge 154, Dia 1.50.
+    </p>
+  </div>
+</section>
+
+<script>
+  import { follow } from "../scripts/story";
+  import { zoom, type Body } from "../scripts/zoom";
+
+  const section = document.querySelector<HTMLElement>(".weight")!;
+  const canvas = section.querySelector<HTMLCanvasElement>("canvas")!;
+  const view = zoom(canvas, JSON.parse(canvas.dataset.bodies!) as Body[]);
+
+  // The camera pulls back between 6% and 86% of the scene's scroll. Without
+  // the scene (reduced motion, or no scripts), it's shown pulled back.
+  view(1);
+  follow(section, (progress) => view((progress - 0.06) / 0.8));
+</script>
+
+<style>
+  .weight {
+    background: var(--color-paper);
+  }
+
+  .weight-stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 144px 16px 64px;
+  }
+
+  .weight-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 30em;
+    margin-inline: auto;
+    text-align: center;
+
+    & h2 {
+      font-size: clamp(34px, 4.4vw, 60px);
+    }
+
+    & p {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--color-muted);
+      text-wrap: balance;
+    }
+  }
+
+  .weight-canvas {
+    width: 100%;
+    height: 60svh;
+    font-family: var(--font-sans);
+  }
+
+  .weight-note {
+    max-width: 44em;
+    margin-inline: auto;
+    font: 400 11.5px/1.6 var(--font-mono);
+    color: var(--color-faint);
+    text-align: center;
+  }
+
+  /* Held on screen: the canvas is the whole stage, under the words. */
+  :global(:root[data-story]) .weight-stage {
+    height: 100svh;
+    padding: 0;
+  }
+
+  :global(:root[data-story]) .weight-copy {
+    margin-top: 13svh;
+  }
+
+  /* The stones pass behind the words: the canvas fades out under them. */
+  :global(:root[data-story]) .weight-canvas {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    mask-image: linear-gradient(to bottom, transparent 26svh, #000 46svh);
+  }
+
+  /* Halfway between the names and the bottom of the stage (--labels comes
+     from zoom.ts). */
+  :global(:root[data-story]) .weight-note {
+    position: absolute;
+    top: calc((var(--labels, 80%) + 100%) / 2);
+    left: 16px;
+    right: 16px;
+    translate: 0 -50%;
+    /* Only once the camera has nearly finished pulling back (--pulled). */
+    opacity: clamp(0, (var(--pulled, 1) - 0.85) * 6.7, 1);
+  }
+</style>

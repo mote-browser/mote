@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Writes a release's appcast.json and its notes, from the CHANGELOG.
+
+    Tools/release/appcast VERSION BUILD SIGNATURE SHA256 OUT_DIR [REPO]
+
+The CHANGELOG section headed "## VERSION" (with or without a date after it)
+becomes the GitHub Release's notes (OUT_DIR/notes.md); its first line of
+plain text, before any "###", is the short summary Settings shows beside
+the update (the feed's "notes"). REPO defaults to mote-browser/mote.
+"""
+
+import json
+import os
+import re
+import sys
+
+
+def section(changelog, version):
+    """The lines of the version's section, or None."""
+    lines = changelog.splitlines()
+    start = next((i for i, line in enumerate(lines) if re.match(rf"^## \[?{re.escape(version)}\]?(\s|$)", line)), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return lines[start + 1:end]
+
+
+def summary(body):
+    """The first paragraph before any "###" heading, on one line."""
+    words = []
+    for line in body:
+        if line.startswith("###"):
+            break
+        if line.strip():
+            words.append(line.strip())
+        elif words:
+            break
+    return " ".join(words) or None
+
+
+def main(argv):
+    if len(argv) not in (5, 6):
+        sys.exit(__doc__.strip())
+    version, build, signature, sha256, out = argv[:5]
+    repo = argv[5] if len(argv) == 6 else "mote-browser/mote"
+    root = os.path.join(os.path.dirname(__file__), "..", "..")
+    with open(os.path.join(root, "CHANGELOG.md"), encoding="utf-8") as f:
+        body = section(f.read(), version)
+    if body is None:
+        sys.exit(f"CHANGELOG.md has no '## {version}' section: move Unreleased there first.")
+    base = f"https://github.com/{repo}/releases/download/v{version}"
+    feed = {
+        "version": version,
+        "build": int(build),
+        "url": f"{base}/Mote.zip",
+        "dmg": f"{base}/Mote.dmg",
+        "sha256": sha256,
+        "signature": signature,
+        "minimumSystemVersion": "14.0",
+    }
+    if note := summary(body):
+        feed["notes"] = note
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "appcast.json"), "w", encoding="utf-8") as f:
+        json.dump(feed, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    with open(os.path.join(out, "notes.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(body).strip() + "\n")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

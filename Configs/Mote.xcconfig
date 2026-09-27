@@ -1,0 +1,23 @@
+// The Mote app target.
+
+PRODUCT_NAME = Mote
+PRODUCT_BUNDLE_IDENTIFIER = $(MOTE_BUNDLE_ID)
+MOTE_COPYRIGHT = Copyright © 2026 AbianS.
+
+INFOPLIST_FILE = Mote/Info.plist
+GENERATE_INFOPLIST_FILE = NO
+ASSETCATALOG_COMPILER_APPICON_NAME = Mote
+CODE_SIGN_ENTITLEMENTS = Mote/Mote.entitlements
+ENABLE_HARDENED_RUNTIME = YES
+
+// Empty: this build never looks for updates. Set by the release workflow.
+MOTE_FEED_URL =
+// The public half of Mote's update key, written by Tools/release/keys. Public
+// on purpose: the private half lives only in GitHub's secrets and your backup.
+MOTE_UPDATE_KEY = c08de6213863d1f2e33cd2994c6461623409941e5b77ad01af1c6ad9bb9b9e65
+
+// Main-actor isolation by default: the app is UI code, and work that leaves
+// the main actor says so explicitly (`nonisolated`, `Task.detached`).
+SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES

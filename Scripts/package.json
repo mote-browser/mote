@@ -1,0 +1,27 @@
+{
+  "name": "mote-scripts",
+  "private": true,
+  "description": "JavaScript that Mote injects into web pages, written in TypeScript. The built output is committed to Mote/Resources/Scripts.",
+  "type": "module",
+  "scripts": {
+    "build": "rolldown --config rolldown.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test"
+  },
+  "devDependencies": {
+    "happy-dom": "20.14.5",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
+    "rolldown": "1.2.11",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.4.2"
+}

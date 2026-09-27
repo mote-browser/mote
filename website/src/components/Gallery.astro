@@ -1,0 +1,814 @@
+---
+// A closer look: five parts of Mote in its dark appearance, each a real-size
+// window (MockWindow) framed so one corner of it shows and the rest runs off
+// the card. Scrolling moves the row left, holding on each card while the
+// window does the thing it's there to show. Flat, 1:1, lit from one place.
+import "../styles/scene.css";
+import Favicon from "./Favicon.astro";
+import Icon from "./Icon.astro";
+import MockWindow from "./MockWindow.astro";
+import Pebble from "./Pebble.astro";
+
+const captions = [
+  ["Tabs, down the side.", "Pinned sites up top, and the tab you're reading fills in as you go."],
+  ["One field for everything.", "An address or a few words. Suggestions come from your own history."],
+  ["Passwords where you sign in.", "Your saved accounts appear under the field, straight from your keychain."],
+  ["Extensions, pinned.", "The ones you use sit in the toolbar. The rest are a click away."],
+  ["Video that floats.", "Switch tabs or apps, and it keeps playing above everything."],
+];
+
+// Each card has the screen to itself around these points of the scene's
+// scroll (the row holds there, see g-travel), and its window acts just
+// before it's reached.
+const holds = [0.05, 0.275, 0.5, 0.725, 0.95];
+const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: ${to.toFixed(3)}`;
+---
+
+<section id="closer" class="scene gallery" style="--length: 460svh" data-dark>
+  <div class="scene-stage g-stage">
+    <div class="g-head">
+      <h2 class="display">Look closer.</h2>
+      <p>Native SwiftUI and WebKit, down to the last pixel.</p>
+    </div>
+
+    <div class="g-view">
+      <div class="g-track part">
+        {
+          captions.map(([title, text], i) => (
+            <figure class:list={["g-card part", `is-${i}`]} style={range(holds[i] - 0.16, holds[i] + 0.16)}>
+              <div class:list={["g-desk", { "fades-left": i === 3 }]} aria-hidden="true">
+                <div class="g-zoom">
+                {i === 0 && (
+                  <MockWindow width={1180} height={740} sidebar host="field-notes.blog" style="left: 36px; top: 36px">
+                    <article class="g-article">
+                      <p class="g-kicker">Field Notes</p>
+                      <p class="g-headline">On walking slowly</p>
+                      <p class="g-by">Essay · 6 min read</p>
+                      <p class="g-copy">
+                        The best walks have no destination. You leave the house with a vague idea of a direction and
+                        let the streets decide the rest. Somewhere past the third corner, the list in your head goes
+                        quiet, and you start noticing things again.
+                      </p>
+                    </article>
+                  </MockWindow>
+                )}
+
+                {i === 1 && (
+                  <MockWindow width={700} height={740} style="left: 30px; top: 36px">
+                    <div class="g-newtab">
+                      <span class="g-newtab-pebble">
+                        <Pebble id="gallery-pebble" class="size-full" />
+                      </span>
+                      <div class="g-composer">
+                        <div class="g-composer-field">
+                          <Icon name="search" class="size-[14px] shrink-0 text-[#949494]" />
+                          <span class="g-typed part" style={range(holds[1] - 0.1, holds[1] - 0.04)}>
+                            slow sunday rec
+                          </span>
+                          <i class="g-caret" />
+                        </div>
+                        <div class="g-composer-foot">
+                          <span class="g-engine">
+                            <Icon name="globe" class="size-[12px]" />
+                            DuckDuckGo
+                          </span>
+                          <span class="g-send">
+                            <Icon name="up" class="size-[14px]" />
+                          </span>
+                        </div>
+                      </div>
+                      <div class="g-panel g-suggestions part" style={range(holds[1] - 0.06, holds[1] - 0.02)}>
+                        <span class="is-picked">
+                          <Icon name="search" class="size-[12px] shrink-0 text-[#949494]" />
+                          <b>slow sunday recipes</b>
+                          <em>Search</em>
+                          <Icon name="enter" class="ml-auto size-[12px] text-[#525252]" />
+                        </span>
+                        <span>
+                          <Favicon site="kettle" class="size-[15px] shrink-0" />
+                          <b>kettle.recipes/slow-sunday</b>
+                          <em>Recipes for a slow Sunday</em>
+                        </span>
+                        <span>
+                          <Favicon site="kettle" class="size-[15px] shrink-0" />
+                          <b>kettle.recipes</b>
+                          <em>Kettle — Recipes for every day</em>
+                        </span>
+                      </div>
+                    </div>
+                  </MockWindow>
+                )}
+
+                {i === 2 && (
+                  <MockWindow width={700} height={740} host="post.mail" style="left: 30px; top: 36px">
+                    <div class="g-signin">
+                      <div class="g-form">
+                        <Favicon site="post" class="size-9" />
+                        <p class="g-form-title">Sign in to Post</p>
+                        <span class="g-field is-focused">
+                          <small>Email</small>
+                          <span>
+                            abian@
+                            <i class="g-caret" />
+                          </span>
+                        </span>
+                        <span class="g-field">
+                          <small>Password</small>
+                        </span>
+                        <span class="g-continue">Continue</span>
+                        <div class="g-panel g-accounts part" style={range(holds[2] - 0.08, holds[2] - 0.03)}>
+                          <span class="is-picked">
+                            <svg class="g-key" viewBox="0 0 16 16">
+                              <circle cx="5.5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.3" />
+                              <path d="M8.5 8h6M12.5 8v2.2M14.5 8v1.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                            </svg>
+                            <span class="g-who">
+                              <b>abian@post.mail</b>
+                              <em>post.mail</em>
+                            </span>
+                          </span>
+                          <span>
+                            <svg class="g-key" viewBox="0 0 16 16">
+                              <circle cx="5.5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.3" />
+                              <path d="M8.5 8h6M12.5 8v2.2M14.5 8v1.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                            </svg>
+                            <span class="g-who">
+                              <b>abian.studio@post.mail</b>
+                              <em>post.mail</em>
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </MockWindow>
+                )}
+
+                {i === 3 && (
+                  <MockWindow width={700} height={740} host="kettle.recipes" extensions style="right: 30px; top: 36px">
+                    <article class="g-article g-recipe">
+                      <p class="g-kicker">Kettle</p>
+                      <p class="g-headline">Recipes for a slow Sunday</p>
+                      <p class="g-copy">
+                        Six dishes that ask for an afternoon and very little else: a pot, a window to look out of, and
+                        somebody to share them with.
+                      </p>
+                    </article>
+                    <div slot="over" class="g-panel g-extensions part" style={range(holds[3] - 0.08, holds[3] - 0.03)}>
+                      <p>Extensions</p>
+                      <span>
+                        <svg viewBox="0 0 16 16"><path d="M8 1.8 13 4v4.2c0 3-2.2 5.2-5 6-2.8-.8-5-3-5-6V4z" fill="#3fb68b" /></svg>
+                        <b>Quietly</b>
+                        <em>Pinned</em>
+                      </span>
+                      <span>
+                        <svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="3" fill="#f5b544" /><path d="M5.5 6h5M5.5 8.2h5M5.5 10.4h3" stroke="#3b2a12" stroke-width="1.2" stroke-linecap="round" /></svg>
+                        <b>Jotter</b>
+                        <em>Pinned</em>
+                      </span>
+                      <span class="is-picked">
+                        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="#8b7cf6" /><path d="M8 5v3l2 1.5" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" /></svg>
+                        <b>Timebox</b>
+                        <em>Pin</em>
+                      </span>
+                      <span>
+                        <svg viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="9" rx="2" fill="#ef6f6c" /><path d="m6.5 6 3 2-3 2z" fill="#fff" /></svg>
+                        <b>Clipreel</b>
+                        <em>Pin</em>
+                      </span>
+                    </div>
+                  </MockWindow>
+                )}
+
+                {i === 4 && (
+                  <>
+                    <MockWindow width={700} height={740} host="frames.video" style="left: 30px; top: 36px">
+                      <p class="g-playing">This page is playing in the floating window.</p>
+                    </MockWindow>
+                    <div class="g-pip part" style={range(holds[4] - 0.1, holds[4] - 0.03)}>
+                      <div class="g-pip-picture" />
+                      <span class="g-pip-pause">
+                        <svg viewBox="0 0 16 16"><path d="M5 3.5h2v9H5zM9 3.5h2v9H9z" fill="#fff" /></svg>
+                      </span>
+                      <i class="g-pip-time"><b /></i>
+                    </div>
+                  </>
+                )}
+                </div>
+              </div>
+              <figcaption>
+                <b>{title}</b> {text}
+              </figcaption>
+            </figure>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { follow } from "../scripts/story";
+
+  follow(document.querySelector<HTMLElement>(".gallery")!);
+</script>
+
+<style>
+  .gallery {
+    background: #09090a;
+    color: #fff;
+  }
+
+  .g-stage {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 48px;
+    padding: 144px 0;
+
+    /* One soft light, behind the card in the middle, and a little grain. */
+    background:
+      radial-gradient(40% 45% at 50% 58%, #ffffff0d, transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  }
+
+  .g-head {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding-inline: 16px;
+
+    & h2 {
+      font-size: clamp(40px, 5.6vw, 76px);
+    }
+
+    & p {
+      margin-top: 14px;
+      font-size: 18px;
+      color: #ffffff80;
+    }
+
+    @media (min-width: 640px) {
+      padding-inline: 32px;
+    }
+  }
+
+  .g-track {
+    --w: min(760px, 86vw);
+    --h: min(540px, 60svh);
+
+    @media (width < 640px) {
+      --h: min(420px, 46svh);
+    }
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px 24px;
+    padding-inline: max(16px, (100vw - 1180px) / 2 + 32px);
+  }
+
+  /* A card: a bezel around a dark desktop, the window sitting on it. */
+  .g-card {
+    width: var(--w);
+    margin: 0;
+
+    & figcaption {
+      max-width: 34em;
+      margin-top: 24px;
+      font-size: 17px;
+      line-height: 1.45;
+      color: #ffffff85;
+
+      & b {
+        font-weight: 600;
+        color: #fff;
+      }
+    }
+  }
+
+  /* A picture of the app, not the app: nothing in it is selectable. */
+  .g-desk {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+    height: var(--h);
+    overflow: hidden;
+    border-radius: 24px;
+    background:
+      radial-gradient(90% 80% at 15% 0%, #2a2420 0%, transparent 60%),
+      radial-gradient(70% 70% at 100% 100%, #1d1a18 0%, transparent 70%),
+      #141313;
+    box-shadow:
+      inset 0 0 0 1px #ffffff14,
+      inset 0 0.5px 0 #ffffff33;
+    /* The window runs off the right and bottom and fades as it goes. */
+    mask-image:
+      linear-gradient(to bottom, #000 62%, transparent 100%),
+      linear-gradient(to right, #000 80%, #0000 100%);
+    mask-composite: intersect;
+
+    &.fades-left {
+      mask-image:
+        linear-gradient(to bottom, #000 62%, transparent 100%),
+        linear-gradient(to left, #000 80%, #0000 100%);
+    }
+  }
+
+  /* The windows are at their real size; on a phone they're shown smaller so
+     the part that matters still fits the card. */
+  .g-zoom {
+    --zoom: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(100% / var(--zoom));
+    height: calc(100% / var(--zoom));
+    transform: scale(var(--zoom));
+    transform-origin: 0 0;
+
+    @media (width < 640px) {
+      --zoom: 0.56;
+    }
+  }
+
+  .fades-left .g-zoom {
+    left: auto;
+    right: 0;
+    transform-origin: 100% 0;
+  }
+
+  /* Pages in the windows. */
+  .g-article {
+    padding: 44px 64px;
+    font-family: Georgia, serif;
+  }
+
+  .g-kicker {
+    font: 600 11px/1 -apple-system, system-ui, sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #e39b7c;
+  }
+
+  .g-headline {
+    margin-top: 18px;
+    font-size: 36px;
+    line-height: 1.05;
+    color: #f2ede8;
+  }
+
+  .g-by {
+    margin-top: 10px;
+    font: 400 12px/1 -apple-system, system-ui, sans-serif;
+    color: #8f8780;
+  }
+
+  .g-copy {
+    max-width: 34em;
+    margin-top: 22px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #c9c3bd;
+  }
+
+  .g-recipe .g-kicker {
+    color: #e2a93b;
+  }
+
+  .g-newtab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 64px;
+  }
+
+  .g-newtab-pebble {
+    display: block;
+    width: 58px;
+    height: 57px;
+    margin-bottom: 26px;
+    filter: drop-shadow(0 5px 12px #00000080);
+  }
+
+  .g-composer {
+    position: relative;
+    width: min(600px, 100% - 64px);
+    height: 104px;
+    border-radius: 18px;
+    background: #1c1c1c;
+    box-shadow:
+      0 0 0 1px #333,
+      0 10px 24px #00000066,
+      0 0 26px #ededed12;
+  }
+
+  .g-composer-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 52px;
+    padding: 0 16px;
+    font-size: 15px;
+    color: #ededed;
+  }
+
+  .g-typed {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .g-caret {
+    display: inline-block;
+    width: 1.5px;
+    height: 16px;
+    margin-left: 1px;
+    background: var(--color-coral);
+    vertical-align: middle;
+  }
+
+  .g-composer-foot {
+    position: absolute;
+    inset: auto 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .g-engine {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    border-radius: 14px;
+    background: #ffffff0b;
+    box-shadow: inset 0 0 0 1px #ffffff12;
+    font-size: 12px;
+    color: #949494;
+  }
+
+  .g-send {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 50%;
+    background: #ededed;
+    color: #1c1c1c;
+  }
+
+  .g-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 14px;
+    background: #1c1c1c;
+    box-shadow:
+      0 0 0 1px #333,
+      0 14px 32px #00000080;
+
+    & > span {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 9px;
+      white-space: nowrap;
+    }
+
+    & b {
+      font-weight: 400;
+      color: #ededed;
+    }
+
+    & em {
+      overflow: hidden;
+      font-size: 12px;
+      font-style: normal;
+      color: #949494;
+      text-overflow: ellipsis;
+    }
+
+    & .is-picked {
+      background: #2d2d2d;
+    }
+  }
+
+  .g-suggestions {
+    width: min(600px, 100% - 64px);
+    margin-top: 8px;
+  }
+
+  /* A sign-in form on someone's site, the saved accounts under its field. */
+  .g-signin {
+    height: 100%;
+    padding-top: 48px;
+    background: radial-gradient(70% 60% at 50% 0%, #1b2233, transparent 70%), #111318;
+  }
+
+  .g-form {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 360px;
+    margin-inline: auto;
+    padding: 30px 28px 26px;
+    border-radius: 18px;
+    background: #181b22;
+    box-shadow:
+      0 0 0 1px #ffffff12,
+      0 20px 40px #00000080;
+  }
+
+  .g-form-title {
+    margin: 14px 0 22px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .g-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    height: 52px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #0f1116;
+    box-shadow: inset 0 0 0 1px #ffffff1a;
+    font-size: 14px;
+
+    & small {
+      font-size: 11px;
+      color: #8b93a7;
+    }
+
+    &.is-focused {
+      box-shadow:
+        inset 0 0 0 1px #4f7cff,
+        0 0 0 3.5px #4f7cff47;
+    }
+  }
+
+  .g-continue {
+    display: grid;
+    width: 100%;
+    height: 42px;
+    margin-top: 6px;
+    place-items: center;
+    border-radius: 10px;
+    background: #4f7cff;
+    font-weight: 600;
+  }
+
+  .g-accounts {
+    position: absolute;
+    top: 170px;
+    left: 22px;
+    right: 22px;
+    z-index: 1;
+
+    & > span {
+      height: 46px;
+    }
+  }
+
+  .g-key {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: #949494;
+  }
+
+  .g-who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.2;
+  }
+
+  /* The puzzle button's menu. */
+  .g-extensions {
+    position: absolute;
+    top: 50px;
+    right: 14px;
+    width: 250px;
+
+    & p {
+      padding: 6px 10px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #949494;
+    }
+
+    & svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    & em {
+      margin-left: auto;
+    }
+  }
+
+  .g-playing {
+    display: grid;
+    height: 46%;
+    place-items: center;
+    color: #949494;
+  }
+
+  /* The floating window, over the desktop, at the bottom right. */
+  .g-pip {
+    position: absolute;
+    right: 28px;
+    bottom: 28px;
+    width: 300px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow:
+      inset 0 0.5px 0 #ffffff40,
+      0 0 0 1px #ffffff1f,
+      0 24px 48px #000000cc;
+    transform-origin: 100% 100%;
+  }
+
+  .g-pip-picture {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(60% 70% at 70% 30%, #f6c6a8 0%, transparent 60%),
+      radial-gradient(80% 80% at 20% 90%, #3b5b4a 0%, transparent 70%),
+      linear-gradient(170deg, #c98f6d, #54675a);
+  }
+
+  .g-pip-pause {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #00000026;
+
+    & svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  .g-pip-time {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    height: 3px;
+    border-radius: 2px;
+    background: #ffffff4d;
+
+    & b {
+      display: block;
+      width: 38%;
+      height: 100%;
+      border-radius: 2px;
+      background: #fff;
+    }
+  }
+
+  /* Scrolled: the row travels left, holding on each card; the card in the
+     middle is at full strength and its window acts. */
+  :global(:root[data-story]) .g-stage {
+    height: 100svh;
+    padding: 0;
+
+    /* Clear of the nav on a phone. */
+    @media (width < 640px) {
+      justify-content: flex-start;
+      gap: 32px;
+      padding-top: 88px;
+    }
+  }
+
+  :global(:root[data-story]) .g-view {
+    mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  :global(:root[data-story]) .g-track {
+    --step: calc(var(--w) + 24px);
+    flex-wrap: nowrap;
+    width: max-content;
+    padding-inline: calc(50vw - var(--w) / 2);
+    animation-name: g-travel;
+  }
+
+  :global(:root[data-story]) .g-card {
+    animation-name: g-present;
+  }
+
+  :global(:root[data-story]) .g-typed {
+    animation-name: g-type;
+  }
+
+  :global(:root[data-story]) :is(.g-suggestions, .g-accounts, .g-extensions) {
+    animation-name: g-drop;
+  }
+
+  :global(:root[data-story]) .g-pip {
+    animation-name: g-float;
+  }
+
+  :global(:root[data-story]) .is-0 :global(.mw-read) {
+    --from: 0;
+    --to: 0.12;
+    animation-name: g-read;
+  }
+
+  :global(:root[data-story]) .is-3 :global(.mw-puzzle) {
+    --from: 0.645;
+    --to: 0.66;
+    animation-name: g-press;
+  }
+
+  @keyframes g-travel {
+    0%,
+    10% {
+      translate: 0 0;
+      animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+    }
+    22.5%,
+    32.5% {
+      translate: calc(var(--step) * -1) 0;
+      animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+    }
+    45%,
+    55% {
+      translate: calc(var(--step) * -2) 0;
+      animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+    }
+    67.5%,
+    77.5% {
+      translate: calc(var(--step) * -3) 0;
+      animation-timing-function: cubic-bezier(0.6, 0, 0.3, 1);
+    }
+    90%,
+    100% {
+      translate: calc(var(--step) * -4) 0;
+    }
+  }
+
+  @keyframes g-present {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    35%,
+    65% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes g-type {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  @keyframes g-drop {
+    from {
+      opacity: 0;
+      translate: 0 -6px;
+      scale: 0.98;
+    }
+  }
+
+  @keyframes g-float {
+    from {
+      opacity: 0;
+      translate: -240px -170px;
+      scale: 2.2;
+      border-radius: 0;
+    }
+  }
+
+  @keyframes g-read {
+    from {
+      scale: 0.2 1;
+    }
+    to {
+      scale: 0.62 1;
+    }
+  }
+
+  @keyframes g-press {
+    to {
+      background: #ffffff21;
+      color: #ededed;
+    }
+  }
+</style>

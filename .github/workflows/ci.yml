@@ -1,0 +1,64 @@
+# Every pull request and push to main: the app (formatting, MoteCore's unit
+# tests, the injected scripts' tests, a build) and the website (types and its
+# build). The integration and UI tests need a real session with a screen, so
+# they stay local (make test, make test-ui).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use the newest Xcode 26
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Scripts/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: Scripts/pnpm-lock.yaml
+
+      - name: Scripts
+        run: make test-scripts
+
+      - name: Formatting
+        run: make lint
+
+      - name: MoteCore
+        run: make test-unit
+
+      - name: Build
+        run: make build
+
+  # The website: types, then the build Pages would publish.
+  website:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: website/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build

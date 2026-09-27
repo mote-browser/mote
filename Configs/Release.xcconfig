@@ -1,0 +1,12 @@
+#include "Base.xcconfig"
+
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+GCC_OPTIMIZATION_LEVEL = s
+
+// Symbols go to a dSYM beside the app, not inside it.
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+DEPLOYMENT_POSTPROCESSING = YES
+STRIP_INSTALLED_PRODUCT = YES
+STRIP_STYLE = non-global
+COPY_PHASE_STRIP = NO

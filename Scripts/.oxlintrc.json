@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "rules": {
+    // `window.__mote…` globals are the switches Swift flips in Mote's isolated
+    // content world; the prefix keeps them apart from anything a page defines.
+    "no-underscore-dangle": "off"
+  },
+  "overrides": [
+    {
+      // The shim takes these globals as it starts (src/extension-shims/captured.ts):
+      // a sandbox may lock them away later.
+      "files": ["src/extension-shims/**"],
+      "rules": {
+        // Listeners are called from a copy of their set, as they stood when the
+        // event came: one added by a listener waits for the next event.
+        "unicorn/no-useless-spread": "off",
+        // The shim builds Chrome's objects, whose `on…` handler properties are
+        // part of the API (WebSocket, FileWriter).
+        "unicorn/prefer-add-event-listener": "off",
+        // Its postMessage calls are on extension ports and BroadcastChannels,
+        // which take no target origin.
+        "unicorn/require-post-message-target-origin": "off",
+        // Tabs are moved and OPFS paths walked one at a time, in order.
+        "no-await-in-loop": "off",
+        "no-restricted-globals": [
+          "error",
+          "URL",
+          "FileReader",
+          "Response",
+          "Blob",
+          "File",
+          "DOMException",
+          "HTMLImageElement",
+          "HTMLAnchorElement",
+          "Element",
+          "crypto"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+---
+import { Font } from "astro:assets";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <Font cssVariable="--font-geist" preload />
+    <Font cssVariable="--font-geist-mono" />
+    <script is:inline>
+      // Before the first paint, so nothing jumps: scripts run (the nav may wait
+      // off screen) and, unless motion is reduced, the opening story plays —
+      // on a CSS scroll timeline where there is one.
+      const root = document.documentElement;
+      root.classList.add("js");
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        root.dataset.story = CSS.supports("animation-timeline: view()") ? "native" : "scripted";
+      }
+    </script>
+  </head>
+  <body>
+    <slot />
+    <script>
+      import Lenis from "lenis";
+
+      // Smooth, weighted scrolling, and for anchor links too. The page's own
+      // scroll animations follow it, since Lenis moves the real scroll.
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        new Lenis({ autoRaf: true, anchors: true, lerp: 0.09 });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+// End-to-end tests that drive the app through its interface.
+
+PRODUCT_NAME = MoteUITests
+PRODUCT_BUNDLE_IDENTIFIER = $(MOTE_BUNDLE_ID).uitests
+GENERATE_INFOPLIST_FILE = YES
+TEST_TARGET_NAME = Mote

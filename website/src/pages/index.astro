@@ -1,0 +1,44 @@
+---
+import Faq from "../components/Faq.astro";
+import Features from "../components/Features.astro";
+import Footer from "../components/Footer.astro";
+import Gallery from "../components/Gallery.astro";
+import Nav from "../components/Nav.astro";
+import Privacy from "../components/Privacy.astro";
+import Source from "../components/Source.astro";
+import Story from "../components/Story.astro";
+import Weight from "../components/Weight.astro";
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Mote — A native browser for the Mac"
+  description="Mote is a native, open-source browser for the Mac, built on the WebKit engine your Mac already has. Under 6 MB, private, and free."
+>
+  <div id="top"></div>
+  <Nav />
+  <main class="sheet" data-sheet>
+    <Story />
+    <Features />
+    <Gallery />
+    <Weight />
+    <Privacy />
+    <Source />
+    <Faq />
+  </main>
+  <Footer />
+</Base>
+
+<script>
+  import { light } from "../scripts/light";
+  import { pebble } from "../scripts/pebble";
+
+  // The shaders wait until the page has loaded and gone quiet; static
+  // stand-ins show until then, and wherever there's no WebGL.
+  const start = () => {
+    for (const canvas of document.querySelectorAll<HTMLCanvasElement>("canvas[data-light]")) light(canvas);
+    for (const canvas of document.querySelectorAll<HTMLCanvasElement>("canvas[data-pebble]")) pebble(canvas);
+  };
+  if ("requestIdleCallback" in window) requestIdleCallback(start, { timeout: 1200 });
+  else setTimeout(start, 300);
+</script>

@@ -1,0 +1,71 @@
+#!/usr/bin/env swift
+// Makes Mote's update key, once. The private half is saved outside the
+// repository, readable by you alone; the public half is written into
+// Configs/Mote.xcconfig, to be built into every copy of Mote.
+//
+//   Tools/release/keys            makes the key, unless there is one
+//   Tools/release/keys --show     prints the public half of the one you have
+//
+// Keep the private key in GitHub (Settings › Secrets and variables › Actions,
+// as MOTE_UPDATE_PRIVATE_KEY) and in your password manager. Losing it means
+// copies already out there can't take updates any more: they'd need to be
+// installed again by hand. Never make a second one for the same app.
+
+import CryptoKit
+import Foundation
+
+let home = FileManager.default.homeDirectoryForCurrentUser
+let folder = home.appending(path: ".config/mote", directoryHint: .isDirectory)
+let file = folder.appending(path: "update-key")
+let config = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Configs/Mote.xcconfig").standardizedFileURL
+
+func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
+
+func publicHalf(of privateHex: String) -> String? {
+    let digits = Array(privateHex.trimmingCharacters(in: .whitespacesAndNewlines))
+    guard digits.count == 64 else { return nil }
+    let bytes = stride(from: 0, to: 64, by: 2).compactMap { UInt8(String(digits[$0...$0 + 1]), radix: 16) }
+    guard bytes.count == 32, let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: Data(bytes)) else { return nil }
+    return hex(key.publicKey.rawRepresentation)
+}
+
+func writePublic(_ key: String) throws {
+    var text = try String(contentsOf: config, encoding: .utf8)
+    guard let line = text.range(of: #"(?m)^MOTE_UPDATE_KEY =.*$"#, options: .regularExpression) else {
+        fatalError("No MOTE_UPDATE_KEY line in \(config.path)")
+    }
+    text.replaceSubrange(line, with: "MOTE_UPDATE_KEY = \(key)")
+    try text.write(to: config, atomically: true, encoding: .utf8)
+}
+
+if CommandLine.arguments.contains("--show") {
+    guard let saved = try? String(contentsOf: file, encoding: .utf8), let key = publicHalf(of: saved) else {
+        print("No key at \(file.path)."); exit(1)
+    }
+    print(key); exit(0)
+}
+
+if FileManager.default.fileExists(atPath: file.path) {
+    print("""
+        There's already a key at \(file.path); Mote keeps the same one for good.
+        Its public half: \(publicHalf(of: (try? String(contentsOf: file, encoding: .utf8)) ?? "") ?? "unreadable")
+        """)
+    exit(1)
+}
+
+let key = Curve25519.Signing.PrivateKey()
+try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+try (hex(key.rawRepresentation) + "\n").write(to: file, atomically: true, encoding: .utf8)
+try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+try writePublic(hex(key.publicKey.rawRepresentation))
+
+print("""
+    Made Mote's update key.
+
+      private  \(file.path)   (only you can read it)
+      public   written into Configs/Mote.xcconfig — commit that
+
+    Now:
+      1. gh secret set MOTE_UPDATE_PRIVATE_KEY < \(file.path)
+      2. Save the file's contents in your password manager too.
+    """)

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The hardened runtime refuses the camera and the microphone unless the
+       app says up front that pages may ask for them. -->
+  <key>com.apple.security.device.camera</key><true/>
+  <key>com.apple.security.device.audio-input</key><true/>
+  <!-- Passkeys, for any site. Apple grants this entitlement to browsers on
+       request, and it only works with a matching Developer ID provisioning
+       profile embedded in the app; the two identifiers tie the app to that
+       profile. Not used yet: builds are unsigned for now. TEAMID stands for
+       the Apple Developer team id, filled in once the profile exists. -->
+  <key>com.apple.application-identifier</key><string>TEAMID.io.github.mote-browser.mote</string>
+  <key>com.apple.developer.team-identifier</key><string>TEAMID</string>
+  <key>com.apple.developer.web-browser.public-key-credential</key><true/>
+</dict>
+</plist>

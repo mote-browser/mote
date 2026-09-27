@@ -1,0 +1,25 @@
+# Build output
+build/
+DerivedData/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# macOS
+.DS_Store
+
+# Signing material tied to one Apple Developer account: never committed.
+*.provisionprofile
+*.mobileprovision
+*.p12
+*.cer
+
+# Claude Code worktrees
+.claude/worktrees/

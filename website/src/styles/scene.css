@@ -1,0 +1,62 @@
+/* Pinned scenes (Story.astro, Gallery.astro, Weight.astro): a tall .scene wrapper with a
+   sticky .scene-stage inside. Any element in it with a .part class plays its
+   animation while the scroll is between --from and --to, fractions of the
+   scene's scroll (0 to 1 by default).
+
+   Chrome and Safari follow the scroll with a view timeline; elsewhere
+   story.ts writes the progress into --p and the animation is scrubbed with a
+   negative delay: paused at time 0, `delay = from - p` puts it `p - from`
+   seconds in, and a duration of `to - from` seconds makes that the fraction.
+
+   Without html[data-story] — no scripts, or reduced motion — a scene is a
+   plain block showing its resting state. */
+
+/* Each part's own stretch: not inherited, so a part inside another keeps
+   the defaults unless it says otherwise. */
+@property --from {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --to {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+.scene-stage {
+  position: relative;
+  overflow: clip;
+}
+
+:root[data-story] {
+  .scene {
+    height: var(--length, 400svh);
+    view-timeline: --scene block;
+  }
+
+  .scene-stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    container-type: size;
+  }
+
+  .part {
+    animation-duration: calc((var(--to, 1) - var(--from, 0)) * 1s);
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+  }
+}
+
+:root[data-story="native"] .part {
+  animation-duration: auto;
+  animation-timeline: --scene;
+  animation-range: contain calc(var(--from, 0) * 100%) contain calc(var(--to, 1) * 100%);
+}
+
+:root[data-story="scripted"] .part {
+  animation-play-state: paused;
+  animation-delay: calc((var(--from, 0) - var(--p, 0)) * 1s);
+}

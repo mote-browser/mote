@@ -1,0 +1,86 @@
+# A version tag (v<version>) becomes a GitHub Release: Mote.dmg for new people,
+# Mote.zip for the updater, and appcast.json, the feed every copy of Mote
+# reads at releases/latest/download/appcast.json.
+#
+# Before tagging: MARKETING_VERSION in Configs/Version.xcconfig is the tag's
+# number, and CHANGELOG.md has its "## <version>" section (Tools/release/appcast).
+#
+# Secrets (Settings › Secrets and variables › Actions):
+#   MOTE_UPDATE_PRIVATE_KEY   the update key's private half (Tools/release/keys). Required.
+#   MOTE_SIGNING_CERT         optional: a code signing certificate (.p12, base64) so every
+#   MOTE_SIGNING_PASSWORD     release keeps one signature and the keychain stops asking
+#   MOTE_SIGNING_IDENTITY     after updates; its common name. Without them, ad-hoc.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      FEED: https://github.com/${{ github.repository }}/releases/latest/download/appcast.json
+      # Only ever goes up: what the updater compares.
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use the newest Xcode 26
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - name: Check the version, the update key and the changelog
+        id: version
+        env:
+          PRIVATE_KEY: ${{ secrets.MOTE_UPDATE_PRIVATE_KEY }}
+        run: |
+          version=$(sed -n 's/^MARKETING_VERSION = //p' Configs/Version.xcconfig)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::The tag is $GITHUB_REF_NAME but Configs/Version.xcconfig says $version"; exit 1; }
+          grep -Eq '^MOTE_UPDATE_KEY = [0-9a-f]{64}$' Configs/Mote.xcconfig || { echo "::error::No update key in Configs/Mote.xcconfig: run Tools/release/keys"; exit 1; }
+          [ -n "$PRIVATE_KEY" ] || { echo "::error::The MOTE_UPDATE_PRIVATE_KEY secret is missing"; exit 1; }
+          grep -q "^## \[\?$version\]\?\( \|$\)" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $version' section"; exit 1; }
+          echo "number=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Signing certificate
+        id: signing
+        env:
+          CERT: ${{ secrets.MOTE_SIGNING_CERT }}
+          PASSWORD: ${{ secrets.MOTE_SIGNING_PASSWORD }}
+          IDENTITY: ${{ secrets.MOTE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$CERT" ]; then echo "identity=-" >> "$GITHUB_OUTPUT"; exit 0; fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build and pack
+        run: >
+          make dmg XCODEBUILD_FLAGS="CURRENT_PROJECT_VERSION=$BUILD_NUMBER MOTE_FEED_URL=$FEED
+          CODE_SIGN_IDENTITY='${{ steps.signing.outputs.identity }}'"
+
+      - name: Sign the update and write the feed
+        env:
+          MOTE_UPDATE_PRIVATE_KEY: ${{ secrets.MOTE_UPDATE_PRIVATE_KEY }}
+        run: |
+          ditto -c -k --keepParent build/Mote.app build/Mote.zip
+          signature=$(Tools/release/sign build/Mote.zip)
+          sha=$(shasum -a 256 build/Mote.zip | cut -d' ' -f1)
+          Tools/release/appcast "${{ steps.version.outputs.number }}" "$BUILD_NUMBER" "$signature" "$sha" build/release "${{ github.repository }}"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" build/Mote.dmg build/Mote.zip build/release/appcast.json
+          --title "Mote ${{ steps.version.outputs.number }}" --notes-file build/release/notes.md

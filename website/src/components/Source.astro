@@ -1,0 +1,77 @@
+---
+// Open source: an invitation, with a little of the real code.
+import { site } from "../site";
+import Button from "./Button.astro";
+import Icon from "./Icon.astro";
+
+// From Mote/Sources/Design/Design.swift, a few members left out.
+const code = [
+  ["c", "/// Shared animations: `glide` for movement between positions, `settle` for"],
+  ["c", "/// appearing and disappearing, `quick` for small state changes. Springs with"],
+  ["c", "/// little or no bounce, and short ease-outs for hover, as Apple's own apps use"],
+  ["c", "/// them: fast to start, gentle to land, never in the way of the next click."],
+  ["k", "enum Motion {"],
+  ["", "    static let glide = Animation.spring(response: 0.34, dampingFraction: 0.82)"],
+  ["", "    static let settle = Animation.spring(response: 0.30, dampingFraction: 0.86)"],
+  ["", "    static let quick = Animation.easeOut(duration: 0.14)"],
+  ["", "    static let press = Animation.spring(response: 0.22, dampingFraction: 0.7)"],
+  ["k", "}"],
+];
+---
+
+<section id="open-source" class="bg-paper">
+  <div class="mx-auto grid max-w-[1180px] items-center gap-16 px-4 pt-36 pb-24 sm:px-8 sm:pt-52 sm:pb-32 lg:grid-cols-[1fr_1.2fr]">
+    <div>
+      <h2 class="display focus text-[clamp(40px,5.6vw,76px)]">Read every line.</h2>
+      <p class="focus mt-8 max-w-sm text-[18px] leading-relaxed text-muted">
+        Mote is free and licensed under the GPL. Check our work, or help build it.
+      </p>
+      <div class="rise mt-10">
+        <Button href={site.repo}><Icon name="github" />Mote on GitHub</Button>
+      </div>
+    </div>
+    <figure class="rise m-0 overflow-hidden rounded-[20px] bg-night shadow-[0_40px_80px_-40px_#3b2a2080]" style="--d: 1">
+      <figcaption class="flex items-center gap-2 border-b border-white/8 px-5 py-3.5 font-mono text-xs text-white/40">
+        <span class="flex gap-1.5"><i class="size-2.5 rounded-full bg-white/15"></i><i class="size-2.5 rounded-full bg-white/15"></i><i class="size-2.5 rounded-full bg-white/15"></i></span>
+        <span class="ml-3">Design.swift</span>
+      </figcaption>
+      <pre class="code m-0 overflow-x-auto p-5 font-mono text-[11.5px] leading-[1.9] sm:p-6 sm:text-[13px]"><code>{code.map(([kind, line]) => <span class:list={["line", kind]}>{line}</span>)}</code></pre>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .code {
+    color: #e8e3de;
+  }
+
+  .line {
+    display: block;
+    white-space: pre;
+  }
+
+  .c {
+    color: #ffffff59;
+  }
+
+  .k {
+    color: var(--color-peach);
+  }
+
+  /* Lines light up as the block passes. */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .line {
+        animation: light linear both;
+        animation-timeline: view();
+        animation-range: cover 25% cover 50%;
+      }
+    }
+  }
+
+  @keyframes light {
+    from {
+      opacity: 0.12;
+    }
+  }
+</style>
