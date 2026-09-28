@@ -468,9 +468,9 @@ private struct ChatComposer: View {
                 }
             }
             HStack(spacing: 8) {
-                ModelChip(browser: browser, eager: true)
-                ModePicker()
+                ToolToggles()
                 Spacer(minLength: 0)
+                AIChip(browser: browser)
                 if conversation.busy, !hasText {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }
                 } else {

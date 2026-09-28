@@ -66,6 +66,14 @@ public struct AddressInput: Equatable, Sendable {
         picked = offers.indices.contains(next) ? next : nil
     }
 
+    /// Whether Return asks the assistant rather than going somewhere: when
+    /// the assistant leads, for anything but an address or a suggestion
+    /// picked with the arrows. Never in the tab switcher.
+    public func asks(assistantLeads: Bool, address: (String) -> URL?) -> Bool {
+        guard assistantLeads, !switching, !isBlank, picked == nil else { return false }
+        return address(typed.trimmingCharacters(in: .whitespaces)) == nil
+    }
+
     /// What Return does: the picked suggestion, then the inline completion,
     /// then the typed text, which `destination` turns into an address or a
     /// search. `address` only accepts addresses (a completion is never a

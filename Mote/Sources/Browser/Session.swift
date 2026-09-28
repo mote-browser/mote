@@ -10,6 +10,8 @@ enum Session {
         var pin: String?
         /// A name the user gave the tab.
         var name: String?
+        /// A chat tab: the kept chat it shows, by id; `url` is empty.
+        var chat: String?
     }
 
     nonisolated struct Saved: Codable, Sendable {

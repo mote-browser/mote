@@ -80,6 +80,7 @@ extension Bench {
             ("hidden", { browser.reviewing = $0 }), ("pages120", { prefs.fastPages = $0 }), ("sidebar", { prefs.sidebar = $0 }),
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
+            ("chats", { if $0 { browser.showChats() } }),
 
         ]
         for (key, set) in switches { request.bool(key).map(set) }

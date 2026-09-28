@@ -1,7 +1,7 @@
 import Foundation
 
-/// What Mote tells every provider before the conversation: who it is, and in
-/// search mode how to answer from the web.
+/// What Mote tells every provider before the conversation: who it is, and
+/// with the web to hand when to search it and how to answer from it.
 public enum Instructions {
     /// The standing instructions, with the method for searching when the
     /// reply searches. `thorough`: a research, whose report is long by design.
@@ -19,16 +19,32 @@ public enum Instructions {
             (headings, lists, tables, fenced code with a language) where it makes the answer easier to read. When you \
             mention a website, give its full https:// address as a Markdown link. Today is \(now.formatted(style)).
             """
-        return search ? chat + "\n\n" + Self.search : chat
+        return search ? chat + "\n\n" + Self.whenNeeded : chat
     }
 
-    /// How to answer from the web, as an answer engine does. Short on purpose:
-    /// it goes with every quick search, and models follow a few plain rules
-    /// better than many. The chat turns the links into numbered citations, so
-    /// they must be to the pages used.
+    /// For a reply that may search: the model decides, as ChatGPT and
+    /// Claude do, and searches like an answer engine when it does.
+    public static let whenNeeded = """
+        You can search the web. Search when the answer depends on anything that could have changed since you were \
+        trained (news, prices, releases, versions, people's roles, anything current or recent), on specific facts \
+        you should check (numbers, dates, quotes, details of a product, a place or a person), or when the person \
+        asks you to look something up. Otherwise answer directly, without searching: writing, rewriting, \
+        translating, explaining a concept, maths, code, and questions about the conversation itself. When in doubt \
+        about a fact, search.
+
+        """ + method
+
+    /// For a reply that must search, as a researcher's does.
     public static let search = """
         Search the web before you answer, and answer from what you find rather than from memory.
 
+        """ + method
+
+    /// How to search and answer from the web, as an answer engine does.
+    /// Short on purpose: it goes with every question, and models follow a
+    /// few plain rules better than many. The chat turns the links into
+    /// numbered citations, so they must be to the pages used.
+    public static let method = """
         Searching:
         - Search from two to four angles at once (in parallel when you can), with short, specific queries. For \
         anything that changes over time, put the current year in the query and prefer the newest sources.

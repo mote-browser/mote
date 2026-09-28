@@ -42,8 +42,14 @@ public final class Conversation: Identifiable {
         case failed(String)
     }
 
-    public let id = UUID()
+    public let id: UUID
     public private(set) var messages: [Message] = []
+    public let created: Date
+    /// When the chat last changed: a question asked, a reply ended.
+    public private(set) var updated: Date
+    /// Called when the chat reaches a point worth keeping: a question asked,
+    /// a reply ended or stopped.
+    @ObservationIgnored public var changed: (@MainActor (Conversation) -> Void)?
     public private(set) var phase: Phase = .idle
     /// What the model is doing on the way to its reply.
     public private(set) var activities: [Activity] = []
@@ -73,15 +79,43 @@ public final class Conversation: Identifiable {
     /// Counts replies, so a stopped one's late events are dropped.
     @ObservationIgnored private var turn = 0
 
-    public init() {}
+    public init() {
+        id = UUID()
+        created = Date()
+        updated = created
+    }
+
+    /// A chat kept earlier, ready to carry on.
+    public init(saved: SavedChat) {
+        id = saved.id
+        created = saved.created
+        updated = saved.updated
+        messages = saved.messages
+        sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search) }
+    }
+
+    /// The chat as it is now, for keeping. A reply still coming is kept as
+    /// stopped, and its session left out.
+    public var saved: SavedChat {
+        var kept = messages
+        if busy, let last = kept.indices.last, kept[last].role == .assistant {
+            kept[last].text += held.text
+            kept[last].reasoning += held.reasoning
+            kept[last].interrupted = true
+        }
+        return SavedChat(
+            id: id, messages: kept, sessions: sessions.mapValues { SavedChat.Session(id: $0.id, heard: $0.heard, search: $0.search) },
+            created: created, updated: updated)
+    }
+
+    private func touch() {
+        updated = Date()
+        changed?(self)
+    }
 
     public var busy: Bool { phase == .waiting || phase == .answering }
 
-    public var title: String {
-        guard let first = messages.first(where: { $0.role == .user }) else { return "New chat" }
-        let line = first.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return line.count > 60 ? String(line.prefix(59)).trimmingCharacters(in: .whitespaces) + "…" : line
-    }
+    public var title: String { SavedChat.title(of: messages) }
 
     /// Finds the route for a turn. Asked once the question is on screen, so
     /// it can take a moment (finding a program, listing models) or fail.
@@ -95,6 +129,7 @@ public final class Conversation: Identifiable {
         stop()
         messages.append(Message(role: .user, text: text))
         ask(routing: routing)
+        touch()
     }
 
     public func retry(via route: Route) { retry(routing: { route }) }
@@ -117,6 +152,7 @@ public final class Conversation: Identifiable {
         if let last = messages.indices.last, messages[last].role == .assistant { messages[last].interrupted = true }
         activities = []
         phase = .idle
+        touch()
     }
 
     private func ask(routing: @escaping Routing) {
@@ -215,6 +251,7 @@ public final class Conversation: Identifiable {
         guard let failure, !(failure is CancellationError) else {
             if let provider, let opened { sessions[provider] = (opened, messages.count, searched) }
             phase = .idle
+            touch()
             return
         }
         // A reply that never started leaves nothing to show.
@@ -222,5 +259,6 @@ public final class Conversation: Identifiable {
         // A session that failed may be gone; the next try starts afresh.
         if let provider { sessions[provider] = nil }
         phase = .failed((failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription)
+        touch()
     }
 }

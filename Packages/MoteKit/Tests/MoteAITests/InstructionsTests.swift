@@ -17,11 +17,22 @@ struct InstructionsTests {
         #expect(!text.contains("Search the web"))
     }
 
-    @Test("Searching adds the method after them")
+    @Test("With the web to hand, it decides when to search, then searches as a research does")
     func search() {
         let text = Instructions.compose(search: true, now: day, timeZone: utc)
         #expect(text.hasPrefix("You are the assistant built into Mote"))
-        #expect(text.hasSuffix(Instructions.search))
+        #expect(text.hasSuffix(Instructions.whenNeeded))
+        #expect(!text.contains("Search the web before you answer"))
+        // The same method once it searches.
+        #expect(Instructions.whenNeeded.hasSuffix(Instructions.method))
+        #expect(Instructions.search.hasSuffix(Instructions.method))
+    }
+
+    @Test(
+        "Deciding: searches for what may have changed or needs checking, answers the rest directly",
+        arguments: ["could have changed", "current", "specific facts", "answer directly", "without searching"])
+    func deciding(rule: String) {
+        #expect(Instructions.whenNeeded.contains(rule))
     }
 
     @Test(

@@ -3,7 +3,7 @@ import MoteAI
 import MoteCore
 import SwiftUI
 
-/// Settings › AI: who answers ⌘Return, with which model, and what each
+/// Settings › AI: who answers when asked, with which model, and what each
 /// provider needs: a key, an address, or its program on the Mac.
 struct AISettings: View {
     let browser: Browser
@@ -16,7 +16,10 @@ struct AISettings: View {
 
     var body: some View {
         let provider = assistant.provider
-        SettingsSection("Asking", note: "In a new tab, ↩ searches with \(prefs.engine.name(custom: prefs.customEngine)) and ⌘↩ asks.") {
+        SettingsSection(
+            "Asking",
+            note: "In a new tab, ↩ searches with \(prefs.engine.name(custom: prefs.customEngine)) and ⌘J switches to asking the assistant."
+        ) {
             SettingRow("Ask with", provider.summary, symbol: "sparkles", tint: Tint.purple) { providerPicker }
             RowRule()
             SettingRow("Model", modelDetail(provider), symbol: "cpu", tint: Tint.indigo) { ModelField(provider: provider) }
@@ -32,6 +35,12 @@ struct AISettings: View {
                 RowRule()
                 programRow(provider, agent: agent)
             }
+            RowRule()
+            SettingRow(
+                "Search the web", provider.searches ? webDetail(provider) : "\(provider.name) can't search the web", symbol: "globe",
+                tint: Tint.blue, on: Binding(get: { assistant.searchesWeb }, set: { assistant.searchesWeb = $0 })
+            )
+            .disabled(!provider.searches)
             RowRule()
             SettingRow("Check it works", checkDetail(provider), symbol: "checkmark.seal", tint: Tint.green) {
                 if checking { Ring(size: 12) } else { Pill("Check") { check(provider) } }
@@ -82,6 +91,12 @@ struct AISettings: View {
         .labelsHidden()
         .pickerStyle(.menu)
         .fixedSize()
+    }
+
+    private func webDetail(_ provider: Provider) -> String {
+        provider.search == .online
+            ? "Through OpenRouter every question would search, so only Research does"
+            : "Looks things up when a question needs it, and cites its sources"
     }
 
     private func modelDetail(_ provider: Provider) -> String {

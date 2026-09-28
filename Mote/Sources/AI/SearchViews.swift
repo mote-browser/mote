@@ -2,59 +2,6 @@ import AppKit
 import MoteAI
 import SwiftUI
 
-/// How the next question is answered: chat, a quick web search, or deep
-/// research. The modes that search are off for a provider that can't.
-struct ModePicker: View {
-    @State private var hovering = false
-    private var assistant: Assistant { .shared }
-
-    var body: some View {
-        let mode = assistant.mode
-        let possible = assistant.provider.searches
-        let lit = mode != .chat
-        Menu {
-            ForEach(Assistant.Mode.allCases) { option in
-                Button {
-                    withAnimation(Motion.quick) { assistant.chosenMode = option }
-                } label: {
-                    Label(option == mode ? "✓ \(option.title)" : option.title, systemImage: option.symbol)
-                    Text(option.detail)
-                }
-                .disabled(option != .chat && !possible)
-            }
-            if !possible {
-                Divider()
-                Text("\(assistant.provider.name) can't search the web")
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: mode.symbol).font(.system(size: 11, weight: .medium))
-                Text(mode.title).font(.system(size: 12))
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
-            }
-            .foregroundStyle(lit ? Palette.ground : hovering ? Palette.ink.opacity(0.8) : Palette.muted)
-            .padding(.horizontal, 11)
-            .frame(height: 28)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(lit ? Palette.ink : Palette.veil.opacity(hovering ? 1.4 : 0.7))
-                    .strokeBorder(lit ? .clear : Palette.edge, lineWidth: 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .onHover { hovering = $0 }
-        .help(possible ? "\(mode.title): \(mode.detail)" : "\(assistant.provider.name) can't search the web, so it only chats")
-        .accessibilityLabel("Mode")
-        .accessibilityValue(mode.title)
-        .animation(Motion.hover, value: hovering)
-        .animation(Motion.quick, value: mode)
-    }
-}
-
 /// A research's progress, then its record: the stages and the parts
 /// researched, each with how many searches and pages it took.
 struct ResearchProgress: View {

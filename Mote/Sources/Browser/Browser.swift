@@ -1,4 +1,5 @@
 import Combine
+import MoteAI
 import MoteCore
 import SwiftUI
 import WebKit
@@ -210,12 +211,8 @@ final class Browser: NSObject, ObservableObject {
     func restoreSession() {
         let saved = Session.read(space: spaceID)
         let restored = saved.tabs.compactMap { entry -> Tab? in
-            guard let url = URL(string: entry.url) else { return nil }
             let tab = Tab()
-            prepare(tab)
-            tab.restore(url: url, title: entry.title, name: entry.name)
-            tab.pin = entry.pin
-            return tab
+            return restore(entry, in: tab) ? tab : nil
         }
         guard !restored.isEmpty else {
             let tab = Tab()
@@ -307,8 +304,28 @@ final class Browser: NSObject, ObservableObject {
 
     // MARK: - Session
 
+    /// Puts a saved tab back: a page, which loads when opened, or a kept chat.
+    private func restore(_ entry: Session.Entry, in tab: Tab) -> Bool {
+        if let id = entry.chat.flatMap(UUID.init(uuidString:)) {
+            guard let chat = Assistant.shared.reopen(id) else { return false }
+            prepare(tab)
+            tab.chat = chat
+            tab.name = entry.name
+            tab.pin = entry.pin
+            return true
+        }
+        guard let url = URL(string: entry.url) else { return false }
+        prepare(tab)
+        tab.restore(url: url, title: entry.title, name: entry.name)
+        tab.pin = entry.pin
+        return true
+    }
+
     func writeSession(now: Bool = false) {
         let entries = tabs.compactMap { tab -> Session.Entry? in
+            if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
+                return Session.Entry(url: "", title: chat.title, pin: tab.pin, name: tab.name, chat: chat.id.uuidString)
+            }
             guard !tab.shy, !tab.bench,
                 // A sleeping tab's address is in `pending`, never its released page's.
                 let url = tab.pending ?? tab.address, url.scheme?.hasPrefix("http") == true
@@ -329,7 +346,10 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Writes the session at once, on quit.
-    func flushSession() { writeSession(now: true) }
+    func flushSession() {
+        writeSession(now: true)
+        Assistant.shared.chats.flush()
+    }
 
     // MARK: - Opening tabs
 
@@ -536,12 +556,8 @@ final class Browser: NSObject, ObservableObject {
     func loadRow(_ space: UUID) -> Parked {
         let saved = Session.read(space: space)
         let row = saved.tabs.compactMap { entry -> Tab? in
-            guard let url = URL(string: entry.url) else { return nil }
             let tab = Tab(configuration: Web.configuration(space: space))
-            prepare(tab)
-            tab.restore(url: url, title: entry.title, name: entry.name)
-            tab.pin = entry.pin
-            return tab
+            return restore(entry, in: tab) ? tab : nil
         }
         return Parked(tabs: row, active: row.indices.contains(saved.active) ? row[saved.active].id : row.first?.id)
     }

@@ -13,17 +13,18 @@ struct KeyMapTests {
             picking: picking, inText: inText)
     }
 
-    @Test("⌘Return and ⌘Enter ask the assistant, only from the address field")
+    @Test("⌘J switches asking the assistant on and off, only in a new tab's composer, whatever the layout")
     func asking() {
-        let press = { (code: UInt16, shift: Bool, option: Bool) in
-            KeyMap.Press(key: "\r", code: code, command: true, shift: shift, option: option)
+        let press = { (key: String, shift: Bool, option: Bool) in
+            KeyMap.Press(key: key, code: KeyMap.jKey, command: true, shift: shift, option: option)
         }
-        #expect(KeyMap.asks(press(36, false, false), inAddressField: true))
-        #expect(KeyMap.asks(press(76, false, false), inAddressField: true))
-        #expect(!KeyMap.asks(press(36, false, false), inAddressField: false))
-        #expect(!KeyMap.asks(press(36, true, false), inAddressField: true))
-        #expect(!KeyMap.asks(press(36, false, true), inAddressField: true))
-        #expect(!KeyMap.asks(KeyMap.Press(key: "\r", code: 36), inAddressField: true))
+        #expect(KeyMap.switchesAsking(press("j", false, false), inComposer: true))
+        // Another layout types something else on that key.
+        #expect(KeyMap.switchesAsking(press("ж", false, false), inComposer: true))
+        #expect(!KeyMap.switchesAsking(press("j", false, false), inComposer: false))
+        #expect(!KeyMap.switchesAsking(press("J", true, false), inComposer: true))
+        #expect(!KeyMap.switchesAsking(press("j", false, true), inComposer: true))
+        #expect(!KeyMap.switchesAsking(KeyMap.Press(key: "j", code: KeyMap.jKey), inComposer: true))
     }
 
     @Test("Everyday shortcuts")

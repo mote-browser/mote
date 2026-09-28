@@ -1,17 +1,117 @@
 [
-  {"id": "swift-latest", "kind": "recent", "question": "What is the latest stable version of Swift, and what are its main new features?"},
-  {"id": "bitcoin-eur", "kind": "volatile", "question": "¿Cuál es el precio actual del bitcoin en euros?"},
-  {"id": "f1-last-race", "kind": "recent", "question": "Who won the most recent Formula 1 Grand Prix, and where was it held?"},
-  {"id": "macbook-compare", "kind": "comparison", "question": "Compare the current MacBook Air and MacBook Pro for a software developer: chips, memory, battery and price."},
-  {"id": "nginx-http3", "kind": "technical", "question": "How do I enable HTTP/3 in nginx? Show the configuration."},
-  {"id": "coffee-heart", "kind": "contested", "question": "Is coffee good or bad for your heart? What does recent research say?"},
-  {"id": "eiffel", "kind": "stable", "question": "When was the Eiffel Tower built, and how tall is it today?"},
-  {"id": "weather-lpa", "kind": "volatile", "question": "¿Qué tiempo va a hacer mañana en Las Palmas de Gran Canaria?"},
-  {"id": "acp", "kind": "niche", "question": "What is the Agent Client Protocol (ACP), and which editors and agents support it?"},
-  {"id": "macos-27", "kind": "recent", "question": "¿Cuáles son las principales novedades de macOS 27?"},
-  {"id": "tokyo-population", "kind": "numbers", "question": "What is the population of the Tokyo metropolitan area according to the latest official figures?"},
-  {"id": "rotate-pdf", "kind": "how-to", "question": "How do I rotate a single page of a PDF on a Mac without installing anything?"},
-  {"id": "foldable-iphone", "kind": "rumour", "question": "Has Apple released a foldable iPhone? If not, what is actually known?"},
-  {"id": "claude-pricing", "kind": "numbers", "question": "How much does the Claude API cost per million tokens for the latest Sonnet model?"},
-  {"id": "rag", "kind": "concept", "question": "Explain what retrieval-augmented generation (RAG) is and when it helps, with sources."}
+  {
+    "id": "swift-latest",
+    "kind": "recent",
+    "question": "What is the latest stable version of Swift, and what are its main new features?",
+    "search": true
+  },
+  {
+    "id": "bitcoin-eur",
+    "kind": "volatile",
+    "question": "¿Cuál es el precio actual del bitcoin en euros?",
+    "search": true
+  },
+  {
+    "id": "f1-last-race",
+    "kind": "recent",
+    "question": "Who won the most recent Formula 1 Grand Prix, and where was it held?",
+    "search": true
+  },
+  {
+    "id": "macbook-compare",
+    "kind": "comparison",
+    "question": "Compare the current MacBook Air and MacBook Pro for a software developer: chips, memory, battery and price.",
+    "search": true
+  },
+  {
+    "id": "nginx-http3",
+    "kind": "technical",
+    "question": "How do I enable HTTP/3 in nginx? Show the configuration."
+  },
+  {
+    "id": "coffee-heart",
+    "kind": "contested",
+    "question": "Is coffee good or bad for your heart? What does recent research say?"
+  },
+  {
+    "id": "eiffel",
+    "kind": "stable",
+    "question": "When was the Eiffel Tower built, and how tall is it today?"
+  },
+  {
+    "id": "weather-lpa",
+    "kind": "volatile",
+    "question": "¿Qué tiempo va a hacer mañana en Las Palmas de Gran Canaria?",
+    "search": true
+  },
+  {
+    "id": "acp",
+    "kind": "niche",
+    "question": "What is the Agent Client Protocol (ACP), and which editors and agents support it?",
+    "search": true
+  },
+  {
+    "id": "macos-27",
+    "kind": "recent",
+    "question": "¿Cuáles son las principales novedades de macOS 27?",
+    "search": true
+  },
+  {
+    "id": "tokyo-population",
+    "kind": "numbers",
+    "question": "What is the population of the Tokyo metropolitan area according to the latest official figures?",
+    "search": true
+  },
+  {
+    "id": "rotate-pdf",
+    "kind": "how-to",
+    "question": "How do I rotate a single page of a PDF on a Mac without installing anything?"
+  },
+  {
+    "id": "foldable-iphone",
+    "kind": "rumour",
+    "question": "Has Apple released a foldable iPhone? If not, what is actually known?",
+    "search": true
+  },
+  {
+    "id": "claude-pricing",
+    "kind": "numbers",
+    "question": "How much does the Claude API cost per million tokens for the latest Sonnet model?",
+    "search": true
+  },
+  {
+    "id": "rag",
+    "kind": "concept",
+    "question": "Explain what retrieval-augmented generation (RAG) is and when it helps, with sources."
+  },
+  {
+    "id": "rewrite",
+    "kind": "writing",
+    "search": false,
+    "question": "Rewrite this more formally: hey, can u send me the report by tmrw? thx"
+  },
+  {
+    "id": "multiply",
+    "kind": "maths",
+    "search": false,
+    "question": "What is 17 × 23?"
+  },
+  {
+    "id": "closure",
+    "kind": "concept",
+    "search": false,
+    "question": "Explain what a closure is in Swift, in two sentences."
+  },
+  {
+    "id": "translate",
+    "kind": "writing",
+    "search": false,
+    "question": "Traduce al francés: buenos días, ¿cómo estás?"
+  },
+  {
+    "id": "haiku",
+    "kind": "writing",
+    "search": false,
+    "question": "Write a haiku about autumn rain."
+  }
 ]

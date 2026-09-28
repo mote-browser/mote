@@ -17,6 +17,27 @@ struct AddressInputTests {
         input.submit(address: address, destination: destination)
     }
 
+    @Test("When the assistant leads, Return asks, unless an address is typed or a suggestion picked")
+    func asking() {
+        var input = AddressInput()
+        input.typed = "why is the sky blue"
+        #expect(input.asks(assistantLeads: true, address: address))
+        #expect(!input.asks(assistantLeads: false, address: address))
+        // Inline completion doesn't turn a question into an address.
+        input.offer([apple], ending: "le.com")
+        #expect(input.asks(assistantLeads: true, address: address))
+        input.walk(1)
+        #expect(!input.asks(assistantLeads: true, address: address))
+        input.typed = "apple.com"
+        input.offer([], ending: nil)
+        #expect(!input.asks(assistantLeads: true, address: address))
+        input.typed = "  "
+        #expect(!input.asks(assistantLeads: true, address: address))
+        input.typed = "tabs"
+        input.switching = true
+        #expect(!input.asks(assistantLeads: true, address: address))
+    }
+
     @Test("The arrows walk the list and stepping off either end clears the pick")
     func walking() {
         var input = AddressInput()

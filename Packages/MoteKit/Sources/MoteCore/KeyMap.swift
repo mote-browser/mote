@@ -43,11 +43,13 @@ public enum KeyMap {
     public static let returnKey: UInt16 = 36
     public static let enterKey: UInt16 = 76
 
-    /// ⌘Return (or ⌘Enter) in the address field: what's typed goes to the
-    /// assistant rather than to the search engine.
-    public static func asks(_ press: Press, inAddressField: Bool) -> Bool {
-        inAddressField && press.command && !press.shift && !press.option && !press.control
-            && (press.code == returnKey || press.code == enterKey)
+    /// The J key, by position.
+    public static let jKey: UInt16 = 38
+
+    /// ⌘J in a new tab's composer: Return asks the assistant instead of
+    /// searching, or searches again.
+    public static func switchesAsking(_ press: Press, inComposer: Bool) -> Bool {
+        inComposer && press.command && !press.shift && !press.option && !press.control && press.code == jKey
     }
 
     /// The top row's digits by key code, so shortcuts don't depend on the

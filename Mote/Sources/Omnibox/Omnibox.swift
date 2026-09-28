@@ -52,9 +52,16 @@ struct NewTabPage: View {
                             SuggestionList(browser: browser)
                                 .offset(y: Composer.fullHeight + 8)
                                 .transition(.opacity.combined(with: .offset(y: -4)))
+                        } else if browser.field.typed.isEmpty, browser.active?.shy != true {
+                            // Past chats, out of the way once typing starts.
+                            RecentChats(browser: browser)
+                                .padding(.horizontal, 6)
+                                .offset(y: Composer.fullHeight + 22)
+                                .transition(.opacity)
                         }
                     }
                     .animation(Motion.quick, value: browser.field.offers.isEmpty)
+                    .animation(Motion.quick, value: browser.field.typed.isEmpty)
             }
             // Above centre: exact centre looks low under the toolbar.
             .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
@@ -78,22 +85,35 @@ struct Composer: View {
 
     @State private var shake: CGFloat = 0
     @State private var refused = false
-    /// ⌘ is held: Return will ask the assistant rather than search.
-    @State private var asking = false
 
     private var hasText: Bool { !browser.field.typed.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var engine: String { browser.prefs.engine.name(custom: browser.prefs.customEngine) }
+    private var assistant: Assistant { .shared }
+    /// Return asks here: one of the assistant's modes is chosen.
+    private var leads: Bool { !compact && browser.field.asksAssistant }
+    /// The field's symbol: what Return will do now, with ⌘ held or not.
+    private var symbol: String {
+        if browser.field.switching { return "square.on.square" }
+        return leads ? "sparkle" : "magnifyingglass"
+    }
+
+    private var placeholder: String {
+        if browser.field.switching { return "Switch to a tab" }
+        if compact || !leads { return "Search or enter an address" }
+        return assistant.mode == .research ? "What should be researched?" : "Ask anything"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: browser.field.switching ? "square.on.square" : "magnifyingglass")
+                Image(systemName: symbol)
+                    .contentTransition(.symbolEffect(.replace))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.muted)
                     .frame(width: 16)
                 AddressField(
                     browser: browser, size: 15,
-                    placeholder: browser.field.switching
-                        ? "Switch to a tab" : compact ? "Search or enter address" : "Search, enter an address, or ask"
+                    placeholder: placeholder
                 )
                 .frame(height: 22)
             }
@@ -101,18 +121,31 @@ struct Composer: View {
             .frame(height: Composer.compactHeight)
 
             if !compact {
-                HStack(spacing: 8) {
-                    Chip(browser: browser)
-                    ModelChip(browser: browser, lit: asking && hasText)
-                    ModePicker()
-                    Spacer(minLength: 0)
-                    if hasText {
-                        AskHint(asking: asking).transition(.opacity)
+                HStack(spacing: 10) {
+                    AskToggle(asks: leads, engine: engine) { asks in
+                        browser.field.asksAssistant = asks
+                        if asks { assistant.prepare() }
+                        browser.field.askFocus()
                     }
-                    Send(ready: hasText, asking: asking) { asking ? browser.ask() : browser.submit() }
+                    if leads {
+                        Rectangle().fill(Palette.edge).frame(width: 1, height: 14).transition(.opacity)
+                        ToolToggles().transition(.opacity)
+                    }
+                    Spacer(minLength: 0)
+                    if leads {
+                        AIChip(browser: browser).transition(.opacity)
+                    }
+                    RoundButton(
+                        symbol: "arrow.up", filled: hasText,
+                        help: leads ? "Ask   ↩" : "Search or go   ↩"
+                    ) {
+                        leads ? browser.ask() : browser.submit(searching: true)
+                    }
                 }
                 .animation(Motion.quick, value: hasText)
-                .padding(.horizontal, 10)
+                .animation(Motion.settle, value: leads)
+                .padding(.leading, 12)
+                .padding(.trailing, 11)
                 .padding(.bottom, 10)
                 .frame(height: Composer.fullHeight - Composer.compactHeight, alignment: .bottom)
             }
@@ -145,86 +178,6 @@ struct Composer: View {
             withAnimation(Motion.quick) { refused = false }
         }
         .animation(Motion.settle, value: refused)
-        .onCommandKey { held in
-            asking = held && !compact
-            if asking { Assistant.shared.prepare() }
-        }
-    }
-
-    /// What Return and ⌘Return do, beside the send button.
-    private struct AskHint: View {
-        let asking: Bool
-
-        var body: some View {
-            HStack(spacing: 4) {
-                Text(asking ? "↩" : "⌘↩").font(.system(size: 11, weight: .medium, design: .rounded))
-                Text(asking ? "to ask" : "to ask AI").font(.system(size: 11.5))
-            }
-            .foregroundStyle(asking ? Palette.ink.opacity(0.7) : Palette.faint)
-            .animation(Motion.quick, value: asking)
-            .accessibilityHidden(true)
-        }
-    }
-
-    /// Where the words go: the search engine, which Settings changes.
-    private struct Chip: View {
-        @ObservedObject var browser: Browser
-        @State private var hovering = false
-
-        var body: some View {
-            Button {
-                browser.tuning = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "globe")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(browser.prefs.engine.name(custom: browser.prefs.customEngine))
-                        .font(.system(size: 12))
-                }
-                .foregroundStyle(hovering ? Palette.ink.opacity(0.8) : Palette.muted)
-                .padding(.horizontal, 11)
-                .frame(height: 28)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Palette.veil.opacity(hovering ? 1.4 : 0.7))
-                        .strokeBorder(Palette.edge, lineWidth: 1)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(Pressed())
-            .onHover { hovering = $0 }
-            .help("Searches go to this engine — change it in Settings")
-            .animation(Motion.hover, value: hovering)
-        }
-    }
-
-    /// The round send button, filled once there is something to send; with
-    /// ⌘ held it asks the assistant instead.
-    private struct Send: View {
-        let ready: Bool
-        var asking = false
-        let act: () -> Void
-        @State private var hovering = false
-
-        var body: some View {
-            Button(action: act) {
-                Image(systemName: asking ? "sparkle" : "arrow.up")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ready ? Palette.ground : Palette.muted)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(ready ? Palette.ink.opacity(hovering ? 0.8 : 1) : Palette.veil))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(Pressed())
-            .disabled(!ready)
-            .onHover { hovering = $0 }
-            .help(asking ? "Ask   ⌘↩" : "Go   ↩")
-            .accessibilityLabel(asking ? "Ask" : "Go")
-            .contentTransition(.symbolEffect(.replace))
-            .animation(Motion.quick, value: ready)
-            .animation(Motion.quick, value: asking)
-            .animation(Motion.hover, value: hovering)
-        }
     }
 }
 

@@ -8,6 +8,8 @@ closes the tab. For every answer it records how long it took, what the model
 searched and read, its sources, and its citations: the links in the text,
 and how many point to a page the provider actually found or read
 ("grounded"). A citation to a page nobody searched up is a warning sign.
+Questions that say whether they need the web ("search": true or false) also
+check the model's own choice to search: "decided" in the report.
 
     Tools/ai-eval/run                          all questions, as Mote is set up
     Tools/ai-eval/run --provider claude-code --model haiku
@@ -70,8 +72,11 @@ def measure(entry, reply, seconds):
     sources = {key(s["url"]) for s in reply.get("sources", [])}
     cited = citations(text)
     steps = reply.get("steps", [])
+    searched = any(s["kind"] in ("search", "read") for s in steps) or bool(sources)
     return {
         **entry,
+        "searched": searched,
+        "decided": None if "search" not in entry else entry["search"] == searched,
         "seconds": round(seconds, 1),
         "searches": sum(1 for s in steps if s["kind"] == "search"),
         "reads": sum(1 for s in steps if s["kind"] == "read"),
@@ -106,8 +111,10 @@ def ask(entry, patience):
 
 def report(results, title):
     ok = [r for r in results if r["phase"] == "idle"]
+    judged = [r for r in ok if r.get("decided") is not None]
+    mark = lambda r: "–" if r.get("decided") is None else "✓" if r["decided"] else "✗"
     rows = [
-        f"| {r['id']} | {r['phase'] if r['phase'] != 'idle' else 'ok'} | {r['seconds']} | {r['searches']} | {r['reads']} "
+        f"| {r['id']} | {r['phase'] if r['phase'] != 'idle' else 'ok'} | {mark(r)} | {r['seconds']} | {r['searches']} | {r['reads']} "
         f"| {r['sources']} | {r['grounded']}/{r['citations']} | {r['words']} |"
         for r in results
     ]
@@ -116,13 +123,16 @@ def report(results, title):
     grounded = sum(r["grounded"] for r in ok)
     return "\n".join([
         f"# {title}", "",
-        "| question | result | seconds | searches | reads | sources | grounded/citations | words |",
-        "|---|---|---|---|---|---|---|---|",
+        "| question | result | decided | seconds | searches | reads | sources | grounded/citations | words |",
+        "|---|---|---|---|---|---|---|---|---|",
         *rows, "",
         f"Answered {len(ok)} of {len(results)}. Means: {mean('seconds')} s, {mean('searches')} searches, "
         f"{mean('reads')} reads, {mean('sources')} sources, {mean('citations')} citations; "
         f"{grounded}/{cited} citations grounded ({round(100 * grounded / cited) if cited else 0}%). "
-        f"Answers without a citation: {sum(1 for r in ok if r['citations'] == 0)}.",
+        f"Answers without a citation: {sum(1 for r in ok if r['citations'] == 0)}. "
+        f"Decided whether to search rightly: {sum(1 for r in judged if r['decided'])}/{len(judged)}"
+        f" (searched when needed {sum(1 for r in judged if r['decided'] and r['search'])}/{sum(1 for r in judged if r['search'])},"
+        f" answered directly {sum(1 for r in judged if r['decided'] and not r['search'])}/{sum(1 for r in judged if not r['search'])}).",
     ])
 
 
@@ -130,6 +140,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--provider", help="provider id, as Settings › AI knows it")
     parser.add_argument("--model", help="model id for that provider")
+    # search: the model may search, and decides when.
     parser.add_argument("--mode", choices=("chat", "search", "research"), default="search")
     parser.add_argument("--only", help="question ids, comma separated")
     parser.add_argument("--questions", default=os.path.join(os.path.dirname(__file__), "questions.json"))
@@ -156,7 +167,7 @@ def main():
             results.append(result)
             out.write(json.dumps(result, ensure_ascii=False) + "\n")
             out.flush()
-            print(f"{result['phase']} in {result['seconds']} s, {result['searches']} searches, "
+            print(f"{result['phase']} in {result['seconds']} s, searched: {result['searched']}, {result['searches']} searches, "
                   f"{result['grounded']}/{result['citations']} grounded citations")
     title = f"{results[0]['author'] if results else '?'} · {options.mode} · {stamp}"
     text = report(results, title)

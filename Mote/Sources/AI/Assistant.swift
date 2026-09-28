@@ -36,7 +36,7 @@ final class Assistant {
         var title: String {
             switch self {
             case .chat: "Chat"
-            case .search: "Search"
+            case .search: "Web search"
             case .research: "Research"
             }
         }
@@ -45,16 +45,16 @@ final class Assistant {
             switch self {
             case .chat: "bubble.left"
             case .search: "network"
-            case .research: "text.magnifyingglass"
+            case .research: "binoculars"
             }
         }
 
         /// What it does, in a few words.
         var detail: String {
             switch self {
-            case .chat: "Answers from the model alone"
-            case .search: "Searches the web and cites sources · seconds"
-            case .research: "Researches in depth, many sources · a few minutes"
+            case .chat: "Answers from what the model knows."
+            case .search: "Searches the web when a question needs it, and cites its sources."
+            case .research: "Reads many sources and writes a report. Takes minutes."
             }
         }
     }
@@ -65,10 +65,29 @@ final class Assistant {
         didSet { Storage.settings.set(chosenMode.rawValue, forKey: Keys.mode) }
     }
 
+    /// The assistant may search the web when it judges a question needs it
+    /// (Settings › AI). Research searches whatever this says.
+    var searchesWeb: Bool {
+        didSet { Storage.settings.set(searchesWeb, forKey: Keys.web) }
+    }
+
+    /// The next question is researched in depth.
+    var researching: Bool {
+        get { chosenMode == .research }
+        set { chosenMode = newValue ? .research : .chat }
+    }
+
     /// The mode the next question goes in.
     var mode: Mode { mode(with: provider) }
 
-    func mode(with provider: Provider) -> Mode { provider.searches ? chosenMode : .chat }
+    /// Research when asked for; otherwise searching when the model judges it
+    /// worth it, where the provider lets the model judge. OpenRouter's
+    /// `:online` searches for every question, so it only searches in research.
+    func mode(with provider: Provider) -> Mode {
+        guard let search = provider.search else { return .chat }
+        if chosenMode == .research { return .research }
+        return searchesWeb && search != .online ? .search : .chat
+    }
 
     private(set) var setups: [String: ProviderSetup]
     /// What was found on the Mac; nil until the first look.
@@ -97,6 +116,7 @@ final class Assistant {
         static let provider = "ai.provider"
         static let setups = "ai.setups"
         static let mode = "ai.mode"
+        static let web = "ai.web"
     }
 
     init(secrets: Secrets? = nil) {
@@ -110,6 +130,7 @@ final class Assistant {
         chosenMode =
             Storage.settings.string(forKey: Keys.mode).flatMap(Mode.init(rawValue:))
             ?? (Storage.settings.bool(forKey: "ai.search") ? .search : .chat)
+        searchesWeb = Storage.settings.object(forKey: Keys.web) as? Bool ?? true
         setups =
             Storage.settings.data(forKey: Keys.setups).flatMap { try? JSONDecoder().decode([String: ProviderSetup].self, from: $0) } ?? [:]
     }
@@ -281,6 +302,23 @@ final class Assistant {
         return Conversation.Route(
             provider: provider.id, model: model, author: author, service: service,
             instructions: Instructions.compose(search: mode == .search, thorough: mode == .research), search: search)
+    }
+
+    /// Every chat kept, for the list of past chats and for chat tabs that
+    /// come back at launch.
+    let chats = ChatArchive(folder: Storage.file("Chats"))
+
+    /// Keeps `conversation` in the archive from now on, as it changes.
+    func keep(_ conversation: Conversation) {
+        conversation.changed = { [chats] in chats.save($0.saved) }
+    }
+
+    /// A kept chat, ready to carry on and still being kept.
+    func reopen(_ id: UUID) -> Conversation? {
+        guard let saved = chats.load(id) else { return nil }
+        let conversation = Conversation(saved: saved)
+        keep(conversation)
+        return conversation
     }
 
     /// Sends `text` in `conversation` to the chosen provider.

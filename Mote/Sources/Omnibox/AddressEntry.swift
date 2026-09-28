@@ -15,6 +15,9 @@ final class AddressEntry {
     private(set) var refusals = 0
     /// Incremented to ask for keyboard focus.
     private(set) var focusRequest = 0
+    /// Return asks the assistant rather than searching: switched on in a new
+    /// tab's composer (⌘J), and off again for every new tab.
+    var asksAssistant = false
     /// Whether ⌘ is still held since the first ⌘K.
     @ObservationIgnored var cycling = false
 
@@ -52,6 +55,7 @@ final class AddressEntry {
     /// Empties the field and leaves switcher mode.
     func clear() {
         input.switching = false
+        asksAssistant = false
         typed = ""
     }
 

@@ -73,6 +73,9 @@ final class Tab: ObservableObject, Identifiable {
     /// A chat with the assistant, shown in place of a page (see ChatView.swift).
     /// Going to an address replaces it.
     @Published var chat: Conversation?
+    /// Shows every kept chat in place of a page (see ChatsPage.swift). Going to
+    /// an address or opening a chat replaces it.
+    @Published var chats = false
 
     /// The tab whose page opened this one by script; sign-ins go back to it.
     var opener: Tab.ID?
@@ -88,9 +91,10 @@ final class Tab: ObservableObject, Identifiable {
     /// No page: a new tab, or a chat.
     var isBlank: Bool { address == nil }
     /// A new tab, waiting for an address, a search or a question.
-    var isStart: Bool { isBlank && chat == nil }
+    var isStart: Bool { isBlank && chat == nil && !chats }
     var label: String {
         if let chat, isBlank, name?.isEmpty != false { return chat.title }
+        if chats, isBlank, name?.isEmpty != false { return "Chats" }
         return TabLabel.text(name: name, popup: popup, address: address, title: title)
     }
     var monogram: String { chat != nil && isBlank ? "✦" : TabLabel.monogram(for: address) }
@@ -612,6 +616,7 @@ final class Tab: ObservableObject, Identifiable {
     private func leaveChat() {
         chat?.stop()
         chat = nil
+        chats = false
     }
 
     /// Removes the web view, and with it the document WebKit would keep in its

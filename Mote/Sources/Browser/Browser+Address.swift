@@ -20,11 +20,19 @@ extension Browser {
         if switching { return (openPages(matching: typed), nil) }
         guard !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], nil) }
         var list = history.suggestions(for: typed, limit: 3)
-        if Address.url(from: typed) == nil, let search = searchURL(for: typed) {
+        // Where the assistant leads, Return asks rather than searches, so
+        // searching isn't offered (⌘J switches back to it).
+        if !assistantLeads, Address.url(from: typed) == nil, let search = searchURL(for: typed) {
             list.append(Suggestion(key: typed, title: prefs.engine.name(custom: prefs.customEngine), url: search, kind: .search))
         }
+        // A question isn't finished for it as an address.
+        if assistantLeads { return (list, nil) }
         return (list, history.completion(for: typed, among: list.filter { $0.kind != .open }))
     }
+
+    /// The new tab's composer asks the assistant on Return, rather than
+    /// searching with the engine.
+    var assistantLeads: Bool { active?.isStart == true && !field.switching && field.asksAssistant }
 
     /// Open tabs other than the active one, most recently seen first,
     /// matching the text by title or address.
@@ -87,7 +95,9 @@ extension Browser {
     }
 
     /// Return.
-    func submit() {
+    /// Return. `searching`: go or search even where the assistant leads.
+    func submit(searching: Bool = false) {
+        if !searching, field.input.asks(assistantLeads: assistantLeads, address: Address.url(from:)) { return ask() }
         switch field.submit(address: Address.url(from:), destination: destination(for:)) {
         case .switchTo(let id, let url):
             if let tab = tab(id) { select(tab) } else if let tab = active ?? tabs.first { go(tab, to: url) }
@@ -100,12 +110,15 @@ extension Browser {
         }
     }
 
-    /// ⌘Return: what's typed goes to the assistant instead of the search
-    /// engine, in a chat that takes over a new tab, or opens in one.
+    /// What's typed goes to the assistant instead of the search engine, in a
+    /// chat that takes over a new tab, or opens in one: Return where the
+    /// assistant leads, or the composer's send button.
     func ask() {
         let text = field.typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return field.refuse() }
         let chat = Conversation()
+        // Private tabs keep nothing.
+        if active?.shy != true { Assistant.shared.keep(chat) }
         Assistant.shared.ask(text, in: chat)
         if let tab = active, tab.isStart {
             tab.chat = chat
@@ -116,6 +129,41 @@ extension Browser {
         }
         editing = false
         field.clear()
+        writeSession()
+    }
+
+    /// Every kept chat, in a tab: the one already showing them, this one when
+    /// it is a new tab, or a new one.
+    func showChats() {
+        if let tab = tabs.first(where: { $0.chats && $0.isBlank }) { return select(tab) }
+        if let tab = active, tab.isStart {
+            tab.chats = true
+            editing = false
+            field.clear()
+        } else {
+            let tab = Tab()
+            tab.chats = true
+            show(tab, adopting: true)
+        }
+    }
+
+    /// A kept chat: the tab already showing it, or this one when it is a new
+    /// tab, or a new one.
+    func open(chat id: UUID) {
+        if let tab = tabs.first(where: { $0.chat?.id == id && $0.isBlank }) { return select(tab) }
+        guard let chat = Assistant.shared.reopen(id) else { return }
+        // From the list of chats, the chat takes the list's place.
+        if let tab = active, tab.isBlank, tab.chat == nil, !tab.shy {
+            tab.chats = false
+            tab.chat = chat
+            editing = false
+            field.clear()
+        } else {
+            let tab = Tab()
+            tab.chat = chat
+            show(tab, adopting: true)
+        }
+        writeSession()
     }
 
     /// A clicked suggestion opens directly, without moving the keyboard pick,

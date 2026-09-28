@@ -155,6 +155,8 @@ private struct PageCard: View {
                 if let chat = tab.chat, tab.isBlank {
                     // One per chat, so a draft and scrolling never carry over to another.
                     ChatView(browser: browser, conversation: chat).id(chat.id)
+                } else if tab.chats, tab.isBlank {
+                    ChatsPage(browser: browser)
                 } else if tab.isBlank {
                     NewTabPage(browser: browser, prefs: prefs)
                 } else {

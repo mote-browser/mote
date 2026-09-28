@@ -10,7 +10,7 @@ extension Bench {
         ["chat": Self.chat]
     }
 
-    /// `chat show` the chat in front; `chat ask TEXT` asks as ⌘Return does in
+    /// `chat show` the chat in front; `chat ask TEXT` asks as the new tab's Ask does in
     /// the address field, and `chat follow TEXT` asks again in the chat in
     /// front (test runs); `chat wait [SECONDS]` until its reply is
     /// done; `chat use PROVIDER [MODEL] [ADDRESS]` who answers (test runs); `chat
@@ -70,6 +70,14 @@ extension Bench {
             }
             Assistant.shared.chosenMode = mode
             call.answer(["chosen": mode.rawValue, "mode": Assistant.shared.mode.rawValue])
+        case "lead":
+            guard call.testRun("it would change your settings") else { return }
+            // search, or ask: what Return does in the new tab's composer.
+            guard let named = request.string("mode"), ["search", "ask"].contains(named) else {
+                return call.fail("chat lead needs search or ask")
+            }
+            browser.field.asksAssistant = named == "ask"
+            call.answer(["leads": browser.field.asksAssistant, "mode": Assistant.shared.mode.rawValue])
         case "demo":
             guard call.testRun("it would open a chat in your browser") else { return }
             let service = DemoReply(sources: request.int("sources") ?? 400, delay: request.double("delay") ?? 0)

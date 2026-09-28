@@ -182,7 +182,7 @@ extension Bench {
         guard let tab = call.browser.active else { return call.answer(out) }
         var out = out
         out["viewWasBuilt"] = tab.built != nil
-        BenchInput.timeLoad(of: tab, doing: call.browser.submit) { returned, rested, loading in
+        BenchInput.timeLoad(of: tab, doing: { call.browser.submit() }) { returned, rested, loading in
             out["returned"] = returned
             out["rested"] = rested
             out["loading"] = loading

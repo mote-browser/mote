@@ -51,7 +51,10 @@ struct AddressField: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         let coordinator = context.coordinator
         coordinator.browser = browser
-        if field.placeholderAttributedString?.string != placeholder { field.placeholderAttributedString = prompt }
+        if field.placeholderAttributedString?.string != placeholder {
+            field.placeholderAttributedString = prompt
+            field.needsDisplay = true
+        }
         // Only changes from outside (⌘L, walking the list, submitting). Checked
         // against the field's own text, the completion would come back after
         // every backspace and an address could never be shortened.
