@@ -198,16 +198,25 @@
 			password: sent.password
 		});
 	}
+	/** The last caret report, so the same one isn't sent twice. */
+	let reported = "";
+	/** Whether the caret is in a sign-in field, whose frame moves with the page. */
+	let hanging = false;
 	/** Where the caret is, and the frame of the sign-in field it's in, which the account list hangs from. */
 	function caret() {
 		const focused = document.activeElement;
 		const fields = findSignIn();
-		const inSignIn = fields && focused && (focused === fields.user || focused === fields.password);
-		post({
+		const rect = fields && focused && (focused === fields.user || focused === fields.password) && focused ? fieldFrame(focused) : null;
+		hanging = rect !== null;
+		const message = {
 			kind: "focus",
 			typing: acceptsTyping(focused),
-			rect: inSignIn && focused ? fieldFrame(focused) : null
-		});
+			rect
+		};
+		const said = JSON.stringify(message);
+		if (said === reported) return;
+		reported = said;
+		post(message);
 	}
 	/**
 	* Full screen, on or off, as the page hears it. Swift learns of going full
@@ -270,7 +279,7 @@
 		});
 		let moving = false;
 		const moved = () => {
-			if (moving) return;
+			if (moving || !hanging) return;
 			moving = true;
 			requestAnimationFrame(() => {
 				moving = false;

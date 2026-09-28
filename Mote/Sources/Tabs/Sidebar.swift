@@ -406,10 +406,7 @@ private struct SideRow: View {
             Lifted(corner: 10) {
                 if prefs.showsReading {
                     // How far the page is read, as a faint fill across the row.
-                    GeometryReader { geometry in
-                        Rectangle().fill(Palette.ink.opacity(0.05)).frame(width: geometry.size.width * tab.reading)
-                            .animation(.easeOut(duration: 0.15), value: tab.reading)
-                    }
+                    ReadFill(reading: tab.reading)
                 }
             }
             .matchedGeometryEffect(id: "live", in: ground)

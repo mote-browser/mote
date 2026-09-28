@@ -166,3 +166,32 @@ extension View {
             }
     }
 }
+
+/// How far the page is read, as a thin line along the top of a tab in the row.
+/// It watches only the reading, so scrolling redraws nothing else on the tab,
+/// and it grows by scaling, which needs no layout, without animating: the
+/// reading changes on most frames of a scroll, and a layout or an animation
+/// in the window on each one makes the page's frames reach the screen unevenly.
+struct ReadLine: View {
+    @ObservedObject var reading: Reading
+    let span: CGFloat
+
+    var body: some View {
+        Capsule()
+            .fill(Palette.ink.opacity(0.3))
+            .frame(width: span, height: 2)
+            .scaleEffect(x: reading.fraction, anchor: .leading)
+            .opacity(reading.fraction > 0 ? 1 : 0)
+    }
+}
+
+/// How far the page is read, as a faint fill across a row in the sidebar;
+/// scaled rather than laid out, as ReadLine is.
+struct ReadFill: View {
+    @ObservedObject var reading: Reading
+
+    var body: some View {
+        Rectangle().fill(Palette.ink.opacity(0.05))
+            .scaleEffect(x: reading.fraction, anchor: .leading)
+    }
+}

@@ -40,8 +40,11 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var canGoForward = false
     /// Why the page didn't load, shown in its place.
     @Published var failure: String?
-    /// How far down the page is scrolled, 0 to 1, for the tab's reading bar.
-    @Published var reading: Double = 0
+    /// How far down the page is scrolled, for the tab's reading bar. Its own
+    /// object, watched only by the bar: it changes as the page scrolls, and
+    /// published from the tab it redrew and laid out every view on the tab
+    /// mid-scroll, which made the page's frames reach the screen unevenly.
+    let reading = Reading()
     @Published private(set) var reader = false
     /// The site's icon: from the cache once the address is known, then from the page.
     @Published var icon: NSImage?
@@ -245,7 +248,7 @@ final class Tab: ObservableObject, Identifiable {
     /// Forgets what belonged to the previous document.
     private func freshPage() {
         failure = nil
-        reading = 0
+        reading.fraction = 0
         reader = false
         typing = false
         immersed = false
@@ -358,10 +361,10 @@ final class Tab: ObservableObject, Identifiable {
     func pickingEnded() { owner?.tabStoppedPicking(self) }
     func pickingFailed(_ reason: String) { owner?.tab(self, couldNotHide: reason) }
 
-    /// From the page script, already throttled to animation frames.
+    /// From the page script, only when the whole percent read changes.
     func scrolled(to y: Double, of ceiling: Double) {
         let fraction = readingFraction(y: y, of: ceiling)
-        if fraction != reading { reading = fraction }
+        if fraction != reading.fraction { reading.fraction = fraction }
     }
 
     func linkHovered(_ address: String?) { owner?.tab(self, hovers: address) }
@@ -450,7 +453,7 @@ final class Tab: ObservableObject, Identifiable {
     func rest() {
         guard let url = address else { return }
         rested = Rested(url: url)
-        reading = 0
+        reading.fraction = 0
         noisy = false
         // Loading about:blank isn't enough: WebKit keeps the old document in its
         // back-forward cache, where a site can still count it as open and block
@@ -614,4 +617,10 @@ final class Tab: ObservableObject, Identifiable {
         web.uiDelegate = nil
         web.removeFromSuperview()
     }
+}
+
+/// How far down a tab's page is scrolled, 0 to 1.
+@MainActor
+final class Reading: ObservableObject {
+    @Published var fraction: Double = 0
 }

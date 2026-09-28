@@ -58,16 +58,23 @@ function offer(): void {
   if (sent) post({ kind: 'submit', user: sent.user, password: sent.password });
 }
 
+/** The last caret report, so the same one isn't sent twice. */
+let reported = '';
+/** Whether the caret is in a sign-in field, whose frame moves with the page. */
+let hanging = false;
+
 /** Where the caret is, and the frame of the sign-in field it's in, which the account list hangs from. */
 function caret(): void {
   const focused = document.activeElement;
   const fields = findSignIn();
   const inSignIn = fields && focused && (focused === fields.user || focused === fields.password);
-  post({
-    kind: 'focus',
-    typing: acceptsTyping(focused),
-    rect: inSignIn && focused ? fieldFrame(focused) : null,
-  });
+  const rect = inSignIn && focused ? fieldFrame(focused) : null;
+  hanging = rect !== null;
+  const message: FormMessage = { kind: 'focus', typing: acceptsTyping(focused), rect };
+  const said = JSON.stringify(message);
+  if (said === reported) return;
+  reported = said;
+  post(message);
 }
 
 /**
@@ -141,10 +148,12 @@ function installForms(): void {
   }).observe(document.documentElement, { childList: true, subtree: true });
 
   // The field moves when the page scrolls or the window changes size, and
-  // whatever hangs from it has to move too. Once a frame at most.
+  // whatever hangs from it has to move too. Once a frame at most, and only
+  // while something hangs from it: a sign-in search every frame of a scroll
+  // costs the page its frames.
   let moving = false;
   const moved = (): void => {
-    if (moving) return;
+    if (moving || !hanging) return;
     moving = true;
     requestAnimationFrame(() => {
       moving = false;

@@ -12,3 +12,8 @@ export function scrollPosition(window: Window): ScrollPosition {
     max: Math.max(1, (root.scrollHeight || 0) - window.innerHeight),
   };
 }
+
+/** How far through the page, in whole percent: the steps the reading bar moves in (readingFraction in Swift). */
+export function readingStep({ y, max }: ScrollPosition): number {
+  return Math.round(Math.min(1, Math.max(0, y / max)) * 100);
+}

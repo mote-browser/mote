@@ -364,14 +364,11 @@ private struct StripTab: View {
                 TabShape().fill(Palette.ground)
                 // How far the page is read, as a thin line along the top. Not on
                 // pinned or icon-only tabs, too narrow to show it.
-                if !pinned, !iconOnly, prefs.showsReading, tab.reading > 0 {
-                    Capsule()
-                        .fill(Palette.ink.opacity(0.3))
-                        .frame(width: max(0, span - 2 * TabShape.corner) * tab.reading, height: 2)
+                if !pinned, !iconOnly, prefs.showsReading {
+                    ReadLine(reading: tab.reading, span: max(0, span - 2 * TabShape.corner))
                         .padding(.leading, TabShape.foot + TabShape.corner)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 1)
-                        .animation(.easeOut(duration: 0.15), value: tab.reading)
                 }
             }
             .padding(.horizontal, -TabShape.foot)

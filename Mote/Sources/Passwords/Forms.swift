@@ -46,7 +46,8 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
             case .sent(let user, let password): tab.sentSignIn(user: user, password: password)
             case .settled: tab.settleSignIn(navigated: false)
             case .focus(let typing, let field):
-                tab.typing = typing
+                // Published even when unchanged, which redraws every view on the tab.
+                if tab.typing != typing { tab.typing = typing }
                 tab.fieldFocused(field)
             // The page's word comes after the web view's (see watchFullscreen).
             case .fullscreen(let on): tab.immersed = on
