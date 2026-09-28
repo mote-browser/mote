@@ -37,12 +37,18 @@ struct Omnibox: View {
 struct NewTabPage: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
+    /// Times the logo has let a drop of light fall onto the composer.
+    @State private var drops = 0
+
+    private static let logo = CGSize(width: 58, height: 57)
+    private static let gap: CGFloat = 26
 
     var body: some View {
         GeometryReader { geo in
-            VStack(spacing: 26) {
-                MoteLogo()
-                    .frame(width: 58, height: 57)
+            VStack(spacing: Self.gap) {
+                MoteLogo(alive: browser.field.asksAssistant)
+                    .padding(-MoteLogo.spill)
+                    .frame(width: Self.logo.width, height: Self.logo.height)
                 Composer(browser: browser, compact: false)
                     .frame(width: min(Metrics.fieldWidth, max(280, geo.size.width - 64)))
                     // An overlay rather than a stack, so the list appearing or growing
@@ -63,6 +69,13 @@ struct NewTabPage: View {
                     .animation(Motion.quick, value: browser.field.offers.isEmpty)
                     .animation(Motion.quick, value: browser.field.typed.isEmpty)
             }
+            // Asking begins: a drop of light falls from the logo onto the composer's border.
+            .overlay(alignment: .top) {
+                LightDrop(trigger: drops, from: Self.logo.height, to: Self.logo.height + Self.gap)
+            }
+            .onChange(of: browser.field.asksAssistant) { _, asking in
+                if asking, !Glow.stillness { drops += 1 }
+            }
             // Above centre: exact centre looks low under the toolbar.
             .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
         }
@@ -70,6 +83,70 @@ struct NewTabPage: View {
         .contentShape(Rectangle())
         // A click on the empty page puts the caret back in the composer.
         .onTapGesture { browser.field.askFocus() }
+    }
+}
+
+/// A drop of light the logo lets fall onto the composer as asking begins:
+/// the last of the halo that closed round the logo, it falls from under it
+/// faster and faster, stretching, and splashes where it lands, as the
+/// composer's halo starts from that point.
+/// `from` and `to` are heights from the top of the logo.
+private struct LightDrop: View {
+    let trigger: Int
+    let from: CGFloat
+    let to: CGFloat
+
+    private struct Fall {
+        var y: CGFloat = 0
+        var opacity: Double = 0
+        var size: CGFloat = 0.3
+        var stretch: CGFloat = 1
+    }
+
+    private static let side: CGFloat = 10
+
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color(nsColor: Glow.cream), Color(nsColor: Glow.peach), Color(nsColor: Glow.clay).opacity(0.6)],
+                    center: .center,
+                    startRadius: 0, endRadius: Self.side / 2)
+            )
+            .frame(width: Self.side, height: Self.side)
+            .shadow(color: Color(nsColor: Glow.clay).opacity(0.9), radius: 6)
+            .keyframeAnimator(initialValue: Fall(), trigger: trigger) { drop, fall in
+                drop.scaleEffect(x: fall.size / fall.stretch.squareRoot(), y: fall.size * fall.stretch)
+                    .opacity(fall.opacity)
+                    .offset(y: fall.y - Self.side / 2)
+            } keyframes: { _ in
+                // It leaves as the halo round the logo closes on its lowest point
+                // (`LogoView.release`) and lands at `Glow.impact`.
+                KeyframeTrack(\.y) {
+                    LinearKeyframe(from, duration: 0.5)
+                    LinearKeyframe(to, duration: 0.3, timingCurve: .easeIn)
+                    LinearKeyframe(to, duration: 0.2)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(0, duration: 0.47)
+                    LinearKeyframe(1, duration: 0.03)
+                    LinearKeyframe(1, duration: 0.3)
+                    LinearKeyframe(0, duration: 0.2, timingCurve: .easeOut)
+                }
+                KeyframeTrack(\.size) {
+                    LinearKeyframe(0.4, duration: 0.5)
+                    LinearKeyframe(1, duration: 0.15, timingCurve: .easeOut)
+                    LinearKeyframe(0.8, duration: 0.15)
+                    LinearKeyframe(2.2, duration: 0.2, timingCurve: .easeOut)
+                }
+                KeyframeTrack(\.stretch) {
+                    LinearKeyframe(1, duration: 0.5)
+                    LinearKeyframe(1.8, duration: 0.3, timingCurve: .easeIn)
+                    LinearKeyframe(0.35, duration: 0.2, timingCurve: .easeOut)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -153,7 +230,10 @@ struct Composer: View {
         .frame(height: compact ? Composer.compactHeight : Composer.fullHeight)
         .background {
             ZStack {
-                if !compact { Breath() }
+                if !compact {
+                    Breath().opacity(leads ? 0 : 1)
+                    AskAura(on: leads).padding(-AskAura.spill)
+                }
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Palette.ground)
                     .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
@@ -162,8 +242,14 @@ struct Composer: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(refused ? Color.red.opacity(0.35) : Palette.hairline, lineWidth: 1)
+                .strokeBorder(refused ? Color.red.opacity(0.35) : Palette.hairline.opacity(leads ? 0 : 1), lineWidth: 1)
                 .allowsHitTesting(false)
+                // Asking, the plain border gives way as the halo drawn from the logo's drop goes round.
+                .animation(leads ? .easeInOut(duration: 0.5).delay(Glow.impact + 0.5) : Motion.settle, value: leads)
+        }
+        .overlay {
+            // Asking: the logo's colours run round the border.
+            if !compact { AskHalo(on: leads).padding(-AskHalo.spill) }
         }
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onTapGesture { browser.field.askFocus() }
@@ -178,6 +264,7 @@ struct Composer: View {
             withAnimation(Motion.quick) { refused = false }
         }
         .animation(Motion.settle, value: refused)
+        .animation(Motion.settle, value: leads)
     }
 }
 
@@ -262,42 +349,6 @@ struct SuggestionList: View {
             .animation(Motion.hover, value: picked)
         }
     }
-}
-
-/// The pebble from the app icon, drawn from its SVG: the same path, filled
-/// with the same four soft lights.
-struct MoteLogo: View {
-    var body: some View {
-        ZStack {
-            Logomark().fill(MoteLogo.base)
-            ForEach(Array(MoteLogo.lights.enumerated()), id: \.offset) { _, light in
-                GeometryReader { geo in
-                    Logomark().fill(
-                        RadialGradient(
-                            stops: [
-                                .init(color: light.colour, location: 0),
-                                .init(color: light.colour.opacity(0.75), location: 0.45),
-                                .init(color: light.colour.opacity(0), location: 1),
-                            ],
-                            center: light.centre, startRadius: 0, endRadius: light.radius * geo.size.width))
-                }
-            }
-        }
-        .aspectRatio(Logomark.canvas, contentMode: .fit)
-        .shadow(color: Color(red: 0.55, green: 0.33, blue: 0.22).opacity(0.18), radius: 10, y: 5)
-        .accessibilityHidden(true)
-    }
-
-    private static let base = Color(red: 0xF2 / 255, green: 0xD9 / 255, blue: 0xC4 / 255)
-
-    /// The gradients of pebble.svg, moved into the pebble's own box (see
-    /// `Logomark.canvas`): centres as fractions of it, radii as fractions of its width.
-    private static let lights: [(colour: Color, centre: UnitPoint, radius: CGFloat)] = [
-        (Color(red: 1, green: 0xF3 / 255, blue: 0xE6 / 255), UnitPoint(x: 124 / 564, y: 100 / 550), 330 / 564),
-        (Color(red: 0xF6 / 255, green: 0xC6 / 255, blue: 0xA8 / 255), UnitPoint(x: 474 / 564, y: 160 / 550), 310 / 564),
-        (Color(red: 0xE7 / 255, green: 0xA5 / 255, blue: 0x8E / 255), UnitPoint(x: 384 / 564, y: 490 / 550), 330 / 564),
-        (Color(red: 0xF4 / 255, green: 0xDC / 255, blue: 0xC0 / 255), UnitPoint(x: 84 / 564, y: 450 / 550), 290 / 564),
-    ]
 }
 
 /// Pulsing glow under the address field, implemented as a layer shadow
