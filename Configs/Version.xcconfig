@@ -1,5 +1,5 @@
 // The version people see, and the build number the updater compares.
 // A release bumps MARKETING_VERSION here; CI overrides CURRENT_PROJECT_VERSION
 // with a number that only ever goes up.
-MARKETING_VERSION = 0.1.0
+MARKETING_VERSION = 0.1.1
 CURRENT_PROJECT_VERSION = 1

@@ -10,6 +10,15 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.1.1 — 2026-09-28
+
+Fixes the traffic lights staying on screen when the sidebar folds away.
+
+### Fixed
+
+- The window's traffic lights could stay behind when the sidebar was folded
+  away, mostly on the first launch after starting the Mac.
+
 ## 0.1.0
 
 The first version: a quiet browser for the Mac, on the WebKit it already has.
