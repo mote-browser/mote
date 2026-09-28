@@ -67,10 +67,10 @@ struct Reorderable: ViewModifier {
             if landing.target != landing.start { move(landing.target) }
             drag = landing
         }
-        let drag = $drag
+        let settling = $drag
         DispatchQueue.main.async {
-            guard drag.wrappedValue == landing else { return }
-            withAnimation(Motion.settle) { drag.wrappedValue = nil }
+            guard settling.wrappedValue == landing else { return }
+            withAnimation(Motion.settle) { settling.wrappedValue = nil }
         }
     }
 }
