@@ -55,6 +55,10 @@ final class Browser: NSObject, ObservableObject {
     /// collapsed (see SidebarFold.swift).
     @Published var folded = false
     @Published var peeking = false
+    /// Fold and peek slides started, and the latest SwiftUI finished drawing
+    /// (see `slidingFold`).
+    var foldSlides = 0
+    var foldLanded = 0
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?

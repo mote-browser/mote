@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import WebKit
 
@@ -7,12 +8,41 @@ extension Browser {
     /// Folds the sidebar or strip away, or back.
     func toggleFold() {
         peeking = false
-        dissolvingPage { withAnimation(Motion.fold) { self.folded.toggle() } }
+        dissolvingPage { self.slidingFold { self.folded.toggle() } }
     }
 
     /// Shows or hides the folded tabs over the page.
     func peek(_ out: Bool) {
-        withAnimation(Motion.fold) { peeking = out }
+        slidingFold { peeking = out }
+    }
+
+    /// Well past the spring's end: a slide not finished by then is stuck.
+    private static let foldLimit: Double = 1.5
+
+    /// Changes the fold on the tabs' spring, making sure it gets drawn.
+    /// SwiftUI has left the sidebar and card on the slide's first frame after
+    /// a click on the sidebar button, while the traffic lights (moved by
+    /// AppKit, see SidebarFold) went, until something else redrew the window.
+    /// A slide that hasn't finished well after it should have is drawn again.
+    func slidingFold(_ change: () -> Void) {
+        foldSlides += 1
+        let slide = foldSlides
+        withAnimation(Motion.fold, completionCriteria: .logicallyComplete, change) { [weak self] in
+            guard let self else { return }
+            foldLanded = max(foldLanded, slide)
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.foldLimit))
+            // Only the latest slide: a newer one takes over from it.
+            guard let self, foldSlides == slide, foldLanded < slide else { return }
+            // Everything watching the browser is asked for again, and the window
+            // laid out and drawn, as the Settings window opening once did.
+            objectWillChange.send()
+            if let view = AppDelegate.window?.contentView {
+                view.needsLayout = true
+                view.needsDisplay = true
+            }
+        }
     }
 
     /// Makes a change that resizes the page under a picture of it, which then
