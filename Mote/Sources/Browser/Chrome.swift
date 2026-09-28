@@ -36,6 +36,7 @@ struct Chrome: View {
             ZStack(alignment: .topLeading) {
                 // Black in full-screen video, so no band shows during the transition.
                 (layout.corner == 0 ? Color.black : Palette.frame)
+                    .opacity(browser.foldNudge ? 0.999 : 1)
 
                 // Kept in the tree while folded, just slid off the window: building the
                 // whole list again as it comes back would cost the first frames of the

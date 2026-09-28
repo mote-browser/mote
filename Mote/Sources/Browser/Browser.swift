@@ -59,6 +59,9 @@ final class Browser: NSObject, ObservableObject {
     /// (see `slidingFold`).
     var foldSlides = 0
     var foldLanded = 0
+    /// Flipped to make the window draw again when a slide is stuck: the
+    /// window's ground goes a shade less opaque, over the same colour.
+    @Published var foldNudge = false
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?
