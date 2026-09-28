@@ -40,6 +40,7 @@ COMMANDS = {
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
     "keyeq": ("chars code:int [shift]", "test run: ⌘CHARS while the page has the keyboard — who took it"),
+    "move": ("x:float y:float", "test run: the window's top left at X, Y on the main screen, not brought forward"),
     "resize": ("width:float height:float [steps:int]", "take the window to that size in steps, like a drag — test runs only"),
     "hit": ("x:float y:float [double|middle]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
             "window; double or middle: test run, that click there"),
@@ -55,7 +56,7 @@ COMMANDS = {
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
-    "frames": ("[fold|peek|unpeek] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "frames": ("[fold|peek|unpeek|scroll] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
     "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
@@ -204,7 +205,7 @@ def read_switch(verb, needed):
 
 
 def read_frames(args):
-    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek")):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll")):
         sys.exit(usage("frames"))
     request = {"action": args[0] if args else "fold"}
     if len(args) > 1:

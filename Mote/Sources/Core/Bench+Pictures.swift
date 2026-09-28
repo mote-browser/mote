@@ -86,6 +86,7 @@ extension Bench {
         case "peek": browser.peek(true)
         case "unpeek": browser.peek(false)
         case "fold": browser.toggleFold()
+        case "scroll": browser.active?.built.map { BenchInput.flick($0) }
         default: break
         }
     }

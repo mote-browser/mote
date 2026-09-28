@@ -11,7 +11,7 @@ extension Bench {
     var inputCommands: [String: Command] {
         [
             "press": Self.press, "key": Self.key, "keyeq": Self.keyEquivalent, "hit": Self.hit, "field": Self.field,
-            "bookmark": Self.bookmark, "menu": Self.menu, "pull": Self.pull, "resize": Self.resize,
+            "bookmark": Self.bookmark, "menu": Self.menu, "pull": Self.pull, "resize": Self.resize, "move": Self.move,
         ]
     }
 
@@ -258,6 +258,18 @@ extension Bench {
         }
     }
 
+    /// The window's top left corner put at X, Y on the main screen (from its
+    /// top left), without bringing the app forward.
+    private static func move(_ call: BenchCall) {
+        guard call.testRun("it would move your window") else { return }
+        guard let window = AppDelegate.window, let screen = NSScreen.screens.first, let x = call.request.double("x"),
+            let y = call.request.double("y")
+        else { return call.fail("move needs a window and a place") }
+        window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + x, y: screen.frame.maxY - y))
+        window.orderFrontRegardless()
+        call.answer(["frame": [Int(window.frame.minX), Int(window.frame.minY), Int(window.frame.width), Int(window.frame.height)]])
+    }
+
     /// The window dragged to a size a frame at a time, as a live resize.
     private static func resize(_ call: BenchCall) {
         guard call.testRun("it would move your window") else { return }
@@ -319,6 +331,41 @@ enum BenchInput {
         event.setIntegerValueField(CGEventField(rawValue: 99)!, value: phase.rawValue)
         event.setIntegerValueField(CGEventField(rawValue: 97)!, value: Int64(delta))
         NSEvent(cgEvent: event).map(view.scrollWheel)
+    }
+
+    /// Two fingers flicking down the page and letting go, a frame at a time:
+    /// 150 ms of fingers, then a second of momentum, the phases a trackpad gives.
+    static func flick(_ view: NSView, points: Double = 900) {
+        var steps: [(dy: Double, phase: Int64, momentum: Int64)] = [(0, 1, 0)]
+        for i in 1...18 { steps.append((-points * 0.4 / 9 * 0.64 * sin(Double(i) / 18 * .pi / 2), 2, 0)) }
+        steps.append((0, 4, 0))
+        var speed = points * 0.6 * 0.05
+        steps.append((-speed, 0, 1))
+        while speed > 0.5 {
+            speed *= 0.95
+            steps.append((-speed, 0, 2))
+        }
+        steps.append((0, 0, 3))
+        for (n, step) in steps.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) / 120) {
+                guard
+                    let event = CGEvent(
+                        scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(step.dy), wheel2: 0, wheel3: 0)
+                else { return }
+                // kCGScrollWheelEventIsContinuous, …ScrollPhase, …MomentumPhase and …PointDeltaAxis1.
+                event.setIntegerValueField(CGEventField(rawValue: 88)!, value: 1)
+                event.setIntegerValueField(CGEventField(rawValue: 99)!, value: step.phase)
+                event.setIntegerValueField(CGEventField(rawValue: 123)!, value: step.momentum)
+                event.setIntegerValueField(CGEventField(rawValue: 96)!, value: Int64(step.dy))
+                let middle = NSPoint(x: view.bounds.midX, y: view.bounds.midY)
+                event.location =
+                    view.window.map { window in
+                        let point = window.convertPoint(toScreen: view.convert(middle, to: nil))
+                        return CGPoint(x: point.x, y: (window.screen?.frame.maxY ?? 0) - point.y)
+                    } ?? .zero
+                NSEvent(cgEvent: event).map(view.scrollWheel)
+            }
+        }
     }
 
     /// The address field's text field, wherever it is in `view`.
