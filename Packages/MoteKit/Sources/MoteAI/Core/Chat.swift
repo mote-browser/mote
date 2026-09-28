@@ -19,14 +19,23 @@ public struct Message: Identifiable, Equatable, Codable, Sendable {
     public var author: String?
     /// The reply was stopped before it was done.
     public var interrupted: Bool
+    /// Pages the reply drew on, in the order they turned up.
+    public var sources: [Source]
+    /// What was done on the way to the reply: searches, pages read.
+    public var steps: [Activity]
 
-    public init(id: UUID = UUID(), role: Role, text: String, reasoning: String = "", author: String? = nil, interrupted: Bool = false) {
+    public init(
+        id: UUID = UUID(), role: Role, text: String, reasoning: String = "", author: String? = nil, interrupted: Bool = false,
+        sources: [Source] = [], steps: [Activity] = []
+    ) {
         self.id = id
         self.role = role
         self.text = text
         self.reasoning = reasoning
         self.author = author
         self.interrupted = interrupted
+        self.sources = sources
+        self.steps = steps
     }
 }
 
@@ -42,12 +51,15 @@ public struct ChatRequest: Equatable, Sendable {
     /// that keep their own history carry on from it and need only the new
     /// message; the rest ignore it.
     public var resume: String?
+    /// Search the web for the answer, with the provider's own search.
+    public var search: Bool
 
-    public init(model: String, messages: [Message], instructions: String? = nil, resume: String? = nil) {
+    public init(model: String, messages: [Message], instructions: String? = nil, resume: String? = nil, search: Bool = false) {
         self.model = model
         self.messages = messages
         self.instructions = instructions
         self.resume = resume
+        self.search = search
     }
 
     /// The message to answer.
@@ -67,18 +79,42 @@ public enum ChatEvent: Equatable, Sendable {
     case activity(Activity)
     /// What the turn cost, once known.
     case usage(Usage)
+    /// A page the provider found or read on the way.
+    case source(Source)
 }
 
-public struct Activity: Equatable, Sendable {
+public struct Activity: Equatable, Codable, Sendable {
+    public enum Kind: String, Codable, Sendable {
+        /// A web search.
+        case search
+        /// Reading a page.
+        case read
+        /// Any other tool.
+        case tool
+    }
+
     public var id: String
     /// Short, for a line in the chat ("Searching the web").
     public var title: String
     public var done: Bool
+    public var kind: Kind
 
-    public init(id: String, title: String, done: Bool = false) {
+    public init(id: String, title: String, done: Bool = false, kind: Kind = .tool) {
         self.id = id
         self.title = title
         self.done = done
+        self.kind = kind
+    }
+
+    /// A search for `query`.
+    static func search(_ id: String, _ query: String?, done: Bool = false) -> Activity {
+        Activity(id: id, title: query.map { "Searching “\($0)”" } ?? "Searching the web", done: done, kind: .search)
+    }
+
+    /// Reading the page at `url`.
+    static func read(_ id: String, _ url: String?, done: Bool = false) -> Activity {
+        let site = url.flatMap(URL.init(string:)).map { Source(url: $0, title: "").site }
+        return Activity(id: id, title: site.map { "Reading \($0)" } ?? "Reading a page", done: done, kind: .read)
     }
 }
 
@@ -106,6 +142,12 @@ public protocol ChatService: Sendable {
 /// so it can remember what it has seen.
 public protocol LineDecoder: Sendable {
     mutating func read(_ line: String) throws -> [ChatEvent]
+    /// What's left once the lines have ended.
+    mutating func finish() throws -> [ChatEvent]
+}
+
+extension LineDecoder {
+    public mutating func finish() throws -> [ChatEvent] { [] }
 }
 
 extension AsyncThrowingStream where Element == ChatEvent, Failure == Error {
@@ -122,8 +164,11 @@ extension AsyncThrowingStream where Element == ChatEvent, Failure == Error {
                     try Task.checkCancellation()
                     for event in try decoder.read(line) { continuation.yield(event) }
                 }
+                for event in try decoder.finish() { continuation.yield(event) }
                 continuation.finish()
             } catch {
+                // What the decoder held back still arrived before the failure.
+                if !(error is CancellationError) { for event in (try? decoder.finish()) ?? [] { continuation.yield(event) } }
                 continuation.finish(throwing: error)
             }
         }

@@ -6,9 +6,12 @@ import SwiftUI
 /// and the words inside them through Foundation's inline Markdown.
 struct MarkdownView: View {
     let text: String
+    /// Links to these pages (by `Source.key`) show as citation chips with
+    /// the name given.
+    var cites: [String: String] = [:]
 
     var body: some View {
-        Blocks(blocks: Markdown.parse(text))
+        Blocks(blocks: Markdown.parse(text), cites: cites)
     }
 
     /// Body text in replies: a little larger than the chrome's, for reading.
@@ -17,7 +20,7 @@ struct MarkdownView: View {
 
     /// Inline Markdown (emphasis, code, links) in a block's text. Code spans
     /// get the monospaced face on a faint wash.
-    static func inline(_ text: String) -> AttributedString {
+    static func inline(_ text: String, cites: [String: String] = [:]) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible)
@@ -26,8 +29,22 @@ struct MarkdownView: View {
             styled[run.range].font = .system(size: size * 0.9, design: .monospaced)
             styled[run.range].backgroundColor = Palette.veil
         }
-        for run in styled.runs where run.link != nil {
-            styled[run.range].underlineStyle = .single
+        // By link, so a link whose text mixes styles is one chip; from the end,
+        // so replacing one never moves those still to come.
+        for (link, range) in styled.runs[\.link].reversed() {
+            guard let link else { continue }
+            guard let name = cites[Source.key(for: link)] else {
+                styled[range].underlineStyle = .single
+                continue
+            }
+            // A citation: the site's name on a small chip, still a link.
+            var chip = AttributedString("\u{2009}\(name)\u{2009}")
+            chip.link = link
+            chip.font = .system(size: size * 0.76, weight: .medium)
+            chip.foregroundColor = Palette.muted
+            chip.backgroundColor = Palette.wash
+            chip.baselineOffset = 1
+            styled.replaceSubrange(range, with: chip)
         }
         return styled
     }
@@ -35,12 +52,13 @@ struct MarkdownView: View {
 
 private struct Blocks: View {
     let blocks: [Markdown.Block]
+    let cites: [String: String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 // Equatable, so as a reply streams in only its last block is drawn again.
-                BlockView(block: block).equatable()
+                BlockView(block: block, cites: cites).equatable()
             }
         }
     }
@@ -48,13 +66,14 @@ private struct Blocks: View {
 
 private struct BlockView: View, Equatable {
     let block: Markdown.Block
+    let cites: [String: String]
 
     var body: some View {
         switch block {
         case .paragraph(let text):
-            Prose(text: text)
+            Prose(text: text, cites: cites)
         case .heading(let level, let text):
-            Text(MarkdownView.inline(text))
+            Text(MarkdownView.inline(text, cites: cites))
                 .font(.system(size: level == 1 ? 19 : level == 2 ? 16.5 : 15, weight: .semibold))
                 .foregroundStyle(Palette.ink)
                 .padding(.top, level <= 2 ? 6 : 2)
@@ -65,13 +84,13 @@ private struct BlockView: View, Equatable {
         case .quote(let blocks):
             HStack(alignment: .top, spacing: 12) {
                 Capsule().fill(Palette.faint).frame(width: 3)
-                Blocks(blocks: blocks).opacity(0.75)
+                Blocks(blocks: blocks, cites: cites).opacity(0.75)
             }
             .fixedSize(horizontal: false, vertical: true)
         case .list(let list):
-            ListBlock(list: list)
+            ListBlock(list: list, cites: cites)
         case .table(let table):
-            TableBlock(table: table)
+            TableBlock(table: table, cites: cites)
         case .rule:
             Palette.hairline.frame(height: 1).padding(.vertical, 4)
         }
@@ -81,9 +100,10 @@ private struct BlockView: View, Equatable {
 /// A paragraph.
 private struct Prose: View {
     let text: String
+    let cites: [String: String]
 
     var body: some View {
-        Text(MarkdownView.inline(text))
+        Text(MarkdownView.inline(text, cites: cites))
             .font(.system(size: MarkdownView.size))
             .lineSpacing(MarkdownView.leading)
             .foregroundStyle(Palette.ink)
@@ -94,6 +114,7 @@ private struct Prose: View {
 
 private struct ListBlock: View {
     let list: Markdown.List
+    let cites: [String: String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -101,7 +122,7 @@ private struct ListBlock: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     marker(index: index, item: item)
                         .frame(width: markerWidth, alignment: .trailing)
-                    Blocks(blocks: item.blocks)
+                    Blocks(blocks: item.blocks, cites: cites)
                 }
             }
         }
@@ -165,6 +186,7 @@ private struct CodeBlock: View {
 
 private struct TableBlock: View {
     let table: Markdown.Table
+    let cites: [String: String]
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -196,7 +218,7 @@ private struct TableBlock: View {
             case .trailing: .trailing
             default: .leading
             }
-        return Text(MarkdownView.inline(text))
+        return Text(MarkdownView.inline(text, cites: cites))
             .foregroundStyle(Palette.ink)
             .textSelection(.enabled)
             .padding(.horizontal, 10)

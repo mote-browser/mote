@@ -20,6 +20,8 @@ final class Favicons {
     /// Sites being fetched, and sites with no icon to be had this session.
     private var fetching: Set<String> = []
     private var iconless: Set<String> = []
+    /// Icons looked up for sites with no tab open (see `icon(for:)`), shared by all who ask.
+    private var lookups: [String: Task<NSImage?, Never>] = [:]
 
     static var dark: Bool { NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
 
@@ -94,6 +96,29 @@ final class Favicons {
             let onDisk = !(tab?.shy ?? false)
             Task { await self.download(candidates, host: host, as: name, onDisk: onDisk) }
         }
+    }
+
+    /// A site's icon with no page of it open, as for a chat's sources: the
+    /// kept one, or else its /favicon.ico, held in memory only. Kept apart
+    /// from tabs' fetching, so a miss here never stops a tab finding the
+    /// icon its page declares.
+    func icon(for host: String) async -> NSImage? {
+        if let kept = cached(host) { return kept }
+        if let asking = lookups[host] { return await asking.value }
+        guard let root = URL(string: "https://\(host)") else { return nil }
+        let asking = Task { @MainActor [weak self] () -> NSImage? in
+            for url in [root.appending(path: "favicon.ico"), root.appending(path: "apple-touch-icon.png")] {
+                guard let (data, response) = try? await Self.session.data(from: url),
+                    (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+                    (61..<2_000_000).contains(data.count), let image = await Self.square(data)
+                else { continue }
+                self?.loaded[host] = image
+                return image
+            }
+            return nil
+        }
+        lookups[host] = asking
+        return await asking.value
     }
 
     /// The kept icon if it is less than a week old.

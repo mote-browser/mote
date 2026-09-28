@@ -68,14 +68,17 @@ public struct Connector: Sendable {
         return (try? await transport.data(for: request)) != nil
     }
 
-    /// Something to chat with, or why there can't be.
-    public func service(for provider: Provider, setup: ProviderSetup, key: String?) throws -> any ChatService {
+    /// Something to chat with, or why there can't be. `search`: the replies
+    /// will search the web, which some providers do through another API.
+    public func service(for provider: Provider, setup: ProviderSetup, key: String?, search: Bool = false) throws -> any ChatService {
         let key = key?.trimmingCharacters(in: .whitespacesAndNewlines)
         if provider.needsKey, key?.isEmpty != false { throw AIError.needsKey(provider.name) }
         switch provider.connection {
         case .openAI:
             guard let base = base(for: provider, setup: setup) else { throw AIError.unreachable(provider.name) }
-            return OpenAIChatService(base: base, key: key, headers: provider.headers, transport: transport)
+            if search, provider.search == .responses { return ResponsesService(base: base, key: key, transport: transport) }
+            return OpenAIChatService(
+                base: base, key: key, headers: provider.headers, online: provider.search == .online, transport: transport)
         case .anthropic:
             guard let base = base(for: provider, setup: setup) else { throw AIError.unreachable(provider.name) }
             return AnthropicService(base: base, key: key ?? "", transport: transport)

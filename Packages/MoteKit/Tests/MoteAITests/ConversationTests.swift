@@ -227,4 +227,40 @@ struct ConversationTests {
         await settle(conversation)
         #expect(service.requests[1].resume == nil)
     }
+
+    @Test("A search reply keeps the pages it found and what it did, once each")
+    func searchRecords() async {
+        let service = ScriptedService()
+        let page = Source(url: URL(string: "https://swift.org/blog")!, title: "Blog")
+        service.events = [
+            .activity(Activity(id: "s1", title: "Searching “swift”", kind: .search)), .source(page),
+            .source(Source(url: URL(string: "https://www.swift.org/blog/")!, title: "Again")),
+            .activity(Activity(id: "s1", title: "Searching “swift”", done: true, kind: .search)),
+            .text("It's 6.4 [swift.org](https://swift.org/blog)"),
+        ]
+        let conversation = Conversation()
+        var route = route(service)
+        route.search = true
+        conversation.send("Latest Swift?", via: route)
+        await settle(conversation)
+        let reply = conversation.messages[1]
+        #expect(reply.sources == [page])
+        #expect(reply.steps == [Activity(id: "s1", title: "Searching “swift”", done: true, kind: .search)])
+        #expect(service.requests[0].search)
+    }
+
+    @Test("Turning search on or off starts the provider afresh, so it gets the new instructions")
+    func searchChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        var searching = route(service)
+        searching.search = true
+        conversation.send("Look it up", via: searching)
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].search)
+    }
 }

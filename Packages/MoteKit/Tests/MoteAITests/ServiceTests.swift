@@ -100,6 +100,17 @@ struct AgentCommandTests {
         #expect(command.input?.hasSuffix("\n") == true)
     }
 
+    @Test("Claude Code searching gets its web tools, allowed without asking, and nothing else")
+    func claudeSearches() {
+        let request = ChatRequest(model: "", messages: [Message(role: .user, text: "Hi")], search: true)
+        let command = ClaudeCodeAgent().command(for: request, executable: claude, workspace: workspace)
+        #expect(pair("--tools", in: command) == "WebSearch,WebFetch")
+        #expect(pair("--allowedTools", in: command) == "WebSearch,WebFetch")
+        let chatting = ClaudeCodeAgent().command(
+            for: ChatRequest(model: "", messages: [Message(role: .user, text: "Hi")]), executable: claude, workspace: workspace)
+        #expect(!chatting.arguments.contains("--allowedTools"))
+    }
+
     @Test("Claude Code resumes its session with only the new message")
     func claudeResumes() throws {
         let request = ChatRequest(model: "", messages: conversation, resume: "s-1")
@@ -131,6 +142,18 @@ struct AgentCommandTests {
             for: ChatRequest(model: "", messages: conversation, resume: "ses_1"), executable: claude, workspace: workspace)
         #expect(pair("--session", in: later) == "ses_1")
         #expect(later.input == "What's 2+2?")
+    }
+
+    @Test("Searching turns on each agent's own web search")
+    func agentsSearch() {
+        let request = ChatRequest(model: "", messages: [Message(role: .user, text: "Hi")], search: true)
+        let codex = CodexAgent().command(for: request, executable: claude, workspace: workspace)
+        #expect(pair("-c", in: codex) == #"web_search="live""#)
+        let opencode = OpenCodeAgent().command(for: request, executable: claude, workspace: workspace)
+        #expect(opencode.environment["OPENCODE_ENABLE_EXA"] == "1")
+        let quiet = ChatRequest(model: "", messages: [Message(role: .user, text: "Hi")])
+        #expect(!CodexAgent().command(for: quiet, executable: claude, workspace: workspace).arguments.contains("-c"))
+        #expect(OpenCodeAgent().command(for: quiet, executable: claude, workspace: workspace).environment["OPENCODE_ENABLE_EXA"] == nil)
     }
 
     @Test("Codex runs read-only outside a repository, resuming by thread")
@@ -259,6 +282,40 @@ struct HTTPProviderTests {
         #expect(json["system"]?.string == "Be brief")
         #expect(json["max_tokens"]?.int == AnthropicService.replyLimit)
         #expect(json["messages"]?.array.map { $0["role"]?.string } == ["user", "assistant", "user"])
+    }
+
+    @Test("Anthropic searching gets its web search tool")
+    func anthropicSearch() throws {
+        let service = AnthropicService(base: URL(string: "https://api.anthropic.com")!, key: "k", transport: FakeHTTP())
+        let request = service.request(for: ChatRequest(model: "m", messages: conversation, search: true))
+        let tool = try #require(body(request)?["tools"]?[0])
+        #expect(tool["type"]?.string == "web_search_20250305")
+        #expect(tool["name"]?.string == "web_search")
+        #expect(body(service.request(for: ChatRequest(model: "m", messages: conversation)))?["tools"] == nil)
+    }
+
+    @Test("The Responses API gets the history as input, the system prompt apart, and web search")
+    func responsesRequest() throws {
+        let service = ResponsesService(base: base, key: "sk-1", transport: FakeHTTP())
+        let request = service.request(for: ChatRequest(model: "gpt-5", messages: conversation, instructions: "Be brief", search: true))
+        #expect(request.url?.absoluteString == "https://api.example.com/v1/responses")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer sk-1")
+        let json = try #require(body(request))
+        #expect(json["instructions"]?.string == "Be brief")
+        #expect(json["stream"]?.bool == true)
+        #expect(json["input"]?.array.map { $0["role"]?.string } == ["user", "assistant", "user"])
+        #expect(json["tools"]?[0]?["type"]?.string == "web_search")
+        // Every page searched, not only those cited.
+        #expect(json["include"]?[0]?.string == "web_search_call.action.sources")
+    }
+
+    @Test("A gateway's web plugin is asked for with :online")
+    func online() throws {
+        let service = OpenAIChatService(base: base, key: "k", online: true, transport: FakeHTTP())
+        let json = try #require(body(service.request(for: ChatRequest(model: "openai/gpt-5", messages: conversation, search: true))))
+        #expect(json["model"]?.string == "openai/gpt-5:online")
+        let plain = try #require(body(service.request(for: ChatRequest(model: "openai/gpt-5", messages: conversation))))
+        #expect(plain["model"]?.string == "openai/gpt-5")
     }
 
     @Test("Anthropic's model list keeps display names")

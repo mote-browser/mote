@@ -120,4 +120,15 @@ struct ConnectorTests {
         http.failure = AIError.unreachable("localhost")
         #expect(await !connector(http: http).reachable(ollama, setup: ProviderSetup()))
     }
+
+    @Test("Providers that can search say so; searching with OpenAI or xAI goes through the Responses API")
+    func searching() throws {
+        #expect(
+            Set(Provider.all.filter(\.searches).map(\.id)) == [
+                "claude-code", "codex", "opencode", "gemini-cli", "anthropic", "openai", "xai", "openrouter",
+            ])
+        #expect(try connector().service(for: provider("openai"), setup: ProviderSetup(), key: "k", search: true) is ResponsesService)
+        #expect(try connector().service(for: provider("xai"), setup: ProviderSetup(), key: "k", search: true) is ResponsesService)
+        #expect(try connector().service(for: provider("openai"), setup: ProviderSetup(), key: "k") is OpenAIChatService)
+    }
 }

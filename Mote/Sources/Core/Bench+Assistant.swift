@@ -59,6 +59,10 @@ extension Bench {
                 Assistant.shared.forgetModels(of: provider)
             }
             call.answer(["provider": provider.id, "model": Assistant.shared.model(for: provider)])
+        case "search":
+            guard call.testRun("it would change your settings") else { return }
+            Assistant.shared.searching = request.flag("on")
+            call.answer(["searching": Assistant.shared.searching, "searches": Assistant.shared.searches])
         case "providers":
             Task {
                 let assistant = Assistant.shared
@@ -74,7 +78,7 @@ extension Bench {
                 ])
             }
         default:
-            call.fail("chat does show, ask TEXT, follow TEXT, wait [SECONDS], use PROVIDER [MODEL] or providers")
+            call.fail("chat does show, ask TEXT, follow TEXT, wait [SECONDS], use PROVIDER [MODEL] [ADDRESS], search on|off or providers")
         }
     }
 
@@ -94,6 +98,8 @@ extension Bench {
                 [
                     "role": message.role.rawValue, "text": message.text, "author": message.author ?? "",
                     "reasoning": message.reasoning.count, "interrupted": message.interrupted,
+                    "sources": message.sources.map { ["url": $0.url.absoluteString, "title": $0.title] },
+                    "steps": message.steps.map { ["title": $0.title, "kind": $0.kind.rawValue, "done": $0.done] },
                 ]
             },
         ]

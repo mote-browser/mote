@@ -35,8 +35,8 @@ COMMANDS = {
     "close": ("id", "a tab the bench opened, or all of them"),
     "place": ("id to:int", "put a tab at another place in the row"),
     "probe": ("", "the window's own state: panels, modal, windows"),
-    "chat": ("[show|ask|follow|wait|use|providers] [args…]", "the chat in front; ask TEXT as ⌘Return does, follow TEXT in the chat "
-             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS] (test run); providers: how each stands"),
+    "chat": ("[show|ask|follow|wait|use|search|providers] [args…]", "the chat in front; ask TEXT as ⌘Return does, follow TEXT in the chat "
+             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], search on|off (test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, sidebar, spaces, hides, bar, folded, peek, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
@@ -221,6 +221,8 @@ def read_chat(args):
     rest = args[1:]
     if action in ("show", "providers") and not rest:
         return {"action": action}
+    if action == "search" and len(rest) == 1 and rest[0] in ("on", "off"):
+        return {"action": action, "on": rest[0] == "on"}
     if action in ("ask", "follow") and rest:
         return {"action": action, "text": " ".join(rest)}
     if action == "wait" and len(rest) <= 1:

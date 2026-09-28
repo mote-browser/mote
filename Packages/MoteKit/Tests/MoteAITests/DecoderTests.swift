@@ -50,12 +50,12 @@ struct ClaudeCodeDecoderTests {
     @Test("Tool use shows as activity that finishes with its result")
     func tools() throws {
         let lines = [
-            #"{"type":"stream_event","event":{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"t1","name":"WebSearch","input":{}}},"parent_tool_use_id":null}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"t1","name":"Read","input":{}}},"parent_tool_use_id":null}"#,
             #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"..."}]},"parent_tool_use_id":null}"#,
         ]
         #expect(
             try decode(ClaudeCodeDecoder(), lines) == [
-                .activity(Activity(id: "t1", title: "WebSearch")), .activity(Activity(id: "t1", title: "WebSearch", done: true)),
+                .activity(Activity(id: "t1", title: "Read")), .activity(Activity(id: "t1", title: "Read", done: true)),
             ])
     }
 
@@ -64,6 +64,40 @@ struct ClaudeCodeDecoderTests {
         let line =
             #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"inner"}},"parent_tool_use_id":"t1"}"#
         #expect(try decode(ClaudeCodeDecoder(), [line]).isEmpty)
+    }
+
+    @Test("A web search shows its query, then gives the pages it found as sources")
+    func webSearch() throws {
+        let lines = [
+            #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t1","name":"WebSearch","input":{}}},"parent_tool_use_id":null}"#,
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"WebSearch","input":{"query":"latest swift"}}]},"parent_tool_use_id":null}"#,
+            #"{"type":"user","message":{"content":[{"tool_use_id":"t1","type":"tool_result","content":"Web search results..."}]},"parent_tool_use_id":null,"tool_use_result":{"query":"latest swift","results":[{"tool_use_id":"srv","content":[{"title":"Swift 6.4 Released | Swift.org","url":"https://www.swift.org/blog/swift-6.4-released/"},{"title":"Swift (programming language)","url":"https://en.wikipedia.org/wiki/Swift_(programming_language)"}]},"Summary text"]}}"#,
+        ]
+        #expect(
+            try decode(ClaudeCodeDecoder(), lines) == [
+                .activity(Activity.search("t1", nil)), .activity(Activity.search("t1", "latest swift")),
+                .source(
+                    Source(url: URL(string: "https://www.swift.org/blog/swift-6.4-released/")!, title: "Swift 6.4 Released | Swift.org")),
+                .source(
+                    Source(
+                        url: URL(string: "https://en.wikipedia.org/wiki/Swift_(programming_language)")!,
+                        title: "Swift (programming language)")),
+                .activity(Activity.search("t1", "latest swift", done: true)),
+            ])
+    }
+
+    @Test("A page read shows its site and counts as a source")
+    func webFetch() throws {
+        let lines = [
+            #"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"WebFetch","input":{"url":"https://www.swift.org/blog/","prompt":"newest post"}}]},"parent_tool_use_id":null}"#,
+            ##"{"type":"user","message":{"content":[{"tool_use_id":"t2","type":"tool_result","content":"# Newest"}]},"parent_tool_use_id":null,"tool_use_result":{"bytes":123618,"code":200,"codeText":"OK","result":"# Newest","durationMs":2895,"url":"https://www.swift.org/blog/"}}"##,
+        ]
+        #expect(
+            try decode(ClaudeCodeDecoder(), lines) == [
+                .activity(Activity.read("t2", "https://www.swift.org/blog/")),
+                .source(Source(url: URL(string: "https://www.swift.org/blog/")!, title: "")),
+                .activity(Activity.read("t2", "https://www.swift.org/blog/", done: true)),
+            ])
     }
 
     @Test("Lines that aren't JSON are ignored")
@@ -99,13 +133,77 @@ struct OpenCodeDecoderTests {
     @Test("Tools show as activity")
     func tools() throws {
         let lines = [
-            #"{"type":"tool_use","sessionID":"s","part":{"id":"p1","type":"tool","tool":"webfetch","state":{"status":"running"}}}"#,
-            #"{"type":"tool_use","sessionID":"s","part":{"id":"p1","type":"tool","tool":"webfetch","state":{"status":"completed"}}}"#,
+            #"{"type":"tool_use","sessionID":"s","part":{"id":"p1","type":"tool","tool":"read","state":{"status":"running"}}}"#,
+            #"{"type":"tool_use","sessionID":"s","part":{"id":"p1","type":"tool","tool":"read","state":{"status":"completed"}}}"#,
         ]
         #expect(
             try decode(OpenCodeDecoder(), lines) == [
-                .session("s"), .activity(Activity(id: "p1", title: "webfetch")),
-                .activity(Activity(id: "p1", title: "webfetch", done: true)),
+                .session("s"), .activity(Activity(id: "p1", title: "read")),
+                .activity(Activity(id: "p1", title: "read", done: true)),
+            ])
+    }
+}
+
+extension OpenCodeDecoderTests {
+    @Test("Words said on the way to a tool are thinking; the last step's are the answer")
+    func narration() throws {
+        let lines = [
+            #"{"type":"step_start","sessionID":"s","part":{"type":"step-start"}}"#,
+            #"{"type":"text","sessionID":"s","part":{"type":"text","text":"I'll search for it."}}"#,
+            ###"{"type":"tool_use","sessionID":"s","part":{"id":"c1","type":"tool","tool":"websearch","state":{"status":"completed","input":{"query":"latest xcode"},"output":"## [Xcode - Wikipedia](https://en.wikipedia.org/wiki/Xcode)\n\nXcode is a suite...\n\n## [Xcode 27 - Apple Developer](https://developer.apple.com/xcode/)\n\nText"}}}"###,
+            #"{"type":"step_finish","sessionID":"s","part":{"type":"step-finish","reason":"tool-calls","tokens":{"input":10,"output":2}}}"#,
+            #"{"type":"step_start","sessionID":"s","part":{"type":"step-start"}}"#,
+            #"{"type":"tool_use","sessionID":"s","part":{"id":"c2","type":"tool","tool":"webfetch","state":{"status":"completed","input":{"url":"https://developer.apple.com/support/xcode/","format":"text"},"output":"..."}}}"#,
+            #"{"type":"step_finish","sessionID":"s","part":{"type":"step-finish","reason":"tool-calls","tokens":{"input":20,"output":3}}}"#,
+            #"{"type":"text","sessionID":"s","part":{"type":"text","text":"Xcode 27 [Apple](https://developer.apple.com/support/xcode/)."}}"#,
+        ]
+        var decoder = OpenCodeDecoder()
+        let events = try lines.flatMap { try decoder.read($0) } + (try decoder.finish())
+        #expect(
+            events == [
+                .session("s"), .reasoning("I'll search for it."),
+                .source(Source(url: URL(string: "https://en.wikipedia.org/wiki/Xcode")!, title: "Xcode - Wikipedia")),
+                .source(Source(url: URL(string: "https://developer.apple.com/xcode/")!, title: "Xcode 27 - Apple Developer")),
+                .activity(Activity.search("c1", "latest xcode", done: true)),
+                .usage(Usage(input: 10, output: 2)),
+                .source(Source(url: URL(string: "https://developer.apple.com/support/xcode/")!, title: "")),
+                .activity(Activity.read("c2", "https://developer.apple.com/support/xcode/", done: true)),
+                .usage(Usage(input: 20, output: 3)),
+                .text("Xcode 27 [Apple](https://developer.apple.com/support/xcode/)."),
+            ])
+    }
+}
+
+extension CodexDecoderTests {
+    @Test("A web search shows its query and passes on any results")
+    func webSearch() throws {
+        let lines = [
+            #"{"type":"item.started","item":{"id":"ws","type":"web_search","query":"swift 6.4"}}"#,
+            #"{"type":"item.completed","item":{"id":"ws","type":"web_search","query":"swift 6.4","results":[{"title":"Swift 6.4","url":"https://swift.org/blog/swift-6.4"}]}}"#,
+        ]
+        #expect(
+            try decode(CodexDecoder(), lines) == [
+                .activity(Activity.search("ws", "swift 6.4")),
+                .source(Source(url: URL(string: "https://swift.org/blog/swift-6.4")!, title: "Swift 6.4")),
+                .activity(Activity.search("ws", "swift 6.4", done: true)),
+            ])
+    }
+}
+
+extension GeminiCLIDecoderTests {
+    @Test("Google searches and page reads show what they're about")
+    func webTools() throws {
+        let lines = [
+            #"{"type":"tool_use","tool_name":"google_web_search","tool_id":"g1","parameters":{"query":"swift 6.4"}}"#,
+            #"{"type":"tool_result","tool_id":"g1","status":"success","output":"Swift 6.4 was released [1].\n\nSources:\n[1] Swift 6.4 Released (https://www.swift.org/blog/swift-6.4-released/)"}"#,
+            #"{"type":"tool_use","tool_name":"web_fetch","tool_id":"g2","parameters":{"prompt":"Summarize https://swift.org/blog"}}"#,
+        ]
+        #expect(
+            try decode(GeminiCLIDecoder(), lines) == [
+                .activity(Activity.search("g1", "swift 6.4")),
+                .source(Source(url: URL(string: "https://www.swift.org/blog/swift-6.4-released/")!, title: "Swift 6.4 Released")),
+                .activity(Activity.search("g1", "swift 6.4", done: true)),
+                .activity(Activity.read("g2", "https://swift.org/blog")),
             ])
     }
 }
@@ -159,8 +257,8 @@ struct GeminiCLIDecoderTests {
         ]
         #expect(
             try decode(GeminiCLIDecoder(), lines) == [
-                .session("g-1"), .text("Hel"), .text("lo"), .activity(Activity(id: "x1", title: "google_web_search")),
-                .activity(Activity(id: "x1", title: "google_web_search", done: true)), .usage(Usage(input: 3, output: 2)),
+                .session("g-1"), .text("Hel"), .text("lo"), .activity(Activity.search("x1", nil)),
+                .activity(Activity.search("x1", nil, done: true)), .usage(Usage(input: 3, output: 2)),
             ])
     }
 
@@ -223,5 +321,126 @@ struct AnthropicDecoderTests {
         #expect(throws: AIError.failed("Overloaded")) {
             try decode(AnthropicDecoder(), [#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#])
         }
+    }
+}
+
+extension AnthropicDecoderTests {
+    @Test("A server search shows its query, lists its results, and cited text ends with links to its sources")
+    func webSearch() throws {
+        let lines = [
+            #"data: {"type":"content_block_start","index":1,"content_block":{"type":"server_tool_use","id":"srv1","name":"web_search","input":{}}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"query\": \"swi"}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"ft 6.4\"}"}}"#,
+            #"data: {"type":"content_block_stop","index":1}"#,
+            #"data: {"type":"content_block_start","index":2,"content_block":{"type":"web_search_tool_result","tool_use_id":"srv1","content":[{"type":"web_search_result","title":"Swift 6.4 Released","url":"https://www.swift.org/blog/swift-6.4-released/","encrypted_content":"x","page_age":"Sep 15, 2026"}]}}"#,
+            #"data: {"type":"content_block_stop","index":2}"#,
+            #"data: {"type":"content_block_start","index":3,"content_block":{"type":"text","text":""}}"#,
+            #"data: {"type":"content_block_delta","index":3,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","cited_text":"Swift 6.4 is now available","url":"https://www.swift.org/blog/swift-6.4-released/","title":"Swift 6.4 Released","encrypted_index":"y"}}}"#,
+            #"data: {"type":"content_block_delta","index":3,"delta":{"type":"text_delta","text":"Swift 6.4 is out."}}"#,
+            #"data: {"type":"content_block_stop","index":3}"#,
+        ]
+        let page = Source(url: URL(string: "https://www.swift.org/blog/swift-6.4-released/")!, title: "Swift 6.4 Released")
+        #expect(
+            try decode(AnthropicDecoder(), lines) == [
+                .activity(Activity.search("srv1", nil)), .activity(Activity.search("srv1", "swift 6.4")), .source(page),
+                .activity(Activity.search("srv1", "swift 6.4", done: true)), .text("Swift 6.4 is out."),
+                .text(" [swift.org](https://www.swift.org/blog/swift-6.4-released/)"),
+            ])
+    }
+}
+
+@Suite("Responses API streams")
+struct ResponsesDecoderTests {
+    @Test("Text, reasoning summaries, searches, citations and usage come through")
+    func turn() throws {
+        let lines = [
+            #"event: response.output_item.added"#,
+            #"data: {"type":"response.output_item.added","output_index":0,"item":{"type":"web_search_call","id":"ws_1","status":"in_progress"}}"#,
+            #"data: {"type":"response.output_item.done","output_index":0,"item":{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"search","query":"swift 6.4","sources":[{"type":"url","url":"https://swift.org/blog"}]}}}"#,
+            #"data: {"type":"response.reasoning_summary_text.delta","delta":"Looking"}"#,
+            #"data: {"type":"response.output_text.delta","delta":"Swift 6.4 "}"#,
+            #"data: {"type":"response.output_text.annotation.added","annotation":{"type":"url_citation","url":"https://www.swift.org/blog/swift-6.4-released/?utm_source=openai","title":"Swift 6.4 Released","start_index":0,"end_index":9}}"#,
+            #"data: {"type":"response.output_text.delta","delta":"is out."}"#,
+            #"data: {"type":"response.completed","response":{"usage":{"input_tokens":30,"output_tokens":9}}}"#,
+        ]
+        #expect(
+            try decode(ResponsesDecoder(), lines) == [
+                .activity(Activity.search("ws_1", nil)),
+                .source(Source(url: URL(string: "https://swift.org/blog")!, title: "")),
+                .activity(Activity.search("ws_1", "swift 6.4", done: true)),
+                .reasoning("Looking"), .text("Swift 6.4 "),
+                .source(
+                    Source(
+                        url: URL(string: "https://www.swift.org/blog/swift-6.4-released/?utm_source=openai")!, title: "Swift 6.4 Released")),
+                .text("is out."), .usage(Usage(input: 30, output: 9)),
+            ])
+    }
+
+    @Test("A failed response fails the reply with its message")
+    func failed() {
+        #expect(throws: AIError.failed("Rate limit")) {
+            try decode(ResponsesDecoder(), [#"data: {"type":"response.failed","response":{"error":{"message":"Rate limit"}}}"#])
+        }
+        #expect(throws: AIError.failed("Bad input")) {
+            try decode(ResponsesDecoder(), [#"data: {"type":"error","message":"Bad input"}"#])
+        }
+    }
+}
+
+extension OpenAIDecoderTests {
+    @Test("Citations a gateway adds to the stream become sources")
+    func annotations() throws {
+        let line =
+            #"data: {"choices":[{"delta":{"content":"Hi","annotations":[{"type":"url_citation","url_citation":{"url":"https://a.com/x","title":"A"}}]}}]}"#
+        #expect(
+            try decode(OpenAIChatDecoder(), [line]) == [.text("Hi"), .source(Source(url: URL(string: "https://a.com/x")!, title: "A"))])
+    }
+}
+
+extension ClaudeCodeDecoderTests {
+    @Test("Text blocks on either side of a tool are separate paragraphs")
+    func blocks() throws {
+        let lines = [
+            #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"parent_tool_use_id":null}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me look."}},"parent_tool_use_id":null}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}},"parent_tool_use_id":null}"#,
+            #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"It's 6.4."}},"parent_tool_use_id":null}"#,
+        ]
+        #expect(try decode(ClaudeCodeDecoder(), lines) == [.text("Let me look."), .text("\n\n"), .text("It's 6.4.")])
+    }
+}
+
+extension AnthropicDecoderTests {
+    @Test("Text blocks after the first start a new paragraph")
+    func blocks() throws {
+        let lines = [
+            #"data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"One."}}"#,
+            #"data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}"#,
+            #"data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"Two."}}"#,
+        ]
+        #expect(try decode(AnthropicDecoder(), lines) == [.text("One."), .text("\n\n"), .text("Two.")])
+    }
+}
+
+extension OpenCodeDecoderTests {
+    @Test("An answer held back is still shown when the run then fails")
+    func heldOnFailure() async throws {
+        let lines = [
+            #"{"type":"text","sessionID":"s","part":{"type":"text","text":"Partial answer"}}"#,
+            #"{"type":"error","sessionID":"s","error":{"message":"Boom"}}"#,
+        ]
+        let stream = AsyncThrowingStream<ChatEvent, Error>.decoding(
+            {
+                AsyncStream { continuation in
+                    for line in lines { continuation.yield(line) }
+                    continuation.finish()
+                }
+            }, with: OpenCodeDecoder())
+        var events: [ChatEvent] = []
+        await #expect(throws: AIError.failed("Boom")) {
+            for try await event in stream { events.append(event) }
+        }
+        #expect(events == [.session("s"), .text("Partial answer")])
     }
 }

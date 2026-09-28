@@ -26,6 +26,17 @@ final class Assistant {
         didSet { Storage.settings.set(providerID, forKey: Keys.provider) }
     }
 
+    /// Questions search the web first, with the provider's own search, when
+    /// it has one (see `searches`).
+    var searching: Bool {
+        didSet { Storage.settings.set(searching, forKey: Keys.search) }
+    }
+
+    /// Whether the next question will search: asked for, and possible.
+    var searches: Bool { searches(with: provider) }
+
+    func searches(with provider: Provider) -> Bool { searching && provider.searches }
+
     private(set) var setups: [String: ProviderSetup]
     /// What was found on the Mac; nil until the first look.
     private(set) var found: ToolLocator.Found?
@@ -52,6 +63,7 @@ final class Assistant {
     private enum Keys {
         static let provider = "ai.provider"
         static let setups = "ai.setups"
+        static let search = "ai.search"
     }
 
     init(secrets: Secrets? = nil) {
@@ -61,6 +73,7 @@ final class Assistant {
         self.secrets = secrets ?? KeychainSecrets(service: service, label: Storage.world.map { "Mote AI (\($0))" } ?? "Mote AI")
         let stored = Storage.settings.string(forKey: Keys.provider).flatMap(Provider.named)
         providerID = stored?.id ?? "claude-code"
+        searching = Storage.settings.bool(forKey: Keys.search)
         setups =
             Storage.settings.data(forKey: Keys.setups).flatMap { try? JSONDecoder().decode([String: ProviderSetup].self, from: $0) } ?? [:]
     }
@@ -222,9 +235,12 @@ final class Assistant {
             change(provider) { $0.model = first.id }
             model = first.id
         }
-        let service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id))
+        let search = searches(with: provider)
+        let service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id), search: search)
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
-        return Conversation.Route(provider: provider.id, model: model, author: author, service: service, instructions: Self.instructions())
+        return Conversation.Route(
+            provider: provider.id, model: model, author: author, service: service, instructions: Instructions.compose(search: search),
+            search: search)
     }
 
     /// Sends `text` in `conversation` to the chosen provider.
@@ -235,16 +251,5 @@ final class Assistant {
     /// Asks again for the last reply, through whatever provider is chosen now.
     func retry(in conversation: Conversation) {
         conversation.retry(routing: { [self] in try await route() })
-    }
-
-    /// Mote's standing instructions to every provider.
-    static func instructions(now: Date = Date()) -> String {
-        let day = now.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
-        return """
-            You are the assistant built into Mote, a web browser for the Mac. Answer the person's questions directly and \
-            helpfully, in the language they write in. Keep answers as short as the question allows; use Markdown \
-            (headings, lists, tables, fenced code with a language) where it makes the answer easier to read. When you \
-            mention a website, give its full https:// address as a Markdown link. Today is \(day).
-            """
     }
 }

@@ -22,6 +22,16 @@ public struct Provider: Identifiable, Hashable, Sendable {
         case apple
     }
 
+    /// How a provider searches the web, with its own search.
+    public enum Search: Sendable {
+        /// Its own tools, in the same requests (agents, Anthropic).
+        case own
+        /// Through the Responses API (OpenAI, xAI).
+        case responses
+        /// The model's `:online` variant (OpenRouter).
+        case online
+    }
+
     public enum Agent: String, CaseIterable, Sendable {
         case claudeCode, codex, openCode, geminiCLI
 
@@ -63,10 +73,14 @@ public struct Provider: Identifiable, Hashable, Sendable {
     public let movable: Bool
     /// Sent with every request.
     public let headers: [String: String]
+    /// How it searches the web; nil when it can't.
+    public let search: Search?
+
+    public var searches: Bool { search != nil }
 
     init(
         id: String, name: String, kind: Kind, connection: Connection, summary: String, needsKey: Bool = false, keyPage: String? = nil,
-        defaultModel: String = "", suggested: [Model] = [], movable: Bool = false, headers: [String: String] = [:]
+        defaultModel: String = "", suggested: [Model] = [], movable: Bool = false, headers: [String: String] = [:], search: Search? = nil
     ) {
         self.id = id
         self.name = name
@@ -79,6 +93,7 @@ public struct Provider: Identifiable, Hashable, Sendable {
         self.suggested = suggested
         self.movable = movable
         self.headers = headers
+        self.search = search
     }
 
     public static func == (a: Provider, b: Provider) -> Bool { a.id == b.id }
@@ -109,18 +124,19 @@ extension Provider {
             summary: "Anthropic's agent, with your Claude plan",
             suggested: [
                 Model(id: "sonnet", name: "Sonnet"), Model(id: "opus", name: "Opus"), Model(id: "haiku", name: "Haiku"),
-            ]),
+            ], search: .own),
         Provider(
-            id: "codex", name: "Codex", kind: .agent, connection: .agent(.codex), summary: "OpenAI's agent, with your ChatGPT plan"),
+            id: "codex", name: "Codex", kind: .agent, connection: .agent(.codex), summary: "OpenAI's agent, with your ChatGPT plan",
+            search: .own),
         Provider(
             id: "opencode", name: "opencode", kind: .agent, connection: .agent(.openCode),
-            summary: "The open agent, with the models it's set up for"),
+            summary: "The open agent, with the models it's set up for", search: .own),
         Provider(
             id: "gemini-cli", name: "Gemini CLI", kind: .agent, connection: .agent(.geminiCLI),
             summary: "Google's agent, with your Google account",
             suggested: [
                 Model(id: "gemini-2.5-pro", name: "Gemini 2.5 Pro"), Model(id: "gemini-2.5-flash", name: "Gemini 2.5 Flash"),
-            ]),
+            ], search: .own),
     ]
 
     static let local: [Provider] = [
@@ -139,11 +155,11 @@ extension Provider {
         Provider(
             id: "anthropic", name: "Anthropic", kind: .cloud, connection: .anthropic(URL(string: "https://api.anthropic.com")!),
             summary: "Claude, through Anthropic's API", needsKey: true, keyPage: "https://console.anthropic.com/settings/keys",
-            defaultModel: "claude-sonnet-5"),
+            defaultModel: "claude-sonnet-5", search: .own),
         Provider(
             id: "openai", name: "OpenAI", kind: .cloud, connection: .openAI(URL(string: "https://api.openai.com/v1")!),
             summary: "GPT models, through OpenAI's API", needsKey: true, keyPage: "https://platform.openai.com/api-keys",
-            defaultModel: "gpt-5"),
+            defaultModel: "gpt-5", search: .responses),
         Provider(
             id: "gemini", name: "Google Gemini", kind: .cloud,
             connection: .openAI(URL(string: "https://generativelanguage.googleapis.com/v1beta/openai")!),
@@ -153,7 +169,7 @@ extension Provider {
             id: "openrouter", name: "OpenRouter", kind: .cloud, connection: .openAI(URL(string: "https://openrouter.ai/api/v1")!),
             summary: "Hundreds of models behind one key", needsKey: true, keyPage: "https://openrouter.ai/keys",
             defaultModel: "openrouter/auto",
-            headers: ["HTTP-Referer": "https://motebrowser.com", "X-Title": "Mote"]),
+            headers: ["HTTP-Referer": "https://motebrowser.com", "X-Title": "Mote"], search: .online),
         Provider(
             id: "groq", name: "Groq", kind: .cloud, connection: .openAI(URL(string: "https://api.groq.com/openai/v1")!),
             summary: "Open models, answered very fast", needsKey: true, keyPage: "https://console.groq.com/keys",
@@ -169,7 +185,7 @@ extension Provider {
         Provider(
             id: "xai", name: "xAI", kind: .cloud, connection: .openAI(URL(string: "https://api.x.ai/v1")!),
             summary: "Grok, through xAI's API",
-            needsKey: true, keyPage: "https://console.x.ai", defaultModel: "grok-4"),
+            needsKey: true, keyPage: "https://console.x.ai", defaultModel: "grok-4", search: .responses),
         Provider(
             id: "custom", name: "Other (OpenAI-compatible)", kind: .cloud, connection: .openAI(URL(string: "http://localhost:8080/v1")!),
             summary: "Any server that speaks OpenAI's API: vLLM, llama.cpp, LiteLLM…", movable: true),

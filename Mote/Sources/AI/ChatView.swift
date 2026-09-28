@@ -184,8 +184,13 @@ private struct Answer: View {
                 }
                 .foregroundStyle(Palette.muted)
             }
+            // Worked out once per draw: it reads the whole reply for links.
+            let text = searched ? Citations.shown(message.text) : message.text
+            let entries = searched ? Citations.arrange(message.sources, for: text) : []
+            if !message.steps.isEmpty { StepsSummary(steps: message.steps) }
+            if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
-            if !message.text.isEmpty { MarkdownView(text: message.text) }
+            if !text.isEmpty { MarkdownView(text: text, cites: Self.cites(entries)) }
             if message.interrupted {
                 Text("Stopped").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
             }
@@ -201,6 +206,14 @@ private struct Answer: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .onHover { hovering = $0 }
         .animation(Motion.hover, value: hovering)
+    }
+
+    /// A reply that looked things up on the web, whose links are citations.
+    private var searched: Bool { !message.sources.isEmpty || message.steps.contains { $0.kind != .tool } }
+
+    /// Each cited page's chip name, by `Source.key`.
+    private static func cites(_ entries: [Citations.Entry]) -> [String: String] {
+        Dictionary(entries.filter { $0.number != nil }.map { ($0.source.id, $0.source.brand) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// The model's thinking, folded away unless asked for.
@@ -410,6 +423,7 @@ private struct ChatComposer: View {
             }
             HStack(spacing: 8) {
                 ModelChip(browser: browser, eager: true)
+                SearchToggle()
                 Spacer(minLength: 0)
                 if conversation.busy, !hasText {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }

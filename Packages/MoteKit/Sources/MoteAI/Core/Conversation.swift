@@ -17,13 +17,18 @@ public final class Conversation: Identifiable {
         public var author: String
         public var service: any ChatService
         public var instructions: String?
+        /// Search the web for the answer.
+        public var search: Bool
 
-        public init(provider: String, model: String, author: String, service: any ChatService, instructions: String? = nil) {
+        public init(
+            provider: String, model: String, author: String, service: any ChatService, instructions: String? = nil, search: Bool = false
+        ) {
             self.provider = provider
             self.model = model
             self.author = author
             self.service = service
             self.instructions = instructions
+            self.search = search
         }
     }
 
@@ -51,9 +56,13 @@ public final class Conversation: Identifiable {
     /// holds the chat up to `heard` messages, the reply included. Another
     /// provider answering, or a reply stopped halfway, leaves it behind, and
     /// the provider then starts afresh with the whole conversation.
-    @ObservationIgnored private var sessions: [String: (id: String, heard: Int)] = [:]
+    /// It was opened searching or not, and its instructions say so; a turn
+    /// the other way starts afresh too.
+    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool)] = [:]
     /// The session opened or carried on by the reply under way.
     @ObservationIgnored private var opened: String?
+    /// Whether the reply under way searches.
+    @ObservationIgnored private var searched = false
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Counts replies, so a stopped one's late events are dropped.
     @ObservationIgnored private var turn = 0
@@ -133,10 +142,11 @@ public final class Conversation: Identifiable {
         let asked = Array(messages.dropLast())
         if let last = messages.indices.last { messages[last].author = route.author }
         // Up to date if it heard everything but the new question.
-        let session = sessions[route.provider].flatMap { $0.heard == asked.count - 1 ? $0.id : nil }
+        let session = sessions[route.provider].flatMap { $0.heard == asked.count - 1 && $0.search == route.search ? $0.id : nil }
         // An agent that carries a session on may not name it again.
         opened = session
-        return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session)
+        searched = route.search
+        return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session, search: route.search)
     }
 
     private func take(_ event: ChatEvent, from provider: String) {
@@ -156,8 +166,15 @@ public final class Conversation: Identifiable {
             } else {
                 activities.append(activity)
             }
+            if let index = messages[last].steps.firstIndex(where: { $0.id == activity.id }) {
+                messages[last].steps[index] = activity
+            } else {
+                messages[last].steps.append(activity)
+            }
         case .usage(let spent):
             usage = spent
+        case .source(let source):
+            if !messages[last].sources.contains(where: { $0.id == source.id }) { messages[last].sources.append(source) }
         }
     }
 
@@ -166,7 +183,7 @@ public final class Conversation: Identifiable {
         task = nil
         activities = []
         guard let failure, !(failure is CancellationError) else {
-            if let provider, let opened { sessions[provider] = (opened, messages.count) }
+            if let provider, let opened { sessions[provider] = (opened, messages.count, searched) }
             phase = .idle
             return
         }

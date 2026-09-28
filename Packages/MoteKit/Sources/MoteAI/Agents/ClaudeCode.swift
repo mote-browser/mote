@@ -4,19 +4,23 @@ import Foundation
 /// as a user line, and the answer comes back as Anthropic's own stream
 /// events wrapped in lines of JSON.
 ///
-/// Mote keeps it a chat: no tools, no MCP servers, no hooks or slash
-/// commands, and Mote's instructions in place of the coding agent's. Each
+/// Mote keeps it a chat: no tools but its own web search and page reading
+/// when asked to search, no MCP servers, no hooks or slash commands, and
+/// Mote's instructions in place of the coding agent's. Each
 /// turn is a process of its own that resumes the session the first opened, so
 /// Claude keeps the history and its prompt cache.
 public struct ClaudeCodeAgent: AgentWire {
     public init() {}
 
     public func command(for request: ChatRequest, executable: URL, workspace: URL) -> Command {
+        let tools = request.search ? "WebSearch,WebFetch" : ""
         var arguments = [
             "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-            "--tools", "", "--strict-mcp-config", "--mcp-config", #"{"mcpServers":{}}"#,
+            "--tools", tools, "--strict-mcp-config", "--mcp-config", #"{"mcpServers":{}}"#,
             "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands", "--no-chrome",
         ]
+        // Allowed up front: in print mode a tool that needs asking is refused.
+        if request.search { arguments += ["--allowedTools", tools] }
         if !request.model.isEmpty { arguments += ["--model", request.model] }
         if let instructions = request.instructions, !instructions.isEmpty { arguments += ["--system-prompt", instructions] }
         if let session = request.resume { arguments += ["--resume", session] }
@@ -30,7 +34,11 @@ public struct ClaudeCodeAgent: AgentWire {
 
 public struct ClaudeCodeDecoder: LineDecoder {
     private var session: String?
-    private var tools: [String: String] = [:]
+    /// Tools under way, by id, as last shown.
+    private var tools: [String: Activity] = [:]
+    /// Some answer has been given; the next text block is a new paragraph.
+    private var wrote = false
+    private var blockStarted = false
 
     public init() {}
 
@@ -44,8 +52,10 @@ public struct ClaudeCodeDecoder: LineDecoder {
             return started(id)
         case "stream_event":
             return streamed(json["event"])
+        case "assistant":
+            return described(json["message"]?["content"]?.array ?? [])
         case "user":
-            return finishedTools(json["message"]?["content"]?.array ?? [])
+            return finishedTools(json["message"]?["content"]?.array ?? [], result: json["tool_use_result"])
         case "result":
             return try result(json)
         default:
@@ -65,25 +75,79 @@ public struct ClaudeCodeDecoder: LineDecoder {
         case "content_block_delta":
             let delta = event["delta"]
             switch delta?["type"]?.string {
-            case "text_delta": return delta?["text"]?.string.flatMap { $0.isEmpty ? nil : [.text($0)] } ?? []
+            case "text_delta":
+                guard let text = delta?["text"]?.string, !text.isEmpty else { return [] }
+                return paragraph() + [.text(text)]
             case "thinking_delta": return delta?["thinking"]?.string.flatMap { $0.isEmpty ? nil : [.reasoning($0)] } ?? []
             default: return []
             }
         case "content_block_start":
             let block = event["content_block"]
+            if block?["type"]?.string == "text" { blockStarted = true }
             guard ["tool_use", "server_tool_use"].contains(block?["type"]?.string ?? ""), let id = block?["id"]?.string else { return [] }
-            let name = block?["name"]?.string ?? "Tool"
-            tools[id] = name
-            return [.activity(Activity(id: id, title: name))]
+            let activity = Self.activity(id: id, name: block?["name"]?.string ?? "Tool", input: nil)
+            tools[id] = activity
+            return [.activity(activity)]
         default:
             return []
         }
     }
 
-    private mutating func finishedTools(_ content: [JSON]) -> [ChatEvent] {
+    /// A break before the first words of a text block that follows others,
+    /// so words on either side of a search don't run together.
+    private mutating func paragraph() -> [ChatEvent] {
+        defer {
+            wrote = true
+            blockStarted = false
+        }
+        return wrote && blockStarted ? [.text("\n\n")] : []
+    }
+
+    /// The whole tool call arrives once its input is complete: a search now
+    /// has its query, a page read its address.
+    private mutating func described(_ content: [JSON]) -> [ChatEvent] {
         content.compactMap { block in
-            guard block["type"]?.string == "tool_result", let id = block["tool_use_id"]?.string, let name = tools[id] else { return nil }
-            return .activity(Activity(id: id, title: name, done: true))
+            guard block["type"]?.string == "tool_use", let id = block["id"]?.string else { return nil }
+            let activity = Self.activity(id: id, name: block["name"]?.string ?? "Tool", input: block["input"])
+            guard tools[id] != activity else { return nil }
+            tools[id] = activity
+            return .activity(activity)
+        }
+    }
+
+    /// Tools that finished; web tools also give the pages they found or read.
+    private mutating func finishedTools(_ content: [JSON], result: JSON?) -> [ChatEvent] {
+        content.flatMap { block -> [ChatEvent] in
+            guard block["type"]?.string == "tool_result", let id = block["tool_use_id"]?.string, var activity = tools[id] else { return [] }
+            activity.done = true
+            tools[id] = activity
+            return Self.sources(in: result, for: activity) + [.activity(activity)]
+        }
+    }
+
+    private static func activity(id: String, name: String, input: JSON?) -> Activity {
+        switch name {
+        case "WebSearch": .search(id, input?["query"]?.string)
+        case "WebFetch": .read(id, input?["url"]?.string)
+        default: Activity(id: id, title: name)
+        }
+    }
+
+    /// `tool_use_result` holds a search's results as `{title, url}` lists, and
+    /// a page read's address.
+    private static func sources(in result: JSON?, for activity: Activity) -> [ChatEvent] {
+        guard let result else { return [] }
+        switch activity.kind {
+        case .search:
+            return result["results"]?.array.flatMap { $0["content"]?.array ?? [] }.compactMap { item in
+                guard let address = item["url"]?.string, let url = URL(string: address) else { return nil }
+                return .source(Source(url: url, title: item["title"]?.string ?? ""))
+            } ?? []
+        case .read:
+            guard let address = result["url"]?.string, let url = URL(string: address) else { return [] }
+            return [.source(Source(url: url, title: ""))]
+        case .tool:
+            return []
         }
     }
 

@@ -8,12 +8,17 @@ public struct OpenAIChatService: ChatService {
     let base: URL
     let key: String?
     let headers: [String: String]
+    /// Searches by asking for the model's `:online` variant, as OpenRouter offers.
+    let online: Bool
     let transport: HTTPTransport
 
-    public init(base: URL, key: String?, headers: [String: String] = [:], transport: HTTPTransport = URLSessionTransport()) {
+    public init(
+        base: URL, key: String?, headers: [String: String] = [:], online: Bool = false, transport: HTTPTransport = URLSessionTransport()
+    ) {
         self.base = base
         self.key = key
         self.headers = headers
+        self.online = online
         self.transport = transport
     }
 
@@ -31,7 +36,8 @@ public struct OpenAIChatService: ChatService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = Data(JSON.encode(["model": chat.model, "messages": messages, "stream": true]).utf8)
+        let model = online && chat.search && !chat.model.hasSuffix(":online") ? chat.model + ":online" : chat.model
+        request.httpBody = Data(JSON.encode(["model": model, "messages": messages, "stream": true]).utf8)
         return request
     }
 
@@ -80,6 +86,12 @@ public struct OpenAIChatDecoder: LineDecoder {
                 if let text = delta[key]?.string, !text.isEmpty { events.append(.reasoning(text)) }
             }
             if let text = delta["content"]?.string, !text.isEmpty { events.append(.text(text)) }
+            // Gateways that search (OpenRouter) cite their pages alongside.
+            for annotation in delta["annotations"]?.array ?? [] {
+                let citation = annotation["url_citation"] ?? annotation
+                guard let address = citation["url"]?.string, let url = URL(string: address) else { continue }
+                events.append(.source(Source(url: url, title: citation["title"]?.string ?? "")))
+            }
         }
         if let usage = json["usage"], let input = usage["prompt_tokens"]?.int {
             events.append(.usage(Usage(input: input, output: usage["completion_tokens"]?.int ?? 0)))

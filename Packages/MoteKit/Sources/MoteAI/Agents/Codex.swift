@@ -7,6 +7,8 @@ public struct CodexAgent: AgentWire {
 
     public func command(for request: ChatRequest, executable: URL, workspace: URL) -> Command {
         var arguments = ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only"]
+        // Live search; left alone, Codex only looks in a cached index.
+        if request.search { arguments += ["-c", #"web_search="live""#] }
         if !request.model.isEmpty { arguments += ["--model", request.model] }
         let prompt: String
         if let session = request.resume {
@@ -57,7 +59,16 @@ public struct CodexDecoder: LineDecoder {
         case "reasoning":
             guard done, let text = item["text"]?.string, !text.isEmpty else { return [] }
             return [.reasoning(text)]
-        case "command_execution", "web_search", "mcp_tool_call", "file_change":
+        case "web_search":
+            guard let id = item["id"]?.string else { return [] }
+            let query = item["query"]?.string ?? item["action"]?["query"]?.string
+            let found: [ChatEvent] =
+                item["results"]?.array.compactMap { result in
+                    guard let address = result["url"]?.string, let url = URL(string: address) else { return nil }
+                    return .source(Source(url: url, title: result["title"]?.string ?? ""))
+                } ?? []
+            return found + [.activity(.search(id, query, done: done))]
+        case "command_execution", "mcp_tool_call", "file_change":
             guard let id = item["id"]?.string else { return [] }
             let title =
                 item["command"]?.string ?? item["query"]?.string ?? item["tool"]?.string ?? kind.replacingOccurrences(of: "_", with: " ")
