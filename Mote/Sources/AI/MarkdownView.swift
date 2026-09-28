@@ -4,23 +4,46 @@ import SwiftUI
 
 /// A reply's Markdown, drawn in Mote's type: each block from `Markdown`,
 /// and the words inside them through Foundation's inline Markdown.
-struct MarkdownView: View {
+struct MarkdownView: View, Equatable {
     let text: String
     /// Links to these pages (by `Source.key`) show as citation chips with
     /// the name given.
     var cites: [String: String] = [:]
 
     var body: some View {
-        Blocks(blocks: Markdown.parse(text), cites: cites)
+        Blocks(blocks: Self.blocks(of: text), cites: cites)
+    }
+
+    /// Parsed replies, so drawing one again doesn't parse it again.
+    @MainActor private static var parsed: [String: [Markdown.Block]] = [:]
+
+    @MainActor private static func blocks(of text: String) -> [Markdown.Block] {
+        if let blocks = parsed[text] { return blocks }
+        let blocks = Markdown.parse(text)
+        // A streaming reply leaves a version per piece; only the latest matter.
+        if parsed.count > 64 { parsed.removeAll() }
+        parsed[text] = blocks
+        return blocks
     }
 
     /// Body text in replies: a little larger than the chrome's, for reading.
     static let size: CGFloat = 14
     static let leading: CGFloat = 4.5
 
+    /// Inline Markdown already styled, by text, with the cites it was styled for.
+    @MainActor private static var styled: [String: (cites: [String: String], text: AttributedString)] = [:]
+
     /// Inline Markdown (emphasis, code, links) in a block's text. Code spans
     /// get the monospaced face on a faint wash.
-    static func inline(_ text: String, cites: [String: String] = [:]) -> AttributedString {
+    @MainActor static func inline(_ text: String, cites: [String: String] = [:]) -> AttributedString {
+        if let kept = styled[text], kept.cites == cites { return kept.text }
+        let made = style(text, cites: cites)
+        if styled.count > 2_000 { styled.removeAll() }
+        styled[text] = (cites, made)
+        return made
+    }
+
+    private static func style(_ text: String, cites: [String: String]) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             allowsExtendedAttributes: false, interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible)
@@ -37,14 +60,20 @@ struct MarkdownView: View {
                 styled[range].underlineStyle = .single
                 continue
             }
-            // A citation: the site's name on a small chip, still a link.
+            // A citation: the site's name on a small chip, still a link. A link
+            // worded as part of the answer keeps its words, with the chip after.
             var chip = AttributedString("\u{2009}\(name)\u{2009}")
             chip.link = link
             chip.font = .system(size: size * 0.76, weight: .medium)
             chip.foregroundColor = Palette.muted
             chip.backgroundColor = Palette.wash
             chip.baselineOffset = 1
-            styled.replaceSubrange(range, with: chip)
+            if Citations.namesSite(String(styled[range].characters), link) {
+                styled.replaceSubrange(range, with: chip)
+            } else {
+                styled[range].link = nil
+                styled.insert(AttributedString(" ") + chip, at: range.upperBound)
+            }
         }
         return styled
     }

@@ -349,17 +349,24 @@ enum BenchInput {
         NSEvent(cgEvent: event).map(view.scrollWheel)
     }
 
+    /// Every view of a kind under `view`, depth first.
+    static func views<Kind: NSView>(of kind: Kind.Type, in view: NSView) -> [Kind] {
+        view.subviews.flatMap { (($0 as? Kind).map { [$0] } ?? []) + views(of: kind, in: $0) }
+    }
+
     /// Two fingers flicking down the page and letting go, a frame at a time:
     /// 150 ms of fingers, then a second of momentum, the phases a trackpad gives.
     static func flick(_ view: NSView, points: Double = 900) {
         var steps: [(dy: Double, phase: Int64, momentum: Int64)] = [(0, 1, 0)]
         for i in 1...18 { steps.append((-points * 0.4 / 9 * 0.64 * sin(Double(i) / 18 * .pi / 2), 2, 0)) }
         steps.append((0, 4, 0))
-        var speed = points * 0.6 * 0.05
-        steps.append((-speed, 0, 1))
+        // Momentum goes the way the fingers went, whichever way that is.
+        let way: Double = points < 0 ? -1 : 1
+        var speed = abs(points) * 0.6 * 0.05
+        steps.append((-way * speed, 0, 1))
         while speed > 0.5 {
             speed *= 0.95
-            steps.append((-speed, 0, 2))
+            steps.append((-way * speed, 0, 2))
         }
         steps.append((0, 0, 3))
         for (n, step) in steps.enumerated() {

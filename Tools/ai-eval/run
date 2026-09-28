@@ -11,7 +11,7 @@ and how many point to a page the provider actually found or read
 
     Tools/ai-eval/run                          all questions, as Mote is set up
     Tools/ai-eval/run --provider claude-code --model haiku
-    Tools/ai-eval/run --only swift-latest,eiffel --search off
+    Tools/ai-eval/run --only swift-latest,eiffel --mode research
     Tools/ai-eval/run --label new-prompt       names the run's folder
 
 Results go to build/ai-eval/<time>-<label>/: results.jsonl (everything,
@@ -89,7 +89,13 @@ def measure(entry, reply, seconds):
 def ask(entry, patience):
     bench("chat", "ask", entry["question"])
     started = time.time()
-    state = bench("chat", "wait", str(patience))
+    state = {}
+    # A wait can come back early (the bench cuts off a call now and then); wait again until done.
+    while time.time() - started < patience:
+        state = bench("chat", "wait", str(int(patience - (time.time() - started)) + 1), check=False)
+        # Nothing to wait for: the app or its chat went away.
+        if not state.get("chat") or state.get("phase") not in ("waiting", "answering"):
+            break
     seconds = time.time() - started
     reply = state["messages"][-1] if state.get("messages") else {}
     result = measure(entry, reply, seconds)
@@ -124,10 +130,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--provider", help="provider id, as Settings › AI knows it")
     parser.add_argument("--model", help="model id for that provider")
-    parser.add_argument("--search", choices=("on", "off"), default="on")
+    parser.add_argument("--mode", choices=("chat", "search", "research"), default="search")
     parser.add_argument("--only", help="question ids, comma separated")
     parser.add_argument("--questions", default=os.path.join(os.path.dirname(__file__), "questions.json"))
-    parser.add_argument("--patience", type=int, default=240, help="seconds to wait for each reply")
+    parser.add_argument("--patience", type=int, default=600, help="seconds to wait for each reply")
     parser.add_argument("--label", default="")
     options = parser.parse_args()
 
@@ -137,7 +143,7 @@ def main():
         questions = [q for q in questions if q["id"] in wanted]
     if options.provider:
         bench("chat", "use", options.provider, *([options.model] if options.model else []))
-    bench("chat", "search", options.search)
+    bench("chat", "mode", options.mode)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     folder = os.path.join(ROOT, "build", "ai-eval", stamp + (f"-{options.label}" if options.label else ""))
@@ -152,7 +158,7 @@ def main():
             out.flush()
             print(f"{result['phase']} in {result['seconds']} s, {result['searches']} searches, "
                   f"{result['grounded']}/{result['citations']} grounded citations")
-    title = f"{results[0]['author'] if results else '?'} · search {options.search} · {stamp}"
+    title = f"{results[0]['author'] if results else '?'} · {options.mode} · {stamp}"
     text = report(results, title)
     open(os.path.join(folder, "report.md"), "w").write(text + "\n")
     print("\n" + text + f"\n\nSaved in {os.path.relpath(folder, ROOT)}")

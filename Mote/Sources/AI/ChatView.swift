@@ -11,9 +11,9 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
     @State private var focus = 0
-    /// Where the end of the conversation is, and the height of the view.
-    @State private var end: CGFloat = 0
-    @State private var viewport: CGFloat = 0
+    /// How far the end of the conversation is below the view: only which
+    /// zone, so scrolling changes it a few times rather than every frame.
+    @State private var distance = ScrollDistance.end
     /// Keeping to the end as the reply grows; scrolling up to read lets go,
     /// and coming back down takes it up again.
     @State private var pinned = true
@@ -35,10 +35,11 @@ struct ChatView: View {
                         Status(browser: browser, conversation: conversation, retry: retry)
                         // Room for the composer over the end; scrolling to it shows the last line above the composer.
                         Color.clear.frame(height: inputHeight + 96).id(Self.end)
-                            .onGeometryChange(for: CGFloat.self) {
-                                $0.frame(in: .named("chat")).maxY
+                            .onGeometryChange(for: ScrollDistance.self) { proxy in
+                                let view = proxy.bounds(of: .named("chat"))?.height ?? 0
+                                return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
                             } action: {
-                                end = $0
+                                distance = $0
                             }
                     }
                     .frame(maxWidth: Self.column, alignment: .leading)
@@ -48,11 +49,6 @@ struct ChatView: View {
                     .animation(Motion.settle, value: conversation.messages.count)
                 }
                 .coordinateSpace(name: "chat")
-                .onGeometryChange(for: CGFloat.self) {
-                    $0.size.height
-                } action: {
-                    viewport = $0
-                }
                 // Follows the reply as it grows, unless scrolled up to read.
                 .onChange(of: conversation.messages.last?.text) {
                     if pinned { scroller.scrollTo(Self.end, anchor: .bottom) }
@@ -61,11 +57,11 @@ struct ChatView: View {
                     pinned = true
                     withAnimation(Motion.settle) { scroller.scrollTo(Self.end, anchor: .bottom) }
                 }
-                .onChange(of: below < 24) { _, atEnd in if atEnd { pinned = true } }
+                .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                 .onScrollUp { pinned = false }
 
                 VStack(spacing: 10) {
-                    if below > 240 {
+                    if distance == .far {
                         JumpDown {
                             pinned = true
                             withAnimation(Motion.glide) { scroller.scrollTo(Self.end, anchor: .bottom) }
@@ -87,7 +83,7 @@ struct ChatView: View {
                         .frame(height: inputHeight + 110)
                         .allowsHitTesting(false)
                 }
-                .animation(Motion.quick, value: below > 240)
+                .animation(Motion.quick, value: distance == .far)
             }
         }
         .background(Palette.ground)
@@ -101,9 +97,6 @@ struct ChatView: View {
             })
     }
 
-    /// How far the end of the conversation is below the bottom of the view.
-    private var below: CGFloat { end - viewport }
-
     private var actions: ChatActions { ChatActions(retry: retry) }
 
     private func send() {
@@ -115,6 +108,20 @@ struct ChatView: View {
 
     private func retry() { Assistant.shared.retry(in: conversation) }
 
+}
+
+/// How far below the view the end of the conversation is.
+nonisolated enum ScrollDistance: Equatable, Sendable {
+    /// At the end, or nearly: following the reply.
+    case end
+    /// A little way up.
+    case near
+    /// Far enough up to offer the way back down.
+    case far
+
+    init(below: CGFloat) {
+        self = below < 24 ? .end : below < 240 ? .near : .far
+    }
 }
 
 /// What a message's buttons do, handed down to the rows.
@@ -144,12 +151,12 @@ private struct MessageRow: View, Equatable {
 
 private struct Question: View {
     let text: String
-    @State private var hovering = false
+    @State private var pointer = Pointer()
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             Spacer(minLength: 90)
-            CopyButton(text: text).opacity(hovering ? 1 : 0)
+            Revealed(pointer: pointer) { CopyButton(text: text) }
             Text(text)
                 .font(.system(size: MarkdownView.size))
                 .lineSpacing(MarkdownView.leading)
@@ -160,8 +167,44 @@ private struct Question: View {
                 .padding(.vertical, 9)
                 .background(Palette.wash, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .onHover { hovering = $0 }
-        .animation(Motion.hover, value: hovering)
+        .onHover { pointer.over = $0 }
+    }
+}
+
+/// Whether the pointer is over a message, kept apart from the message so
+/// only what shows on hover redraws when it changes.
+@MainActor
+@Observable
+private final class Pointer {
+    var over = false
+}
+
+/// Content shown while the pointer is over its message.
+private struct Revealed<Content: View>: View {
+    let pointer: Pointer
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content().opacity(pointer.over ? 1 : 0).animation(Motion.hover, value: pointer.over)
+    }
+}
+
+/// Copy, and ask again for the last answer: always there on the last,
+/// on hover on the others.
+private struct AnswerButtons: View {
+    let text: String
+    let last: Bool
+    let retry: () -> Void
+    let pointer: Pointer
+
+    var body: some View {
+        HStack(spacing: 2) {
+            CopyButton(text: text)
+            if last { RetryButton(act: retry) }
+        }
+        .padding(.leading, -7)
+        .opacity(pointer.over || last ? 1 : 0)
+        .animation(Motion.hover, value: pointer.over)
     }
 }
 
@@ -172,7 +215,9 @@ private struct Answer: View {
     let streaming: Bool
 
     @Environment(\.chatActions) private var actions
-    @State private var hovering = false
+    /// Read only by the buttons: the answer's own body doesn't redraw as the
+    /// pointer comes and goes, which scrolling past does all the time.
+    @State private var pointer = Pointer()
     @State private var thoughtsOpen = false
 
     var body: some View {
@@ -184,37 +229,31 @@ private struct Answer: View {
                 }
                 .foregroundStyle(Palette.muted)
             }
-            // Worked out once per draw: it reads the whole reply for links.
-            let text = searched ? Citations.shown(message.text) : message.text
-            let entries = searched ? Citations.arrange(message.sources, for: text) : []
-            if !message.steps.isEmpty { StepsSummary(steps: message.steps) }
+            // Kept from draw to draw (hovering redraws this): it reads the whole
+            // reply for links and matches them against every source.
+            let rendered = RenderedReply.of(message, searched: searched)
+            let (text, entries) = (rendered.text, rendered.entries)
+            if message.steps.contains(where: { $0.kind == .task || $0.kind == .phase }) {
+                ResearchProgress(steps: message.steps, live: streaming)
+            } else if !message.steps.isEmpty {
+                StepsSummary(steps: message.steps)
+            }
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
-            if !text.isEmpty { MarkdownView(text: text, cites: Self.cites(entries)) }
+            if !text.isEmpty { MarkdownView(text: text, cites: rendered.cites).equatable() }
             if message.interrupted {
                 Text("Stopped").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
             }
             if !message.text.isEmpty, !streaming {
-                HStack(spacing: 2) {
-                    CopyButton(text: message.text)
-                    if last { RetryButton(act: actions.retry) }
-                }
-                .padding(.leading, -7)
-                .opacity(hovering || last ? 1 : 0)
+                AnswerButtons(text: message.text, last: last, retry: actions.retry, pointer: pointer)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onHover { hovering = $0 }
-        .animation(Motion.hover, value: hovering)
+        .onHover { pointer.over = $0 }
     }
 
     /// A reply that looked things up on the web, whose links are citations.
     private var searched: Bool { !message.sources.isEmpty || message.steps.contains { $0.kind != .tool } }
-
-    /// Each cited page's chip name, by `Source.key`.
-    private static func cites(_ entries: [Citations.Entry]) -> [String: String] {
-        Dictionary(entries.filter { $0.number != nil }.map { ($0.source.id, $0.source.brand) }, uniquingKeysWith: { first, _ in first })
-    }
 
     /// The model's thinking, folded away unless asked for.
     private var thoughts: some View {
@@ -281,6 +320,9 @@ private struct Status: View {
     var body: some View {
         Group {
             switch conversation.phase {
+            case .waiting where researching, .answering where researching:
+                // The research card above shows its own progress.
+                EmptyView()
             case .waiting:
                 Working(title: conversation.activities.last(where: { !$0.done })?.title ?? waitingWords)
             case .answering:
@@ -297,6 +339,10 @@ private struct Status: View {
         }
         .transition(.opacity)
         .animation(Motion.quick, value: conversation.phase)
+    }
+
+    private var researching: Bool {
+        conversation.messages.last?.steps.contains { $0.kind == .phase } == true && conversation.messages.last?.text.isEmpty != false
     }
 
     private var waitingWords: String {
@@ -423,7 +469,7 @@ private struct ChatComposer: View {
             }
             HStack(spacing: 8) {
                 ModelChip(browser: browser, eager: true)
-                SearchToggle()
+                ModePicker()
                 Spacer(minLength: 0)
                 if conversation.busy, !hasText {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }
@@ -473,5 +519,31 @@ struct RoundButton: View {
         .accessibilityLabel(help.components(separatedBy: "   ")[0])
         .animation(Motion.quick, value: filled)
         .animation(Motion.hover, value: hovering)
+    }
+}
+
+/// What an answer shows, worked out from its message once and kept until
+/// the message changes: the text without a closing list of sources, the
+/// sources to list, and the chip name for each cited page.
+@MainActor
+struct RenderedReply {
+    let text: String
+    let entries: [Citations.Entry]
+    let cites: [String: String]
+
+    private static var kept: [UUID: (key: [Int], reply: RenderedReply)] = [:]
+
+    static func of(_ message: Message, searched: Bool) -> RenderedReply {
+        // The text only grows while it streams, so its length tells versions apart.
+        let key = [message.text.utf8.count, message.sources.count, searched ? 1 : 0]
+        if let kept = kept[message.id], kept.key == key { return kept.reply }
+        let text = searched ? Citations.shown(message.text) : message.text
+        let entries = searched ? Citations.arrange(message.sources, for: text) : []
+        let cites = Dictionary(
+            entries.filter { $0.number != nil }.map { ($0.source.id, $0.source.brand) }, uniquingKeysWith: { first, _ in first })
+        let reply = RenderedReply(text: text, entries: entries, cites: cites)
+        if kept.count > 200 { kept.removeAll() }
+        kept[message.id] = (key, reply)
+        return reply
     }
 }

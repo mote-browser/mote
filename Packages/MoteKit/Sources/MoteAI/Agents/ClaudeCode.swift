@@ -146,7 +146,7 @@ public struct ClaudeCodeDecoder: LineDecoder {
         case .read:
             guard let address = result["url"]?.string, let url = URL(string: address) else { return [] }
             return [.source(Source(url: url, title: ""))]
-        case .tool:
+        case .tool, .task, .phase:
             return []
         }
     }

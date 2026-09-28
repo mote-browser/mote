@@ -35,8 +35,8 @@ COMMANDS = {
     "close": ("id", "a tab the bench opened, or all of them"),
     "place": ("id to:int", "put a tab at another place in the row"),
     "probe": ("", "the window's own state: panels, modal, windows"),
-    "chat": ("[show|ask|follow|wait|use|search|providers] [args…]", "the chat in front; ask TEXT as ⌘Return does, follow TEXT in the chat "
-             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], search on|off (test run); providers: how each stands"),
+    "chat": ("[show|ask|follow|wait|use|mode|search|providers] [args…]", "the chat in front; ask TEXT as ⌘Return does, follow TEXT in the chat "
+             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] (a long researched reply, streamed from Mote itself; test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, sidebar, spaces, hides, bar, folded, peek, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
@@ -59,7 +59,7 @@ COMMANDS = {
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
-    "frames": ("[fold|peek|unpeek|scroll] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
     "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
@@ -208,7 +208,7 @@ def read_switch(verb, needed):
 
 
 def read_frames(args):
-    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll")):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown")):
         sys.exit(usage("frames"))
     request = {"action": args[0] if args else "fold"}
     if len(args) > 1:
@@ -223,6 +223,15 @@ def read_chat(args):
         return {"action": action}
     if action == "search" and len(rest) == 1 and rest[0] in ("on", "off"):
         return {"action": action, "on": rest[0] == "on"}
+    if action == "demo" and len(rest) <= 2:
+        request = {"action": action}
+        if rest:
+            request["sources"] = int(rest[0])
+        if len(rest) > 1:
+            request["delay"] = float(rest[1])
+        return request
+    if action == "mode" and len(rest) == 1 and rest[0] in ("chat", "search", "research"):
+        return {"action": action, "mode": rest[0]}
     if action in ("ask", "follow") and rest:
         return {"action": action, "text": " ".join(rest)}
     if action == "wait" and len(rest) <= 1:

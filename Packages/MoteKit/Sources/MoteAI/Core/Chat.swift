@@ -91,6 +91,10 @@ public struct Activity: Equatable, Codable, Sendable {
         case read
         /// Any other tool.
         case tool
+        /// One part of a research, looked into by a researcher of its own.
+        case task
+        /// A stage of a research: planning, reviewing, writing.
+        case phase
     }
 
     public var id: String
@@ -107,12 +111,12 @@ public struct Activity: Equatable, Codable, Sendable {
     }
 
     /// A search for `query`.
-    static func search(_ id: String, _ query: String?, done: Bool = false) -> Activity {
+    public static func search(_ id: String, _ query: String?, done: Bool = false) -> Activity {
         Activity(id: id, title: query.map { "Searching “\($0)”" } ?? "Searching the web", done: done, kind: .search)
     }
 
     /// Reading the page at `url`.
-    static func read(_ id: String, _ url: String?, done: Bool = false) -> Activity {
+    public static func read(_ id: String, _ url: String?, done: Bool = false) -> Activity {
         let site = url.flatMap(URL.init(string:)).map { Source(url: $0, title: "").site }
         return Activity(id: id, title: site.map { "Reading \($0)" } ?? "Reading a page", done: done, kind: .read)
     }

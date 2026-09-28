@@ -26,16 +26,49 @@ final class Assistant {
         didSet { Storage.settings.set(providerID, forKey: Keys.provider) }
     }
 
-    /// Questions search the web first, with the provider's own search, when
-    /// it has one (see `searches`).
-    var searching: Bool {
-        didSet { Storage.settings.set(searching, forKey: Keys.search) }
+    /// How questions are answered: from the model alone, from a quick web
+    /// search, or by researching the web in depth.
+    enum Mode: String, CaseIterable, Identifiable {
+        case chat, search, research
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .chat: "Chat"
+            case .search: "Search"
+            case .research: "Research"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .chat: "bubble.left"
+            case .search: "network"
+            case .research: "text.magnifyingglass"
+            }
+        }
+
+        /// What it does, in a few words.
+        var detail: String {
+            switch self {
+            case .chat: "Answers from the model alone"
+            case .search: "Searches the web and cites sources · seconds"
+            case .research: "Researches in depth, many sources · a few minutes"
+            }
+        }
     }
 
-    /// Whether the next question will search: asked for, and possible.
-    var searches: Bool { searches(with: provider) }
+    /// The mode asked for; one that needs searching falls back to chat with a
+    /// provider that can't search (see `mode(with:)`).
+    var chosenMode: Mode {
+        didSet { Storage.settings.set(chosenMode.rawValue, forKey: Keys.mode) }
+    }
 
-    func searches(with provider: Provider) -> Bool { searching && provider.searches }
+    /// The mode the next question goes in.
+    var mode: Mode { mode(with: provider) }
+
+    func mode(with provider: Provider) -> Mode { provider.searches ? chosenMode : .chat }
 
     private(set) var setups: [String: ProviderSetup]
     /// What was found on the Mac; nil until the first look.
@@ -63,7 +96,7 @@ final class Assistant {
     private enum Keys {
         static let provider = "ai.provider"
         static let setups = "ai.setups"
-        static let search = "ai.search"
+        static let mode = "ai.mode"
     }
 
     init(secrets: Secrets? = nil) {
@@ -73,7 +106,10 @@ final class Assistant {
         self.secrets = secrets ?? KeychainSecrets(service: service, label: Storage.world.map { "Mote AI (\($0))" } ?? "Mote AI")
         let stored = Storage.settings.string(forKey: Keys.provider).flatMap(Provider.named)
         providerID = stored?.id ?? "claude-code"
-        searching = Storage.settings.bool(forKey: Keys.search)
+        // Before modes there was only a switch for searching.
+        chosenMode =
+            Storage.settings.string(forKey: Keys.mode).flatMap(Mode.init(rawValue:))
+            ?? (Storage.settings.bool(forKey: "ai.search") ? .search : .chat)
         setups =
             Storage.settings.data(forKey: Keys.setups).flatMap { try? JSONDecoder().decode([String: ProviderSetup].self, from: $0) } ?? [:]
     }
@@ -235,12 +271,16 @@ final class Assistant {
             change(provider) { $0.model = first.id }
             model = first.id
         }
-        let search = searches(with: provider)
-        let service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id), search: search)
+        let mode = mode(with: provider)
+        let search = mode != .chat
+        var service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id), search: search)
+        // Research runs many replies of the provider's: a plan, researchers
+        // that search, a writer that doesn't. Only researchers get the search method.
+        if mode == .research { service = Research(service: service) }
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
         return Conversation.Route(
-            provider: provider.id, model: model, author: author, service: service, instructions: Instructions.compose(search: search),
-            search: search)
+            provider: provider.id, model: model, author: author, service: service,
+            instructions: Instructions.compose(search: mode == .search, thorough: mode == .research), search: search)
     }
 
     /// Sends `text` in `conversation` to the chosen provider.

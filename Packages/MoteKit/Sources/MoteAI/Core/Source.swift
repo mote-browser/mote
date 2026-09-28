@@ -92,6 +92,20 @@ public enum Citations {
         return numbered + rest
     }
 
+    /// Whether a link's text just names the site it points to, so a chip
+    /// can take its place, rather than carrying words of the answer.
+    public static func namesSite(_ label: String, _ url: URL) -> Bool {
+        let source = Source(url: url, title: "")
+        let squeeze = { (text: String) in text.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let words = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let plain = squeeze(words.hasPrefix("www.") ? String(words.dropFirst(4)) : words)
+        let brand = squeeze(source.brand)
+        // The site's name, as its address has it, with at most a word more
+        // ("swift.org", "Swift Blog"); anything longer is the answer's own words.
+        guard !brand.isEmpty, plain.hasPrefix(brand) || plain == squeeze(source.site) else { return false }
+        return words.split(separator: " ").count <= 2 && plain.count <= brand.count + 8
+    }
+
     /// The reply as the chat shows it: without a closing list of the pages
     /// it cites, which models add though asked not to, and which the list of
     /// sources above the reply already shows.

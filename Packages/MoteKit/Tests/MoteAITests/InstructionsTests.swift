@@ -45,4 +45,12 @@ struct InstructionsTests {
     func method(rule: String) {
         #expect(Instructions.search.contains(rule))
     }
+
+    @Test("Research asks for thorough answers instead of short ones")
+    func thorough() {
+        let text = Instructions.compose(search: false, thorough: true, now: day, timeZone: utc)
+        #expect(!text.contains("as short as the question allows"))
+        #expect(text.contains("thorough"))
+        #expect(Instructions.compose(search: false, now: day, timeZone: utc).contains("as short as the question allows"))
+    }
 }

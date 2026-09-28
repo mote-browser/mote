@@ -263,4 +263,40 @@ struct ConversationTests {
         #expect(service.requests[1].resume == nil)
         #expect(service.requests[1].search)
     }
+
+    @Test("Text arriving in many small pieces is shown in a few updates, the first at once, and all of it by the end")
+    func coalesced() async {
+        let service = ScriptedService()
+        service.events = (0..<300).map { .text("w\($0) ") }
+        let conversation = Conversation()
+        let count = ChangeCount(conversation)
+        conversation.send("Hi", via: route(service))
+        await settle(conversation)
+        #expect(conversation.messages.last?.text.hasPrefix("w0 w1 ") == true)
+        #expect(conversation.messages.last?.text.hasSuffix("w299 ") == true)
+        #expect(count.changes < 30)
+    }
+}
+
+/// Counts how often a conversation's messages change, as a view watching them would see.
+@MainActor
+final class ChangeCount {
+    private(set) var changes = 0
+    private let conversation: Conversation
+
+    init(_ conversation: Conversation) {
+        self.conversation = conversation
+        watch()
+    }
+
+    private func watch() {
+        withObservationTracking {
+            _ = conversation.messages
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.changes += 1
+                self?.watch()
+            }
+        }
+    }
 }

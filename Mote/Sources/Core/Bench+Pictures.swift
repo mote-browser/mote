@@ -87,6 +87,12 @@ extension Bench {
         case "unpeek": browser.peek(false)
         case "fold": browser.toggleFold()
         case "scroll": browser.active?.built.map { BenchInput.flick($0) }
+        // The chat in front: its conversation, the largest scroll view in the window.
+        case "chat", "chatdown":
+            let window = AppDelegate.window?.contentView
+            let scrollers = window.map { BenchInput.views(of: NSScrollView.self, in: $0) } ?? []
+            let chat = scrollers.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+            chat.map { BenchInput.flick($0, points: action == "chat" ? -900 : 900) }
         default: break
         }
     }

@@ -2,45 +2,169 @@ import AppKit
 import MoteAI
 import SwiftUI
 
-/// Whether questions search the web first. Off for a provider that has no
-/// search of its own, saying why.
-struct SearchToggle: View {
+/// How the next question is answered: chat, a quick web search, or deep
+/// research. The modes that search are off for a provider that can't.
+struct ModePicker: View {
     @State private var hovering = false
     private var assistant: Assistant { .shared }
 
     var body: some View {
+        let mode = assistant.mode
         let possible = assistant.provider.searches
-        let on = assistant.searches
-        Button {
-            withAnimation(Motion.quick) { assistant.searching.toggle() }
+        let lit = mode != .chat
+        Menu {
+            ForEach(Assistant.Mode.allCases) { option in
+                Button {
+                    withAnimation(Motion.quick) { assistant.chosenMode = option }
+                } label: {
+                    Label(option == mode ? "✓ \(option.title)" : option.title, systemImage: option.symbol)
+                    Text(option.detail)
+                }
+                .disabled(option != .chat && !possible)
+            }
+            if !possible {
+                Divider()
+                Text("\(assistant.provider.name) can't search the web")
+            }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: "network").font(.system(size: 11, weight: .medium))
-                Text("Search").font(.system(size: 12))
+                Image(systemName: mode.symbol).font(.system(size: 11, weight: .medium))
+                Text(mode.title).font(.system(size: 12))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
             }
-            .foregroundStyle(on ? Palette.ground : hovering && possible ? Palette.ink.opacity(0.8) : Palette.muted)
+            .foregroundStyle(lit ? Palette.ground : hovering ? Palette.ink.opacity(0.8) : Palette.muted)
             .padding(.horizontal, 11)
             .frame(height: 28)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(on ? Palette.ink : Palette.veil.opacity(hovering && possible ? 1.4 : 0.7))
-                    .strokeBorder(on ? .clear : Palette.edge, lineWidth: 1)
+                    .fill(lit ? Palette.ink : Palette.veil.opacity(hovering ? 1.4 : 0.7))
+                    .strokeBorder(lit ? .clear : Palette.edge, lineWidth: 1)
             }
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(Pressed())
-        .disabled(!possible)
-        .opacity(possible ? 1 : 0.5)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
         .onHover { hovering = $0 }
-        .help(
-            possible
-                ? (on ? "Answers search the web and cite their sources — click to just chat" : "Search the web and cite sources")
-                : "\(assistant.provider.name) can't search the web. Claude Code, Codex, opencode, Gemini CLI, Anthropic, OpenAI, xAI and OpenRouter can"
-        )
-        .accessibilityLabel("Search the web")
-        .accessibilityValue(on ? "On" : "Off")
+        .help(possible ? "\(mode.title): \(mode.detail)" : "\(assistant.provider.name) can't search the web, so it only chats")
+        .accessibilityLabel("Mode")
+        .accessibilityValue(mode.title)
         .animation(Motion.hover, value: hovering)
-        .animation(Motion.quick, value: on)
+        .animation(Motion.quick, value: mode)
+    }
+}
+
+/// A research's progress, then its record: the stages and the parts
+/// researched, each with how many searches and pages it took.
+struct ResearchProgress: View {
+    let steps: [Activity]
+    /// Still researching: shown open, with what's under way.
+    let live: Bool
+    @State private var open: Bool?
+
+    private var parts: [Activity] { steps.filter { $0.kind == .task } }
+    private var stages: [Activity] { steps.filter { $0.kind == .phase } }
+    private func count(_ kind: Activity.Kind, in id: String? = nil) -> Int {
+        steps.filter { step in step.kind == kind && (id.map { step.id.hasPrefix($0 + "-") } ?? true) }.count
+    }
+
+    var body: some View {
+        let showing = open ?? live
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(Motion.settle) { open = !showing }
+            } label: {
+                HStack(spacing: 6) {
+                    if live { Ring(size: 10) } else { Image(systemName: "text.magnifyingglass").font(.system(size: 11, weight: .medium)) }
+                    Text(headline).font(.system(size: 12.5, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .rotationEffect(.degrees(showing ? 90 : 0))
+                }
+                .foregroundStyle(Palette.muted)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showing {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(rows, id: \.id) { row in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            mark(for: row).frame(width: 14)
+                            Text(row.title)
+                                .font(.system(size: 12.5, weight: row.kind == .phase ? .medium : .regular))
+                                .foregroundStyle(row.kind == .phase ? Palette.muted : Palette.ink.opacity(0.85))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            if row.kind == .task { tally(for: row) }
+                        }
+                    }
+                    if live {
+                        Text("Research takes a few minutes. You can keep browsing meanwhile.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.faint)
+                            .padding(.top, 2)
+                    }
+                }
+                .padding(12)
+                .background(Palette.wash.opacity(0.45), in: Rounded.card)
+                .overlay(Rounded.card.strokeBorder(Palette.hairline))
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// Stages and parts in the order they came: planning, the parts, the
+    /// review with its follow-ups, the writing.
+    private var rows: [Activity] { steps.filter { $0.kind == .phase || $0.kind == .task } }
+
+    private var headline: String {
+        let searches = count(.search)
+        let pages = count(.read)
+        let done = parts.filter(\.done).count
+        if live {
+            let stage = stages.last(where: { !$0.done })?.title ?? "Researching"
+            return parts.isEmpty
+                ? stage
+                : "\(stage == "Planning the research" ? "Researching" : stage) · \(done) of \(parts.count) parts · \(searches) searches"
+        }
+        return "Researched \(parts.count) parts · \(searches) searches · \(pages) pages"
+    }
+
+    /// How many searches and pages a part took, as small counted symbols.
+    @ViewBuilder
+    private func tally(for part: Activity) -> some View {
+        let searches = count(.search, in: part.id)
+        let pages = count(.read, in: part.id)
+        HStack(spacing: 8) {
+            if searches > 0 { counted(searches, "magnifyingglass") }
+            if pages > 0 { counted(pages, "doc.text") }
+        }
+        .font(.system(size: 11).monospacedDigit())
+        .foregroundStyle(Palette.muted)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(searches) searches, \(pages) pages")
+    }
+
+    private func counted(_ number: Int, _ symbol: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 9, weight: .medium))
+            Text("\(number)")
+        }
+    }
+
+    /// Done, under way, waiting its turn, or left undone when stopped.
+    @ViewBuilder
+    private func mark(for row: Activity) -> some View {
+        if row.done {
+            Image(systemName: "checkmark").font(.system(size: 9.5, weight: .bold)).foregroundStyle(Palette.muted)
+        } else if live, row.kind == .phase || steps.contains(where: { $0.id.hasPrefix(row.id + "-") }) {
+            Ring(size: 9)
+        } else if live {
+            Circle().strokeBorder(Palette.faint, lineWidth: 1.2).frame(width: 9, height: 9)
+        } else {
+            Image(systemName: "minus").font(.system(size: 9.5, weight: .bold)).foregroundStyle(Palette.faint)
+        }
     }
 }
 
@@ -98,17 +222,55 @@ struct StepsSummary: View {
 /// numbered as in the text.
 struct SourcesStrip: View {
     let entries: [Citations.Entry]
+    @State private var all = false
+
+    /// Uncited pages shown before the rest fold into a count: a research
+    /// can read hundreds, and a card each would be more than anyone reads.
+    static let uncited = 6
 
     var body: some View {
+        let cited = entries.filter { $0.number != nil }
+        let rest = entries.filter { $0.number == nil }
+        let shown = all ? entries : cited + rest.prefix(Self.uncited)
+        let hidden = entries.count - shown.count
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(entries, id: \.source.id) { entry in
+            // Lazy, so only the cards in view are made.
+            LazyHStack(spacing: 8) {
+                ForEach(shown, id: \.source.id) { entry in
                     SourceCard(entry: entry)
+                }
+                if hidden > 0 {
+                    MoreCard(count: hidden) { all = true }
                 }
             }
             .padding(.vertical, 1)
         }
+        .frame(height: 68)
         .scrollClipDisabled()
+    }
+}
+
+/// The pages folded away, as a card that shows them.
+private struct MoreCard: View {
+    let count: Int
+    let show: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: show) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("+\(count)").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink.opacity(0.8))
+                Text(count == 1 ? "more page read" : "more pages read").font(.system(size: 11)).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 12)
+            .frame(width: 120, height: 66, alignment: .leading)
+            .background(hovering ? Palette.hover : Palette.wash.opacity(0.4), in: Rounded.row)
+            .overlay(Rounded.row.strokeBorder(Palette.hairline))
+            .contentShape(Rounded.row)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("Show \(count) more sources")
     }
 }
 

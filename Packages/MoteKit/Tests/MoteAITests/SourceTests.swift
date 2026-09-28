@@ -106,4 +106,21 @@ struct SourceTests {
         let middle = "Sources:\n- [A](https://a.com)\n\nThen more text."
         #expect(Citations.shown(middle) == middle)
     }
+
+    @Test("A link naming its site can become a chip; one worded as a claim keeps its words")
+    func siteNames() {
+        let swift = URL(string: "https://www.swift.org/blog/x")!
+        #expect(Citations.namesSite("swift.org", swift))
+        #expect(Citations.namesSite("Swift.org", swift))
+        #expect(Citations.namesSite("swift", swift))
+        #expect(Citations.namesSite("Swift Blog", swift))
+        #expect(Citations.namesSite("Wikipedia", URL(string: "https://en.wikipedia.org/wiki/Swift")!))
+        #expect(Citations.namesSite("X", URL(string: "https://x.com/a")!))
+        // Words of the answer, however short, stay words.
+        #expect(!Citations.namesSite("Go 1.23 adds range-over-func", URL(string: "https://go.dev/blog/x")!))
+        #expect(!Citations.namesSite("Hummingbird", URL(string: "https://github.com/hummingbird-project")!))
+        #expect(!Citations.namesSite("Hacker News", URL(string: "https://news.ycombinator.com/item?id=1")!))
+        #expect(!Citations.namesSite("Hummingbird uses 30x less memory than comparable frameworks", swift))
+        #expect(!Citations.namesSite("Vapor and Hummingbird are production-ready", swift))
+    }
 }

@@ -104,7 +104,7 @@ struct Composer: View {
                 HStack(spacing: 8) {
                     Chip(browser: browser)
                     ModelChip(browser: browser, lit: asking && hasText)
-                    SearchToggle()
+                    ModePicker()
                     Spacer(minLength: 0)
                     if hasText {
                         AskHint(asking: asking).transition(.opacity)

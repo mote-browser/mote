@@ -63,6 +63,12 @@ public final class Conversation: Identifiable {
     @ObservationIgnored private var opened: String?
     /// Whether the reply under way searches.
     @ObservationIgnored private var searched = false
+    /// Text and thinking that arrived since the reply was last shown; they
+    /// go into the message together, at most every `pace`, so a reply that
+    /// comes a word at a time doesn't redraw the chat per word.
+    @ObservationIgnored private var held = (text: "", reasoning: "")
+    @ObservationIgnored private var flushing: Task<Void, Never>?
+    static let pace: Duration = .milliseconds(50)
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Counts replies, so a stopped one's late events are dropped.
     @ObservationIgnored private var turn = 0
@@ -104,6 +110,7 @@ public final class Conversation: Identifiable {
     /// Stops the reply, keeping what arrived.
     public func stop() {
         guard busy else { return }
+        flush()
         turn += 1
         task?.cancel()
         task = nil
@@ -149,17 +156,39 @@ public final class Conversation: Identifiable {
         return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session, search: route.search)
     }
 
+    /// Shows what's held: the first words at once, the rest a pace later.
+    private func show(_ last: Int) {
+        phase = .answering
+        if messages[last].text.isEmpty, messages[last].reasoning.isEmpty { return flush() }
+        guard flushing == nil else { return }
+        flushing = Task { [weak self] in
+            try? await Task.sleep(for: Self.pace)
+            self?.flush()
+        }
+    }
+
+    /// Puts what's held into the reply.
+    private func flush() {
+        flushing?.cancel()
+        flushing = nil
+        guard !held.text.isEmpty || !held.reasoning.isEmpty, let last = messages.indices.last, messages[last].role == .assistant
+        else { return }
+        messages[last].text += held.text
+        messages[last].reasoning += held.reasoning
+        held = ("", "")
+    }
+
     private func take(_ event: ChatEvent, from provider: String) {
         guard let last = messages.indices.last else { return }
         switch event {
         case .session(let id):
             opened = id
         case .text(let more):
-            messages[last].text += more
-            phase = .answering
+            held.text += more
+            show(last)
         case .reasoning(let more):
-            messages[last].reasoning += more
-            phase = .answering
+            held.reasoning += more
+            show(last)
         case .activity(let activity):
             if let index = activities.firstIndex(where: { $0.id == activity.id }) {
                 activities[index] = activity
@@ -180,6 +209,7 @@ public final class Conversation: Identifiable {
 
     private func end(_ ended: Int, failure: Error?, provider: String?) {
         guard ended == turn else { return }
+        flush()
         task = nil
         activities = []
         guard let failure, !(failure is CancellationError) else {

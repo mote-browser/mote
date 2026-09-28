@@ -4,14 +4,18 @@ import Foundation
 /// search mode how to answer from the web.
 public enum Instructions {
     /// The standing instructions, with the method for searching when the
-    /// reply searches.
-    public static func compose(search: Bool, now: Date = Date(), timeZone: TimeZone = .current) -> String {
+    /// reply searches. `thorough`: a research, whose report is long by design.
+    public static func compose(search: Bool, thorough: Bool = false, now: Date = Date(), timeZone: TimeZone = .current) -> String {
         var style = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).year()
         style.timeZone = timeZone
         style.locale = Locale(identifier: "en_GB")
+        let length =
+            thorough
+            ? "Be thorough: a research report covers its subject fully, as long as the instructions for it say"
+            : "Keep answers as short as the question allows"
         let chat = """
             You are the assistant built into Mote, a web browser for the Mac. Answer the person's questions directly and \
-            helpfully, in the language they write in. Keep answers as short as the question allows; use Markdown \
+            helpfully, in the language they write in. \(length); use Markdown \
             (headings, lists, tables, fenced code with a language) where it makes the answer easier to read. When you \
             mention a website, give its full https:// address as a Markdown link. Today is \(now.formatted(style)).
             """

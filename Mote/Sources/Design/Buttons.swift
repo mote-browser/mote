@@ -70,6 +70,9 @@ struct Ring: View {
             .stroke(Palette.muted.opacity(0.7), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
             .frame(width: size, height: size)
             .rotationEffect(.degrees(turned ? 360 : 0))
-            .onAppear { withAnimation(.linear(duration: 0.85).repeatForever(autoreverses: false)) { turned = true } }
+            // Set here rather than with withAnimation, so a parent that turns
+            // animations off for its content (the page area does) can't stop it.
+            .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: turned)
+            .onAppear { turned = true }
     }
 }
