@@ -53,8 +53,10 @@ struct SidebarFold: View {
         // The sidebar can start folded before the window exists; hide the lights once it does.
         .background(
             WindowSetup { window in
+                Self.window = window
                 Self.lightsWanted = lightsOff
                 window.standardWindowButton(.closeButton)?.superview?.isHidden = lightsOff
+                Self.holdLights()
                 pointer.window = window
                 watch()
             }
@@ -154,7 +156,8 @@ struct SidebarFold: View {
     /// The title bar view holds the traffic lights and their stand-ins for
     /// when the app is in the background (see RestingLights); moving it moves both.
     private func slideLights() {
-        guard let bar = Self.titlebar else { return }
+        // Without a title bar yet, kept for when it turns up (see `holdLights`).
+        guard let bar = Self.titlebar else { return Self.lightsWanted = lightsOff }
         if prefs.sidebar {
             Self.slide(bar, off: lightsOff, by: prefs.sideWidth + ChromeLayout.gap)
         } else {
@@ -162,20 +165,39 @@ struct SidebarFold: View {
         }
     }
 
-    static var titlebar: NSView? { AppDelegate.window?.standardWindowButton(.closeButton)?.superview }
+    /// The window the fold is in, once it exists.
+    private static weak var window: NSWindow?
+
+    static var titlebar: NSView? { (window ?? AppDelegate.window)?.standardWindowButton(.closeButton)?.superview }
 
     /// Counts slides, so an interrupted one's end doesn't hide the lights.
     private static var slides = 0
     /// Whether the lights should be away, once no slide is under way.
     private static var lightsWanted: Bool?
 
+    /// The title bar whose `hidden` is watched, and the watch.
+    private static weak var watchedBar: NSView?
+    private static var hiddenWatch: NSKeyValueObservation?
+
     /// Puts the lights back where the fold wants them when something else
-    /// (AppKit laying the title bar out again, say) moved them in between.
+    /// (AppKit laying the title bar out again, or showing it, say) moved them
+    /// in between.
     static func holdLights() {
-        guard let wanted = lightsWanted, let bar = titlebar, bar.layer?.animation(forKey: "fold") == nil, bar.isHidden != wanted else {
-            return
-        }
+        guard let bar = titlebar else { return }
+        watchHidden(bar)
+        guard let wanted = lightsWanted, bar.layer?.animation(forKey: "fold") == nil, bar.isHidden != wanted else { return }
         bar.isHidden = wanted
+    }
+
+    /// AppKit can show the title bar again while the tabs are folded, without
+    /// laying anything out that TrafficLights would hear; it's hidden again.
+    private static func watchHidden(_ bar: NSView) {
+        guard bar !== watchedBar else { return }
+        watchedBar = bar
+        hiddenWatch = bar.observe(\.isHidden) { _, _ in
+            // Once AppKit's own change has finished.
+            DispatchQueue.main.async { MainActor.assumeIsolated { holdLights() } }
+        }
     }
 
     /// The end of a slide: the lights where they were going, the animation gone.
