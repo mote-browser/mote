@@ -10,6 +10,26 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.1.2 — 2026-09-28
+
+Smoother scrolling, and tabs that stay under the pointer as you drag them.
+
+### Fixed
+
+- Dragging a tab to a new place made it jump back a place each time it passed
+  another, in the tab strip, the sidebar and the pinned tabs. The tab now
+  follows the pointer, the others step aside, and it settles into its place
+  when let go.
+- Pages could show their frames unevenly while scrolling, most on pages that
+  animate as they scroll: the reading progress on the tab redrew the whole
+  window as it filled, and a check for sign-in fields ran on every frame.
+
+### Changed
+
+- The reading progress on a tab fills in whole-percent steps, without easing.
+- A pinned tab dragged past the edge of the pin grid stays in its row instead
+  of wrapping to the next.
+
 ## 0.1.1 — 2026-09-28
 
 Fixes the traffic lights staying on screen when the sidebar folds away.
