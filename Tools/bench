@@ -40,6 +40,7 @@ COMMANDS = {
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
     "keyeq": ("chars code:int [shift]", "test run: ⌘CHARS while the page has the keyboard — who took it"),
+    "tabdrag": ("id distance:float [ms:float]", "test run: drag tab ID DISTANCE points along the strip or sidebar over MS, then let go"),
     "move": ("x:float y:float", "test run: the window's top left at X, Y on the main screen, not brought forward"),
     "resize": ("width:float height:float [steps:int]", "take the window to that size in steps, like a drag — test runs only"),
     "hit": ("x:float y:float [double|middle]", "what a press there (from the window's top left) lands on, and whether a drag moves the "

@@ -16,6 +16,8 @@ struct Sidebar: View {
     @Namespace private var groundBefore
     @Namespace private var groundAfter
     @State private var dropping = false
+    /// A tab being dragged to a new place in the list.
+    @State private var drag: ReorderDrag<Tab.ID>?
 
     /// A tab row's height and the gap between rows.
     private static let row = Metrics.row
@@ -171,9 +173,10 @@ struct Sidebar: View {
                     }
                     // Places count among the unpinned tabs, after the pinned ones.
                     .modifier(
-                        Reorderable(index: index, count: loose.count, step: Self.row + Self.gap, vertical: true, space: "rows") {
-                            browser.move(tab, to: $0 + browser.pinnedCount)
-                        })
+                        Reorderable(
+                            id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
+                            space: "rows", drag: $drag
+                        ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
             // Drags are measured in the list's space (see Reorderable).
@@ -206,49 +209,25 @@ private struct PinnedTabs: View {
     @ObservedObject var prefs: Preferences
     let ground: Namespace.ID
 
-    @State private var dragged: Tab.ID?
-    @State private var start = 0
-    @State private var travel = CGSize.zero
+    @State private var drag: ReorderDrag<Tab.ID>?
 
     private static let gap: CGFloat = 6
 
     var body: some View {
         let tabs = browser.tabs.filter { $0.pin != nil }
         let grid = PinGrid(count: tabs.count, width: prefs.sideWidth - 20, gap: Self.gap)
-        // Drags are measured in the grid's space; in a cell's own, a cell that
-        // just moved would measure from its new place and swing back and forth.
+        // Drags are measured in the grid's space (see Reorderable).
         PinCells(grid: grid) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
-                let held = dragged == tab.id
                 PinSquare(browser: browser, prefs: prefs, tab: tab, live: tab.id == browser.activeID, ground: ground, size: grid.cell)
-                    .offset(held ? Reorder.offset(travel: travel, step: grid.step, columns: grid.columns, from: start, now: index) : .zero)
-                    // The held cell follows the pointer without animation.
-                    .transaction { if held { $0.animation = nil } }
-                    .zIndex(held ? 1 : 0)
-                    .shadow(color: .black.opacity(held ? 0.16 : 0), radius: 10, y: 3)
-                    .gesture(drag(tab, at: index, in: grid, count: tabs.count))
+                    .modifier(
+                        Reorderable(
+                            id: tab.id, index: index, places: 0..<tabs.count, lattice: Lattice(columns: grid.columns, step: grid.step),
+                            space: "pins", drag: $drag
+                        ) { browser.move(tab, to: $0) })
             }
         }
         .coordinateSpace(name: "pins")
-    }
-
-    private func drag(_ tab: Tab, at index: Int, in grid: PinGrid, count: Int) -> some Gesture {
-        DragGesture(minimumDistance: 5, coordinateSpace: .named("pins"))
-            .onChanged { value in
-                if dragged != tab.id {
-                    dragged = tab.id
-                    start = index
-                }
-                travel = value.translation
-                let target = Reorder.target(from: start, travel: travel, step: grid.step, columns: grid.columns, count: count)
-                if target != index { withAnimation(Motion.settle) { browser.move(tab, to: target) } }
-            }
-            .onEnded { _ in
-                withAnimation(Motion.settle) {
-                    dragged = nil
-                    travel = .zero
-                }
-            }
     }
 }
 

@@ -1,49 +1,105 @@
 import AppKit
+import Combine
 import MoteCore
 import SwiftUI
 
-/// Dragging a tab to a new place along the strip or down the sidebar. Only
-/// the dragged tab keeps drag state, so moving the pointer redraws it alone;
-/// the list redraws only when the tab changes place.
+/// Dragging a tab to a new place along the strip, down the sidebar or
+/// across the pin grid (see ReorderDrag). The held tab follows the pointer
+/// and the tabs it passes step aside; the order changes on letting go, when
+/// the held tab eases from where it was dropped into its new place.
 struct Reorderable: ViewModifier {
+    let id: Tab.ID
     let index: Int
-    let count: Int
-    /// From one place to the next: a tab's length plus the gap.
-    let step: CGFloat
-    let vertical: Bool
+    /// The places the tab may take: its section of the row.
+    let places: Range<Int>
+    let lattice: Lattice
     /// The list's coordinate space. Measured in the tab's own space, the
-    /// origin would jump each time the tab changed place.
+    /// origin would move whenever the tab did.
     let space: String
+    /// The list's drag, one for all its tabs.
+    @Binding var drag: ReorderDrag<Tab.ID>?
     let move: (Int) -> Void
 
-    @State private var start: Int?
-    @State private var travel: CGFloat = 0
-
     func body(content: Content) -> some View {
-        // The drag less the places already moved through.
-        let shift = start.map { travel - CGFloat(index - $0) * step } ?? 0
+        let held = drag?.id == id
+        let following = held && drag?.landed == false
         content
-            .offset(x: vertical ? 0 : shift, y: vertical ? shift : 0)
-            // The dragged tab follows the pointer without animation; animating its
-            // offset along with its new place makes it jump and drift back.
-            .transaction { if start != nil { $0.animation = nil } }
-            .zIndex(start == nil ? 0 : 1)
-            .shadow(color: .black.opacity(start == nil ? 0 : 0.14), radius: 12, y: 4)
+            .offset(drag?.offset(of: id, at: index, in: lattice) ?? .zero)
+            // The held tab follows the pointer without animation, even as the
+            // others step aside with one.
+            .transaction { if following { $0.animation = nil } }
+            .zIndex(held ? 1 : 0)
+            .shadow(color: .black.opacity(following ? 0.14 : 0), radius: 12, y: 4)
             .gesture(
                 DragGesture(minimumDistance: 5, coordinateSpace: .named(space))
-                    .onChanged { drag in
-                        let from = start ?? index
-                        start = from
-                        travel = vertical ? drag.translation.height : drag.translation.width
-                        let target = Reorder.target(from: from, travel: travel, step: step, count: count)
-                        if target != index { withAnimation(Motion.settle) { move(target) } }
-                    }
-                    .onEnded { _ in
-                        withAnimation(Motion.settle) {
-                            start = nil
-                            travel = 0
-                        }
-                    })
+                    .onChanged { changed($0.translation) }
+                    .onEnded { _ in ended() }
+            )
+            .onReceive(ScriptedDrag.shared.$travel) { travel in
+                guard ScriptedDrag.shared.tab == id else { return }
+                if let travel { changed(travel) } else { ended() }
+            }
+    }
+
+    private func changed(_ travel: CGSize) {
+        // A tab still easing home is done; one held elsewhere keeps the drag.
+        if drag?.landed == true { drag = nil }
+        if let drag, drag.id != id { return }
+        var next = drag ?? ReorderDrag(id: id, start: index)
+        let before = next.target
+        next.follow(travel, in: lattice, within: places)
+        if next.target == before {
+            drag = next
+        } else {
+            withAnimation(Motion.settle) { drag = next }
+        }
+    }
+
+    private func ended() {
+        guard var landing = drag, landing.id == id, !landing.landed else { return }
+        landing.land()
+        // The new order and the offsets that keep every tab where it is on
+        // screen, in one update with nothing animated: the list's own animation
+        // of the order would otherwise slide tabs from their old places.
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) {
+            if landing.target != landing.start { move(landing.target) }
+            drag = landing
+        }
+        let drag = $drag
+        DispatchQueue.main.async {
+            guard drag.wrappedValue == landing else { return }
+            withAnimation(Motion.settle) { drag.wrappedValue = nil }
+        }
+    }
+}
+
+/// A drag the bench plays on a tab, a frame at a time, through the same
+/// steps as the pointer's (Tools/bench tabdrag).
+@MainActor
+final class ScriptedDrag: ObservableObject {
+    static let shared = ScriptedDrag()
+    private(set) var tab: Tab.ID?
+    /// How far the drag has gone; nil once let go.
+    @Published private(set) var travel: CGSize?
+
+    /// Drags `tab` by `distance` over `seconds`, then lets go.
+    func play(_ tab: Tab.ID, by distance: CGSize, over seconds: Double, then done: @escaping () -> Void) {
+        self.tab = tab
+        let steps = max(2, Int(seconds * 120))
+        for n in 0...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds * Double(n) / Double(steps)) {
+                let part = CGFloat(n) / CGFloat(steps)
+                self.travel = CGSize(width: distance.width * part, height: distance.height * part)
+                guard n == steps else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.travel = nil
+                    self.tab = nil
+                    done()
+                }
+            }
+        }
     }
 }
 

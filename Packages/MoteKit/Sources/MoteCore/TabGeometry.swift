@@ -1,29 +1,97 @@
 import CoreGraphics
 import Foundation
 
-/// Where a dragged tab lands.
-public enum Reorder {
-    /// In a row or column: `travel` along it, `step` from one place to the next.
-    public static func target(from start: Int, travel: CGFloat, step: CGFloat, count: Int) -> Int {
-        guard count > 0, step > 0 else { return start }
-        return min(max(0, start + Int((travel / step).rounded())), count - 1)
+/// Where the places of a row, a column or a grid filled row by row sit,
+/// from the first one's.
+public struct Lattice: Equatable, Sendable {
+    public let columns: Int
+    /// From one place to the next across and down; zero along an axis the
+    /// places don't follow.
+    public let step: CGSize
+
+    public init(columns: Int, step: CGSize) {
+        self.columns = max(1, columns)
+        self.step = step
     }
 
-    /// In a grid filled row by row, whose cells may be wider than tall.
-    public static func target(from start: Int, travel: CGSize, step: CGSize, columns: Int, count: Int) -> Int {
-        guard count > 0, columns > 0, step.width > 0, step.height > 0 else { return start }
-        let moved = Int((travel.height / step.height).rounded()) * columns + Int((travel.width / step.width).rounded())
-        return min(max(0, start + moved), count - 1)
+    public static func row(step: CGFloat) -> Lattice { Lattice(columns: .max, step: CGSize(width: step, height: 0)) }
+    public static func column(step: CGFloat) -> Lattice { Lattice(columns: 1, step: CGSize(width: 0, height: step)) }
+
+    public func origin(_ place: Int) -> CGSize {
+        CGSize(width: CGFloat(place % columns) * step.width, height: CGFloat(place / columns) * step.height)
     }
 
-    /// How far a dragged grid cell sits from its current slot: the pointer's
-    /// travel less the slots it has already moved through.
-    public static func offset(travel: CGSize, step: CGSize, columns: Int, from start: Int, now index: Int) -> CGSize {
-        guard columns > 0 else { return travel }
-        return CGSize(
-            width: travel.width - CGFloat(index % columns - start % columns) * step.width,
-            height: travel.height - CGFloat(index / columns - start / columns) * step.height)
+    /// Only the part of `travel` along the axes the places follow.
+    func along(_ travel: CGSize) -> CGSize {
+        CGSize(width: step.width > 0 ? travel.width : 0, height: step.height > 0 ? travel.height : 0)
     }
+
+    /// The place nearest to where `travel` has taken the one at `start`: the
+    /// next once past halfway, never past the edges, and within `places`, the
+    /// held tab's section.
+    public func target(from start: Int, travel: CGSize, within places: Range<Int>) -> Int {
+        guard !places.isEmpty else { return start }
+        let column = start % columns + (step.width > 0 ? Int((travel.width / step.width).rounded()) : 0)
+        let row = start / columns + (step.height > 0 ? Int((travel.height / step.height).rounded()) : 0)
+        let lastRow = (places.upperBound - 1) / columns
+        let place = min(max(0, row), lastRow) * columns + min(max(0, column), columns - 1)
+        return min(max(place, places.lowerBound), places.upperBound - 1)
+    }
+}
+
+/// A tab dragged to a new place. The held tab follows the pointer and the
+/// tabs it passes step aside to make room, by offsets alone: the order, and
+/// so the layout, changes only once it is let go. Reordering mid-drag moved
+/// the held tab to its new place with the list's animation while its offset
+/// made up for it at once, so it jumped back a place each time it passed one.
+public struct ReorderDrag<ID: Hashable>: Equatable {
+    public let id: ID
+    /// Its place when picked up.
+    public let start: Int
+    /// The place it would take if let go now.
+    public private(set) var target: Int
+    public private(set) var travel = CGSize.zero
+    /// Let go, with the order changed: it eases from where it was dropped
+    /// into its new place.
+    public private(set) var landed = false
+
+    public init(id: ID, start: Int) {
+        self.id = id
+        self.start = start
+        target = start
+    }
+
+    /// The pointer has gone `travel` from where the tab was picked up.
+    public mutating func follow(_ travel: CGSize, in lattice: Lattice, within places: Range<Int>) {
+        self.travel = lattice.along(travel)
+        target = lattice.target(from: start, travel: self.travel, within: places)
+    }
+
+    /// Let go. Whoever holds the order moves the tab to `target` along with this.
+    public mutating func land() {
+        landed = true
+    }
+
+    /// How far the tab `other`, at `index` in the current order, sits from its place.
+    public func offset(of other: ID, at index: Int, in lattice: Lattice) -> CGSize {
+        if other == id {
+            guard landed else { return travel }
+            let moved = lattice.origin(target) - lattice.origin(start)
+            return travel - moved
+        }
+        guard !landed else { return .zero }
+        let place =
+            start < index && index <= target
+            ? index - 1
+            : target <= index && index < start
+                ? index + 1
+                : index
+        return lattice.origin(place) - lattice.origin(index)
+    }
+}
+
+extension CGSize {
+    fileprivate static func - (a: CGSize, b: CGSize) -> CGSize { CGSize(width: a.width - b.width, height: a.height - b.height) }
 }
 
 /// The sidebar's pinned tabs: a grid of at least three columns that grows

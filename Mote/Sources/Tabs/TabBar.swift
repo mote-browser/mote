@@ -17,6 +17,8 @@ struct TabBar: View {
     @State private var dropping = false
     /// The tab under the pointer; the rules beside it hide, as beside the active one.
     @State private var hovered: Tab.ID?
+    /// A tab being dragged to a new place in the row.
+    @State private var drag: ReorderDrag<Tab.ID>?
 
     static let widths = TabWidths(
         widest: Metrics.tabWidth, narrowest: Metrics.tabMinWidth, titled: Metrics.tabTitled, pinned: Metrics.pinWidth, gap: Metrics.tabGap)
@@ -99,6 +101,7 @@ struct TabBar: View {
 
     private func liveRow(_ layout: Layout) -> some View {
         let tabs = browser.tabs
+        let pinned = browser.pinnedCount
         let active = browser.activeID
         /// A rule shows between two tabs that are neither active nor hovered.
         func quiet(_ id: Tab.ID) -> Bool { id != active && id != hovered }
@@ -113,8 +116,9 @@ struct TabBar: View {
                 )
                 .modifier(
                     Reorderable(
-                        index: index, count: tabs.count, step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap,
-                        vertical: false, space: "strip"
+                        id: tab.id, index: index, places: tab.pin == nil ? pinned..<tabs.count : 0..<pinned,
+                        lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
+                        drag: $drag
                     ) { browser.move(tab, to: $0) }
                 )
                 .id(tab.id)

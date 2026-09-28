@@ -12,6 +12,7 @@ extension Bench {
         [
             "press": Self.press, "key": Self.key, "keyeq": Self.keyEquivalent, "hit": Self.hit, "field": Self.field,
             "bookmark": Self.bookmark, "menu": Self.menu, "pull": Self.pull, "resize": Self.resize, "move": Self.move,
+            "tabdrag": Self.tabDrag,
         ]
     }
 
@@ -268,6 +269,21 @@ extension Bench {
         window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + x, y: screen.frame.maxY - y))
         window.orderFrontRegardless()
         call.answer(["frame": [Int(window.frame.minX), Int(window.frame.minY), Int(window.frame.width), Int(window.frame.height)]])
+    }
+
+    /// A tab dragged along the strip or the sidebar by DISTANCE points, through
+    /// the same steps as a pointer's drag (ScriptedDrag): a background window
+    /// takes no gestures, and bringing it forward would take the keyboard.
+    private static func tabDrag(_ call: BenchCall) {
+        guard call.testRun("it would reorder your tabs") else { return }
+        guard let tab = call.tab(), let distance = call.request.double("distance") else {
+            return call.fail("tabdrag needs a tab and a distance")
+        }
+        let seconds = max(0.05, (call.request.double("ms") ?? 700) / 1000)
+        // Along a row or a column, whichever the tab is in.
+        ScriptedDrag.shared.play(tab.id, by: CGSize(width: distance, height: distance), over: seconds) {
+            call.answer(["order": call.browser.tabs.map { BenchWire.short($0.id) }])
+        }
     }
 
     /// The window dragged to a size a frame at a time, as a live resize.

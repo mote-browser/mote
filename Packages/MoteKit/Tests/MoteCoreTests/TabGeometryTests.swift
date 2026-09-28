@@ -5,27 +5,86 @@ import Testing
 
 @Suite("Tab geometry")
 struct TabGeometryTests {
-    @Test("A dragged tab moves by whole places and stays in the row")
-    func rowTargets() {
-        #expect(Reorder.target(from: 2, travel: 40, step: 100, count: 5) == 2)
-        #expect(Reorder.target(from: 2, travel: 60, step: 100, count: 5) == 3)
-        #expect(Reorder.target(from: 2, travel: -260, step: 100, count: 5) == 0)
-        #expect(Reorder.target(from: 2, travel: 900, step: 100, count: 5) == 4)
+    @Test("A row, a column and a grid place their slots from the first")
+    func latticeOrigins() {
+        #expect(Lattice.row(step: 100).origin(3) == CGSize(width: 300, height: 0))
+        #expect(Lattice.column(step: 34).origin(2) == CGSize(width: 0, height: 68))
+        #expect(Lattice(columns: 3, step: CGSize(width: 60, height: 40)).origin(4) == CGSize(width: 60, height: 40))
     }
 
-    @Test("In the pin grid a drag counts columns and rows separately")
+    @Test("A held tab lands on the nearest place, once past halfway, and stays in its section")
+    func targets() {
+        let row = Lattice.row(step: 100)
+        #expect(row.target(from: 2, travel: CGSize(width: 40, height: 0), within: 0..<5) == 2)
+        #expect(row.target(from: 2, travel: CGSize(width: 60, height: 0), within: 0..<5) == 3)
+        #expect(row.target(from: 2, travel: CGSize(width: -260, height: 0), within: 0..<5) == 0)
+        #expect(row.target(from: 2, travel: CGSize(width: 900, height: 0), within: 0..<5) == 4)
+        // Pinned tabs 0 and 1 are another section.
+        #expect(row.target(from: 3, travel: CGSize(width: -300, height: 0), within: 2..<5) == 2)
+        // Up and down doesn't move a tab along a row.
+        #expect(row.target(from: 2, travel: CGSize(width: 0, height: 400), within: 0..<5) == 2)
+        #expect(Lattice.column(step: 34).target(from: 0, travel: CGSize(width: 90, height: 52), within: 0..<4) == 2)
+    }
+
+    @Test("In the pin grid a drag counts columns and rows, and keeps to the grid's edges")
     func gridTargets() {
-        let step = CGSize(width: 60, height: 40)
-        #expect(Reorder.target(from: 0, travel: CGSize(width: 70, height: 0), step: step, columns: 3, count: 6) == 1)
-        #expect(Reorder.target(from: 0, travel: CGSize(width: 0, height: 45), step: step, columns: 3, count: 6) == 3)
-        #expect(Reorder.target(from: 5, travel: CGSize(width: 500, height: 500), step: step, columns: 3, count: 6) == 5)
+        let grid = Lattice(columns: 3, step: CGSize(width: 60, height: 40))
+        #expect(grid.target(from: 0, travel: CGSize(width: 70, height: 0), within: 0..<6) == 1)
+        #expect(grid.target(from: 0, travel: CGSize(width: 0, height: 45), within: 0..<6) == 3)
+        #expect(grid.target(from: 5, travel: CGSize(width: 500, height: 500), within: 0..<6) == 5)
+        // Past the right edge it stays in its row rather than wrapping to the next.
+        #expect(grid.target(from: 1, travel: CGSize(width: 400, height: 0), within: 0..<6) == 2)
+        // A short last row: below it, the last pin.
+        #expect(grid.target(from: 0, travel: CGSize(width: 120, height: 40), within: 0..<4) == 3)
     }
 
-    @Test("A dragged cell's offset is its travel less the slots already moved")
-    func gridOffset() {
-        let step = CGSize(width: 60, height: 40)
-        let offset = Reorder.offset(travel: CGSize(width: 70, height: 45), step: step, columns: 3, from: 0, now: 4)
-        #expect(offset == CGSize(width: 10, height: 5))
+    @Test("While a tab is held it follows the pointer, and the order stays as it was")
+    func heldFollows() {
+        let column = Lattice.column(step: 34)
+        var drag = ReorderDrag(id: "a", start: 0)
+        drag.follow(CGSize(width: 3, height: 80), in: column, within: 0..<4)
+        #expect(drag.target == 2)
+        #expect(drag.offset(of: "a", at: 0, in: column) == CGSize(width: 0, height: 80))
+    }
+
+    @Test("The tabs between a held tab's place and where it would land step aside toward its place")
+    func othersStepAside() {
+        let column = Lattice.column(step: 34)
+        var down = ReorderDrag(id: "a", start: 0)
+        down.follow(CGSize(width: 0, height: 80), in: column, within: 0..<4)
+        #expect(down.offset(of: "b", at: 1, in: column) == CGSize(width: 0, height: -34))
+        #expect(down.offset(of: "c", at: 2, in: column) == CGSize(width: 0, height: -34))
+        #expect(down.offset(of: "d", at: 3, in: column) == .zero)
+
+        var up = ReorderDrag(id: "d", start: 3)
+        up.follow(CGSize(width: 0, height: -40), in: column, within: 0..<4)
+        #expect(up.offset(of: "c", at: 2, in: column) == CGSize(width: 0, height: 34))
+        #expect(up.offset(of: "b", at: 1, in: column) == .zero)
+    }
+
+    @Test("In the grid a tab stepping aside goes to the next cell, across rows too")
+    func gridStepAside() {
+        let grid = Lattice(columns: 3, step: CGSize(width: 60, height: 40))
+        var drag = ReorderDrag(id: 0, start: 0)
+        drag.follow(CGSize(width: 60, height: 40), in: grid, within: 0..<6)
+        #expect(drag.target == 4)
+        // The first cell of the second row goes back to the end of the first.
+        #expect(drag.offset(of: 3, at: 3, in: grid) == CGSize(width: 120, height: -40))
+        #expect(drag.offset(of: 2, at: 2, in: grid) == CGSize(width: -60, height: 0))
+        #expect(drag.offset(of: 5, at: 5, in: grid) == .zero)
+    }
+
+    @Test("Let go, the held tab stays where it was dropped from its new place, and the others are home")
+    func landing() {
+        let column = Lattice.column(step: 34)
+        var drag = ReorderDrag(id: "a", start: 0)
+        drag.follow(CGSize(width: 0, height: 80), in: column, within: 0..<4)
+        drag.land()
+        #expect(drag.landed)
+        // Now third in the order: 80 down from the first place is 12 past the third.
+        #expect(drag.offset(of: "a", at: 2, in: column) == CGSize(width: 0, height: 12))
+        #expect(drag.offset(of: "b", at: 0, in: column) == .zero)
+        #expect(drag.offset(of: "c", at: 1, in: column) == .zero)
     }
 
     @Test("Pins sit in at least three columns, and more past six to keep two rows")
