@@ -10,6 +10,17 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.1.4 — 2026-09-28
+
+Fixes the sidebar staying on screen after folding it away, for real this time.
+
+### Fixed
+
+- Folding the sidebar away, most of all the first time after opening Mote,
+  could leave it on screen with the traffic lights gone. 0.1.3's fix asked the
+  window to draw again, which didn't move the stuck slide on; the window now
+  gets a real change, and the sidebar goes within a second.
+
 ## 0.1.3 — 2026-09-28
 
 Fixes the sidebar staying on screen after folding it away.
