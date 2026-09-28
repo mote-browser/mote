@@ -1,5 +1,6 @@
 import Combine
 import ImageIO
+import MoteAI
 import MoteCore
 import SwiftUI
 import WebKit
@@ -69,6 +70,9 @@ final class Tab: ObservableObject, Identifiable {
     @Published var storePlaced: String?
     /// The snapshot shown while a woken page is made again.
     @Published private(set) var cover: NSImage?
+    /// A chat with the assistant, shown in place of a page (see ChatView.swift).
+    /// Going to an address replaces it.
+    @Published var chat: Conversation?
 
     /// The tab whose page opened this one by script; sign-ins go back to it.
     var opener: Tab.ID?
@@ -81,9 +85,15 @@ final class Tab: ObservableObject, Identifiable {
     /// When the tab was last on screen, for ordering and tab sleep.
     private(set) var touched = Date()
 
+    /// No page: a new tab, or a chat.
     var isBlank: Bool { address == nil }
-    var label: String { TabLabel.text(name: name, popup: popup, address: address, title: title) }
-    var monogram: String { TabLabel.monogram(for: address) }
+    /// A new tab, waiting for an address, a search or a question.
+    var isStart: Bool { isBlank && chat == nil }
+    var label: String {
+        if let chat, isBlank, name?.isEmpty != false { return chat.title }
+        return TabLabel.text(name: name, popup: popup, address: address, title: title)
+    }
+    var monogram: String { chat != nil && isBlank ? "✦" : TabLabel.monogram(for: address) }
     var store: WKWebsiteDataStore { configuration.websiteDataStore }
 
     /// Made with the extension controller, which can't be added later.
@@ -219,6 +229,7 @@ final class Tab: ObservableObject, Identifiable {
         // At once rather than on KVO, so the tab stops being blank in the same
         // frame the address field goes away.
         address = url
+        leaveChat()
         title = ""
         freshPage()
         // Going somewhere wakes a sleeping tab with nothing to restore.
@@ -593,7 +604,14 @@ final class Tab: ObservableObject, Identifiable {
     /// Lets the page go so its timers, media and sockets stop.
     func close() {
         owner = nil
+        leaveChat()
         letPageGo()
+    }
+
+    /// Ends the chat, stopping any reply still coming.
+    private func leaveChat() {
+        chat?.stop()
+        chat = nil
     }
 
     /// Removes the web view, and with it the document WebKit would keep in its

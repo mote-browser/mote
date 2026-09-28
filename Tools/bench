@@ -35,6 +35,8 @@ COMMANDS = {
     "close": ("id", "a tab the bench opened, or all of them"),
     "place": ("id to:int", "put a tab at another place in the row"),
     "probe": ("", "the window's own state: panels, modal, windows"),
+    "chat": ("[show|ask|follow|wait|use|providers] [args…]", "the chat in front; ask TEXT as ⌘Return does, follow TEXT in the chat "
+             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS] (test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, sidebar, spaces, hides, bar, folded, peek, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
@@ -214,7 +216,27 @@ def read_frames(args):
     return request
 
 
+def read_chat(args):
+    action = args[0] if args else "show"
+    rest = args[1:]
+    if action in ("show", "providers") and not rest:
+        return {"action": action}
+    if action in ("ask", "follow") and rest:
+        return {"action": action, "text": " ".join(rest)}
+    if action == "wait" and len(rest) <= 1:
+        return {"action": action, "seconds": float(rest[0]) if rest else 60.0}
+    if action == "use" and 1 <= len(rest) <= 3:
+        request = {"action": action, "provider": rest[0]}
+        if len(rest) >= 2:
+            request["model"] = rest[1]
+        if len(rest) == 3:
+            request["address"] = rest[2]
+        return request
+    sys.exit(usage("chat"))
+
+
 READERS = {
+    "chat": read_chat,
     "tap": with_mods("tap", 2, ("shift", "cmd", "opt")),
     "press": lambda args: with_mods("press", 2, ("cmd", "shift", "ctrl", "opt", "repeat"), always=True)(args) if len(args) >= 2 else sys.exit(usage("press")),
     "keyeq": with_mods("keyeq", 2, ("shift",), always=True),

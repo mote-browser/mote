@@ -144,7 +144,7 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Reading
 
     var active: Tab? { activeID.flatMap(tab) }
-    var fieldShowing: Bool { editing || active?.isBlank ?? true }
+    var fieldShowing: Bool { editing || active?.isStart ?? true }
     var pinnedCount: Int { row.pinnedCount }
     var recentlyVisited: [History.Entry] { history.recent() }
 
@@ -355,7 +355,7 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Puts a fresh blank tab in front with the field ready for typing.
-    private func show(_ tab: Tab, adopting: Bool) {
+    func show(_ tab: Tab, adopting: Bool) {
         if adopting { adopt(tab) }
         floatActiveVideo()
         activeID = tab.id
@@ -398,7 +398,7 @@ final class Browser: NSObject, ObservableObject {
     /// A link from another app: into the current tab if it is blank and
     /// nothing is typed, otherwise a new tab in front.
     func arrive(_ url: URL) {
-        if let active, active.isBlank, field.typed.isEmpty, !active.floating {
+        if let active, active.isStart, field.typed.isEmpty, !active.floating {
             active.go(to: url)
             editing = false
         } else {
@@ -570,7 +570,7 @@ final class Browser: NSObject, ObservableObject {
         }
 
         if tabs.count == 1 {
-            guard !tab.isBlank else {
+            guard !tab.isStart else {
                 NSApp.keyWindow?.performClose(nil)
                 return
             }

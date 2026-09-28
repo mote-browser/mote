@@ -13,6 +13,19 @@ struct KeyMapTests {
             picking: picking, inText: inText)
     }
 
+    @Test("⌘Return and ⌘Enter ask the assistant, only from the address field")
+    func asking() {
+        let press = { (code: UInt16, shift: Bool, option: Bool) in
+            KeyMap.Press(key: "\r", code: code, command: true, shift: shift, option: option)
+        }
+        #expect(KeyMap.asks(press(36, false, false), inAddressField: true))
+        #expect(KeyMap.asks(press(76, false, false), inAddressField: true))
+        #expect(!KeyMap.asks(press(36, false, false), inAddressField: false))
+        #expect(!KeyMap.asks(press(36, true, false), inAddressField: true))
+        #expect(!KeyMap.asks(press(36, false, true), inAddressField: true))
+        #expect(!KeyMap.asks(KeyMap.Press(key: "\r", code: 36), inAddressField: true))
+    }
+
     @Test("Everyday shortcuts")
     func everyday() {
         #expect(command("t") == .newTab)

@@ -1,4 +1,5 @@
 import AppKit
+import MoteAI
 import MoteCore
 import SwiftUI
 
@@ -44,6 +45,12 @@ final class KeyRouter {
             option: flags.contains(.option), control: flags.contains(.control))
 
         if press.code == KeyMap.escape { return escape(in: browser) }
+        // AppKit's field editor has no command for ⌘Return, so it's caught here.
+        let inField = AddressField.hasKeyboard(in: event.window) && !browser.field.switching
+        if KeyMap.asks(press, inAddressField: inField) {
+            browser.ask()
+            return true
+        }
         // Tab (without ⌘, ⌥ or ⌃) walks the suggestions while the field is open,
         // is swallowed while renaming a tab, and otherwise goes to the page.
         if press.code == KeyMap.tabKey, !press.command, !press.option, !press.control {
@@ -99,7 +106,9 @@ final class KeyRouter {
             (browser.finder.showing, browser.finder.hide),
             // The pick goes before the field does.
             (browser.field.picked != nil, { browser.field.picked = nil }),
-            (browser.editing && browser.active?.isBlank == false, browser.dismiss),
+            (browser.editing && browser.active?.isStart == false, browser.dismiss),
+            // Last, so Escape first closes whatever is over the chat.
+            (browser.active?.chat?.busy == true, { browser.active?.chat?.stop() }),
         ]
         guard let step = steps.first(where: \.0) else { return false }
         step.1()

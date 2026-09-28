@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		B10000000000000000000001 /* MoteCore in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* MoteCore */; };
+		B10000000000000000000002 /* MoteAI in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000002 /* MoteAI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000001 /* MoteCore in Frameworks */,
+				B10000000000000000000002 /* MoteAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,6 +157,7 @@
 			name = Mote;
 			packageProductDependencies = (
 				C10000000000000000000001 /* MoteCore */,
+				C10000000000000000000002 /* MoteAI */,
 			);
 			productName = Mote;
 			productReference = A10000000000000000000001 /* Mote.app */;
@@ -420,6 +423,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/MoteKit" */;
 			productName = MoteCore;
+		};
+		C10000000000000000000002 /* MoteAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C20000000000000000000001 /* XCLocalSwiftPackageReference "Packages/MoteKit" */;
+			productName = MoteAI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

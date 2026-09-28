@@ -1,4 +1,5 @@
 import AppKit
+import MoteAI
 import MoteCore
 
 // The address field's actions: what it suggests, ⌘L, ⌘K and Return.
@@ -58,7 +59,7 @@ extension Browser {
     func dismiss() {
         field.switching = false
         field.cycling = false
-        guard active?.isBlank == false else { return }
+        guard active?.isStart == false else { return }
         editing = false
         field.clear()
     }
@@ -97,6 +98,24 @@ extension Browser {
         case .refuse:
             field.refuse()
         }
+    }
+
+    /// ⌘Return: what's typed goes to the assistant instead of the search
+    /// engine, in a chat that takes over a new tab, or opens in one.
+    func ask() {
+        let text = field.typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return field.refuse() }
+        let chat = Conversation()
+        Assistant.shared.ask(text, in: chat)
+        if let tab = active, tab.isStart {
+            tab.chat = chat
+        } else {
+            let tab = Tab(shy: active?.shy ?? false)
+            tab.chat = chat
+            show(tab, adopting: true)
+        }
+        editing = false
+        field.clear()
     }
 
     /// A clicked suggestion opens directly, without moving the keyboard pick,

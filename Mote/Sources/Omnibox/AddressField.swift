@@ -15,6 +15,13 @@ struct AddressField: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(browser: browser) }
 
+    /// Whether the keyboard is in an address field in `window`, rather than
+    /// another field (renaming a tab, naming a space).
+    @MainActor static func hasKeyboard(in window: NSWindow?) -> Bool {
+        guard let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor else { return false }
+        return (editor.delegate as? NSTextField)?.delegate is Coordinator
+    }
+
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
         field.delegate = context.coordinator

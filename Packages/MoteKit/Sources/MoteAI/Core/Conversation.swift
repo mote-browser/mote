@@ -1,0 +1,179 @@
+import Foundation
+import Observation
+
+/// A chat: its messages, the reply on its way, and what went wrong.
+///
+/// It keeps the whole history itself, so any provider can take over at any
+/// turn. Providers that keep their own sessions are handed theirs back, and
+/// only need the new message.
+@MainActor
+@Observable
+public final class Conversation: Identifiable {
+    /// Where a message goes: the provider, its model, and the service that answers.
+    public struct Route: Sendable {
+        public var provider: String
+        public var model: String
+        /// Shown over the reply ("Claude Code · sonnet").
+        public var author: String
+        public var service: any ChatService
+        public var instructions: String?
+
+        public init(provider: String, model: String, author: String, service: any ChatService, instructions: String? = nil) {
+            self.provider = provider
+            self.model = model
+            self.author = author
+            self.service = service
+            self.instructions = instructions
+        }
+    }
+
+    public enum Phase: Equatable, Sendable {
+        case idle
+        /// Asked, and nothing back yet.
+        case waiting
+        /// The reply is arriving.
+        case answering
+        /// The last reply failed, for this reason.
+        case failed(String)
+    }
+
+    public let id = UUID()
+    public private(set) var messages: [Message] = []
+    public private(set) var phase: Phase = .idle
+    /// What the model is doing on the way to its reply.
+    public private(set) var activities: [Activity] = []
+    /// What the last reply cost.
+    public private(set) var usage: Usage?
+
+    /// Sessions providers opened, by provider.
+    ///
+    /// A session is only carried on while it has heard every message: it
+    /// holds the chat up to `heard` messages, the reply included. Another
+    /// provider answering, or a reply stopped halfway, leaves it behind, and
+    /// the provider then starts afresh with the whole conversation.
+    @ObservationIgnored private var sessions: [String: (id: String, heard: Int)] = [:]
+    /// The session opened or carried on by the reply under way.
+    @ObservationIgnored private var opened: String?
+    @ObservationIgnored private var task: Task<Void, Never>?
+    /// Counts replies, so a stopped one's late events are dropped.
+    @ObservationIgnored private var turn = 0
+
+    public init() {}
+
+    public var busy: Bool { phase == .waiting || phase == .answering }
+
+    public var title: String {
+        guard let first = messages.first(where: { $0.role == .user }) else { return "New chat" }
+        let line = first.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return line.count > 60 ? String(line.prefix(59)).trimmingCharacters(in: .whitespaces) + "…" : line
+    }
+
+    /// Finds the route for a turn. Asked once the question is on screen, so
+    /// it can take a moment (finding a program, listing models) or fail.
+    public typealias Routing = @MainActor @Sendable () async throws -> Route
+
+    public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
+
+    public func send(_ text: String, routing: @escaping Routing) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        stop()
+        messages.append(Message(role: .user, text: text))
+        ask(routing: routing)
+    }
+
+    public func retry(via route: Route) { retry(routing: { route }) }
+
+    /// Asks again for the last reply, in place of the one that failed or was stopped.
+    public func retry(routing: @escaping Routing) {
+        stop()
+        guard messages.contains(where: { $0.role == .user }) else { return }
+        while messages.last?.role == .assistant { messages.removeLast() }
+        ask(routing: routing)
+    }
+
+    /// Stops the reply, keeping what arrived.
+    public func stop() {
+        guard busy else { return }
+        turn += 1
+        task?.cancel()
+        task = nil
+        if let last = messages.indices.last, messages[last].role == .assistant { messages[last].interrupted = true }
+        activities = []
+        phase = .idle
+    }
+
+    private func ask(routing: @escaping Routing) {
+        turn += 1
+        let turn = turn
+        messages.append(Message(role: .assistant, text: ""))
+        phase = .waiting
+        activities = []
+        task = Task { [weak self] in
+            var provider: String?
+            do {
+                let route = try await routing()
+                guard let self, self.turn == turn else { return }
+                provider = route.provider
+                let request = self.request(for: route)
+                for try await event in route.service.reply(to: request) {
+                    guard self.turn == turn else { return }
+                    self.take(event, from: route.provider)
+                }
+                self.end(turn, failure: nil, provider: route.provider)
+            } catch {
+                self?.end(turn, failure: error, provider: provider)
+            }
+        }
+    }
+
+    /// Signs the reply with the route's author and asks for it with everything
+    /// before it.
+    private func request(for route: Route) -> ChatRequest {
+        let asked = Array(messages.dropLast())
+        if let last = messages.indices.last { messages[last].author = route.author }
+        // Up to date if it heard everything but the new question.
+        let session = sessions[route.provider].flatMap { $0.heard == asked.count - 1 ? $0.id : nil }
+        // An agent that carries a session on may not name it again.
+        opened = session
+        return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session)
+    }
+
+    private func take(_ event: ChatEvent, from provider: String) {
+        guard let last = messages.indices.last else { return }
+        switch event {
+        case .session(let id):
+            opened = id
+        case .text(let more):
+            messages[last].text += more
+            phase = .answering
+        case .reasoning(let more):
+            messages[last].reasoning += more
+            phase = .answering
+        case .activity(let activity):
+            if let index = activities.firstIndex(where: { $0.id == activity.id }) {
+                activities[index] = activity
+            } else {
+                activities.append(activity)
+            }
+        case .usage(let spent):
+            usage = spent
+        }
+    }
+
+    private func end(_ ended: Int, failure: Error?, provider: String?) {
+        guard ended == turn else { return }
+        task = nil
+        activities = []
+        guard let failure, !(failure is CancellationError) else {
+            if let provider, let opened { sessions[provider] = (opened, messages.count) }
+            phase = .idle
+            return
+        }
+        // A reply that never started leaves nothing to show.
+        if let last = messages.last, last.role == .assistant, last.text.isEmpty, last.reasoning.isEmpty { messages.removeLast() }
+        // A session that failed may be gone; the next try starts afresh.
+        if let provider { sessions[provider] = nil }
+        phase = .failed((failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription)
+    }
+}

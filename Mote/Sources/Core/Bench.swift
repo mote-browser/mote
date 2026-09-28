@@ -207,7 +207,7 @@ final class Bench {
     /// Every command, by its verb.
     private lazy var commands: [String: Command] = {
         var all: [String: Command] = [:]
-        for family in [pageCommands, inputCommands, chromeCommands, pictureCommands, extensionCommands] {
+        for family in [pageCommands, inputCommands, chromeCommands, pictureCommands, extensionCommands, assistantCommands] {
             all.merge(family) { first, _ in first }
         }
         return all

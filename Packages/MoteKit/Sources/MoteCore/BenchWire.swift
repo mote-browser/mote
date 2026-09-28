@@ -95,9 +95,12 @@ public struct BenchRequest: @unchecked Sendable, Equatable {
     public func strings(_ key: String) -> [String] { values[key] as? [String] ?? [] }
     public func flag(_ key: String) -> Bool { bool(key) == true }
 
-    /// How long before the bench answers for it: `wait` gets its own seconds
-    /// and a little more, everything else 25.
-    public var patience: Double { verb == "wait" ? (double("seconds") ?? 30) + 5 : 25 }
+    /// How long before the bench answers for it: `wait` and `chat wait` get
+    /// their own seconds and a little more, everything else 25.
+    public var patience: Double { waits ? (double("seconds") ?? 30) + 5 : 25 }
+
+    /// A request that waits for something, for as many seconds as it says.
+    private var waits: Bool { verb == "wait" || verb == "chat" && string("action") == "wait" }
 
     /// Modifier names ("cmd", "shift", "opt", "ctrl") given with a key or click.
     public var modifiers: Set<String> { Set(strings("mods")) }

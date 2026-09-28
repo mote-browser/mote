@@ -37,6 +37,7 @@ struct SettingsPanel: View {
     @ViewBuilder private var content: some View {
         switch page {
         case .general: GeneralSettings(browser: browser, prefs: prefs)
+        case .ai: AISettings(browser: browser, prefs: prefs)
         case .tabs: TabSettings(prefs: prefs)
         case .passwords: PasswordSettings(browser: browser, prefs: prefs)
         case .privacy: PrivacySettings(browser: browser, prefs: prefs)
@@ -47,14 +48,15 @@ struct SettingsPanel: View {
 }
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, tabs, passwords, privacy, extensions, about
+    case general, ai, tabs, passwords, privacy, extensions, about
 
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String { self == .ai ? "AI" : rawValue.capitalized }
 
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .ai: "sparkles"
         case .tabs: "square.on.square"
         case .passwords: "key"
         case .privacy: "hand.raised"
@@ -66,6 +68,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .general: Tint.gray
+        case .ai: Tint.pink
         case .tabs: Tint.blue
         case .passwords: Tint.yellow
         case .privacy: Tint.indigo

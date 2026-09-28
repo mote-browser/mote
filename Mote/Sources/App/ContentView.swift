@@ -15,7 +15,7 @@ struct ContentView: View {
     static var keyHook: ((NSEvent) -> NSEvent?)?
 
     /// The switcher over a page; a blank tab switches in its own composer.
-    private var switching: Bool { browser.field.switching && browser.active?.isBlank == false }
+    private var switching: Bool { browser.field.switching && browser.active?.isStart == false }
 
     var body: some View {
         Chrome(browser: browser, prefs: browser.prefs)

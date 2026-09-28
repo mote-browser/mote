@@ -10,13 +10,13 @@ extension Browser {
     /// Settings, and always on a new tab, which has no page to cover.
     var bookmarksShown: Bool {
         guard !bookmarks.isEmpty, active?.immersed != true else { return false }
-        return prefs.bookmarksBar || active?.isBlank != false
+        return prefs.bookmarksBar || active?.isStart != false
     }
 
     /// Whether the address field is being edited in the toolbar, over a page. A
     /// blank tab edits in its own composer, and ⌘K opens the palette instead.
     var editingInBar: Bool {
-        editing && !field.switching && active?.isBlank == false
+        editing && !field.switching && active?.isStart == false
     }
 
     func layout(in window: CGSize) -> ChromeLayout {
@@ -98,7 +98,7 @@ private struct PageCard: View {
                     .zIndex(1)
             }
             if layout.bookmarks > 0 {
-                BookmarksBar(browser: browser, bookmarks: browser.bookmarks, ruled: browser.active?.isBlank == false)
+                BookmarksBar(browser: browser, bookmarks: browser.bookmarks, ruled: browser.active?.isStart == false)
                     .frame(height: layout.bookmarks)
                     .transition(.opacity)
             }
@@ -152,7 +152,10 @@ private struct PageCard: View {
     private var stage: some View {
         if let tab = browser.active {
             ZStack(alignment: .topLeading) {
-                if tab.isBlank {
+                if let chat = tab.chat, tab.isBlank {
+                    // One per chat, so a draft and scrolling never carry over to another.
+                    ChatView(browser: browser, conversation: chat).id(chat.id)
+                } else if tab.isBlank {
                     NewTabPage(browser: browser, prefs: prefs)
                 } else {
                     Page(tab: tab)

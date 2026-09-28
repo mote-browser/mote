@@ -297,7 +297,8 @@ struct AboutSettings: View {
     @ObservedObject private var updater = Updater.shared
 
     private static let keys = [
-        ("⌘L", "Type an address"), ("⌘K", "Jump to a tab"), ("⌘T  ⌘W  ⇧⌘T", "Open, close, bring back a tab"), ("⇧⌘V", "Paste and go"),
+        ("⌘L", "Type an address"), ("⌘↩", "Ask AI what you typed"), ("⌘K", "Jump to a tab"),
+        ("⌘T  ⌘W  ⇧⌘T", "Open, close, bring back a tab"), ("⇧⌘V", "Paste and go"),
         ("⇧⌘C", "Copy the address"), ("⌃⇥  ⌘1–9", "Next tab, or by position"), ("⇧⌘S", "Tabs on top or at the side"),
         ("⌘S", "Tuck the sidebar away"),
         ("⇧⌘R", "Reading mode"), ("⇧⌘H", "Hide part of a page"), ("⇧⌘P", "Float a video"),

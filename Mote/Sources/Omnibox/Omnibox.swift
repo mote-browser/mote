@@ -78,6 +78,8 @@ struct Composer: View {
 
     @State private var shake: CGFloat = 0
     @State private var refused = false
+    /// ⌘ is held: Return will ask the assistant rather than search.
+    @State private var asking = false
 
     private var hasText: Bool { !browser.field.typed.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -90,7 +92,8 @@ struct Composer: View {
                     .frame(width: 16)
                 AddressField(
                     browser: browser, size: 15,
-                    placeholder: browser.field.switching ? "Switch to a tab" : "Search or enter address"
+                    placeholder: browser.field.switching
+                        ? "Switch to a tab" : compact ? "Search or enter address" : "Search, enter an address, or ask"
                 )
                 .frame(height: 22)
             }
@@ -100,9 +103,14 @@ struct Composer: View {
             if !compact {
                 HStack(spacing: 8) {
                     Chip(browser: browser)
+                    ModelChip(browser: browser, lit: asking && hasText)
                     Spacer(minLength: 0)
-                    Send(ready: hasText) { browser.submit() }
+                    if hasText {
+                        AskHint(asking: asking).transition(.opacity)
+                    }
+                    Send(ready: hasText, asking: asking) { asking ? browser.ask() : browser.submit() }
                 }
+                .animation(Motion.quick, value: hasText)
                 .padding(.horizontal, 10)
                 .padding(.bottom, 10)
                 .frame(height: Composer.fullHeight - Composer.compactHeight, alignment: .bottom)
@@ -136,6 +144,25 @@ struct Composer: View {
             withAnimation(Motion.quick) { refused = false }
         }
         .animation(Motion.settle, value: refused)
+        .onCommandKey { held in
+            asking = held && !compact
+            if asking { Assistant.shared.prepare() }
+        }
+    }
+
+    /// What Return and ⌘Return do, beside the send button.
+    private struct AskHint: View {
+        let asking: Bool
+
+        var body: some View {
+            HStack(spacing: 4) {
+                Text(asking ? "↩" : "⌘↩").font(.system(size: 11, weight: .medium, design: .rounded))
+                Text(asking ? "to ask" : "to ask AI").font(.system(size: 11.5))
+            }
+            .foregroundStyle(asking ? Palette.ink.opacity(0.7) : Palette.faint)
+            .animation(Motion.quick, value: asking)
+            .accessibilityHidden(true)
+        }
     }
 
     /// Where the words go: the search engine, which Settings changes.
@@ -170,15 +197,17 @@ struct Composer: View {
         }
     }
 
-    /// The round send button, filled once there is something to send.
+    /// The round send button, filled once there is something to send; with
+    /// ⌘ held it asks the assistant instead.
     private struct Send: View {
         let ready: Bool
+        var asking = false
         let act: () -> Void
         @State private var hovering = false
 
         var body: some View {
             Button(action: act) {
-                Image(systemName: "arrow.up")
+                Image(systemName: asking ? "sparkle" : "arrow.up")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ready ? Palette.ground : Palette.muted)
                     .frame(width: 30, height: 30)
@@ -188,9 +217,11 @@ struct Composer: View {
             .buttonStyle(Pressed())
             .disabled(!ready)
             .onHover { hovering = $0 }
-            .help("Go   ↩")
-            .accessibilityLabel("Go")
+            .help(asking ? "Ask   ⌘↩" : "Go   ↩")
+            .accessibilityLabel(asking ? "Ask" : "Go")
+            .contentTransition(.symbolEffect(.replace))
             .animation(Motion.quick, value: ready)
+            .animation(Motion.quick, value: asking)
             .animation(Motion.hover, value: hovering)
         }
     }

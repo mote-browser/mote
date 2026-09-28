@@ -28,12 +28,14 @@ struct BenchWireTests {
         #expect(BenchWire.plain(Date(timeIntervalSince1970: 0)) is String)
     }
 
-    @Test("Requests read typed values; patience is 25 s except for wait")
+    @Test("Requests read typed values; patience is 25 s except for waiting")
     func requests() {
         let request = BenchRequest(["do": "press", "code": 17, "mods": ["cmd", "shift"], "yes": true, "x": 1.5])
         #expect(request.int("code") == 17 && request.double("x") == 1.5 && request.flag("yes") && !request.flag("no"))
         #expect(request.modifiers == ["cmd", "shift"] && request.patience == 25)
         #expect(BenchRequest(["do": "wait"]).patience == 35)
+        #expect(BenchRequest(["do": "chat", "action": "wait", "seconds": 90.0]).patience == 95)
+        #expect(BenchRequest(["do": "chat", "action": "show"]).patience == 25)
     }
 
     @Test("Tabs are named by the start of their id")

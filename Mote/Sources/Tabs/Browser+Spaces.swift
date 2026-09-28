@@ -43,7 +43,7 @@ extension Browser {
             showRow([], active: nil)
             restoreSession()
         }
-        editing = active?.isBlank ?? true
+        editing = active?.isStart ?? true
         field.clear()
         field.askFocus()
         announce(space.name)

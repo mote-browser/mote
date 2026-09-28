@@ -40,6 +40,15 @@ public enum KeyMap {
     public static let tabKey: UInt16 = 48
     public static let leftArrow: UInt16 = 123
     public static let rightArrow: UInt16 = 124
+    public static let returnKey: UInt16 = 36
+    public static let enterKey: UInt16 = 76
+
+    /// ⌘Return (or ⌘Enter) in the address field: what's typed goes to the
+    /// assistant rather than to the search engine.
+    public static func asks(_ press: Press, inAddressField: Bool) -> Bool {
+        inAddressField && press.command && !press.shift && !press.option && !press.control
+            && (press.code == returnKey || press.code == enterKey)
+    }
 
     /// The top row's digits by key code, so shortcuts don't depend on the
     /// layout (AZERTY types other characters there).

@@ -1,3 +1,4 @@
+import MoteAI
 import MoteCore
 import SwiftUI
 
@@ -159,7 +160,7 @@ struct AddressBar: View {
         .contentShape(Rounded.row)
         .onTapGesture {
             guard !editing else { return }
-            if browser.active?.isBlank != false { browser.field.askFocus() } else { browser.edit() }
+            if browser.active?.isStart != false { browser.field.askFocus() } else { browser.edit() }
         }
         .onHover { hovering = $0 }
         .background(KeepZone())
@@ -186,6 +187,9 @@ struct AddressBar: View {
             Group {
                 if let url = tab.address {
                     Text(AddressBar.display(url))
+                        .foregroundStyle(Palette.ink.opacity(0.88))
+                } else if let chat = tab.chat {
+                    Text(chat.title)
                         .foregroundStyle(Palette.ink.opacity(0.88))
                 } else {
                     Text("Search or enter address")
