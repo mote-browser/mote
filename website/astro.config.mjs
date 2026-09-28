@@ -1,11 +1,9 @@
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
 
-// Served by GitHub Pages from the mote repository, so every URL lives under
-// /mote/. With a custom domain, drop `base` and change `site`.
+// Served by GitHub Pages at the custom domain, from the root.
 export default defineConfig({
-  site: "https://mote-browser.github.io",
-  base: "/mote",
+  site: "https://motebrowser.com",
   // One page, one small stylesheet: inline it and save a blocking request.
   build: { inlineStylesheets: "always" },
   vite: { plugins: [tailwindcss()] },

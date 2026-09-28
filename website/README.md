@@ -1,6 +1,6 @@
 # Mote's website
 
-One page to see Mote and download it: [Astro](https://astro.build) with Tailwind CSS v4 and no UI framework; Geist for type. Served by GitHub Pages at `mote-browser.github.io/mote`.
+One page to see Mote and download it: [Astro](https://astro.build) with Tailwind CSS v4 and no UI framework; Geist for type. Served by GitHub Pages at [motebrowser.com](https://motebrowser.com).
 
 ```
 pnpm install
