@@ -21,12 +21,17 @@ public struct Research: ChatService {
         public var parallel: Int
         /// Most parts in a wave of follow-ups.
         public var followUps: Int
+        /// How long one researcher may take. An agent can wander off (one
+        /// wrote a script fetching an index page by page); past this it's
+        /// stopped and what it found so far is kept.
+        public var deadline: Duration
 
-        public init(questions: Int, waves: Int, parallel: Int, followUps: Int = 3) {
+        public init(questions: Int, waves: Int, parallel: Int, followUps: Int = 3, deadline: Duration = .seconds(240)) {
             self.questions = questions
             self.waves = waves
             self.parallel = parallel
             self.followUps = followUps
+            self.deadline = deadline
         }
 
         public static let standard = Budget(questions: 5, waves: 2, parallel: 3, followUps: 3)
@@ -157,11 +162,11 @@ public struct Research: ChatService {
         let asking = ChatRequest(
             model: request.model, messages: [Message(role: .user, text: Self.researchPrompt(question, part: part))],
             instructions: instructions, search: true)
-        var text = ""
-        do {
+        let found = Found()
+        let reading = Task {
             for try await event in service.reply(to: asking) {
                 switch event {
-                case .text(let more): text += more
+                case .text(let more): found.add(more)
                 case .source: emit(event)
                 case .activity(var activity):
                     activity.id = "\(id)-\(activity.id)"
@@ -169,10 +174,46 @@ public struct Research: ChatService {
                 case .session, .reasoning, .usage: break
                 }
             }
-            return Notes(part: part, result: .success(text.trimmingCharacters(in: .whitespacesAndNewlines)))
-        } catch {
-            return Notes(part: part, result: .failure(error))
         }
+        let inTime = await withTaskCancellationHandler {
+            await withTaskGroup(of: Bool.self) { group in
+                group.addTask { (try? await reading.value) != nil || true }
+                group.addTask {
+                    try? await Task.sleep(for: budget.deadline)
+                    // Stopped here, or the group would wait on it forever.
+                    reading.cancel()
+                    return false
+                }
+                let first = await group.next() ?? true
+                group.cancelAll()
+                return first
+            }
+        } onCancel: {
+            reading.cancel()
+        }
+        let failure: Error? = await {
+            do {
+                try await reading.value
+                return nil
+            } catch {
+                return error
+            }
+        }()
+        let text = found.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !inTime {
+            guard !text.isEmpty else { return Notes(part: part, result: .failure(AIError.failed("It ran out of time"))) }
+            return Notes(part: part, result: .success(text + "\n(The researcher was stopped here: it ran out of time.)"))
+        }
+        if let failure { return Notes(part: part, result: .failure(failure)) }
+        return Notes(part: part, result: .success(text))
+    }
+
+    /// A researcher's text so far, shared with what's waiting on it.
+    private final class Found: @unchecked Sendable {
+        private let lock = NSLock()
+        private var kept = ""
+        var text: String { lock.withLock { kept } }
+        func add(_ more: String) { lock.withLock { kept += more } }
     }
 
     /// The whole text of a reply that doesn't search.

@@ -41,7 +41,8 @@ struct AISettings: View {
 
         SettingsSection(
             "On this Mac",
-            note: "Agents use their own accounts and run read-only, in a folder of Mote's own; Claude Code gets no tools at all."
+            note:
+                "Agents use their own accounts and work in a folder of Mote's own. Claude Code gets only web search and page reading; Codex runs read-only; opencode's planning agent writes no files but may run commands."
         ) {
             ForEach(Array(Provider.all.filter { $0.kind != .cloud }.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { RowRule() }

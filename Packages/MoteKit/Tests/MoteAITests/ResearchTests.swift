@@ -233,4 +233,44 @@ struct ResearchTests {
         #expect(question.contains("And then?"))
         #expect(question.count < 2_500)
     }
+
+    @Test("A researcher that goes past its time is cut off, and what it found so far is kept")
+    func deadline() async throws {
+        let base = provider(parts: ["Performance", "Stuck"])
+        let service = HangingService(hangs: "Stuck", base: base)
+        var budget = Research.Budget(questions: 5, waves: 1, parallel: 3)
+        budget.deadline = .milliseconds(300)
+        let started = ContinuousClock.now
+        let events = try await events(Research(service: service, budget: budget))
+        #expect(ContinuousClock.now - started < .seconds(5))
+        #expect(Self.text(of: events) == "Report")
+        let writer = try #require(base.asked(.write).first)
+        #expect(writer.prompt.contains("Found Performance"))
+        #expect(writer.prompt.contains("Half of what Stuck found"))
+        #expect(writer.prompt.contains("stopped"))
+        #expect(service.stopped)
+    }
+}
+
+/// Passes requests to `base`, except the researcher for `hangs`: it says a
+/// little, then never finishes until it is stopped.
+final class HangingService: ChatService, @unchecked Sendable {
+    let hangs: String
+    let base: RoleService
+    private(set) var stopped = false
+
+    init(hangs: String, base: RoleService) {
+        self.hangs = hangs
+        self.base = base
+    }
+
+    func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
+        guard Research.role(of: request) == .research, request.prompt.contains("Your part: \(hangs)") else {
+            return base.reply(to: request)
+        }
+        let (stream, continuation) = AsyncThrowingStream<ChatEvent, Error>.makeStream()
+        continuation.yield(.text("- Half of what \(hangs) found"))
+        continuation.onTermination = { [weak self] _ in self?.stopped = true }
+        return stream
+    }
 }
