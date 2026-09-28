@@ -10,6 +10,17 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.1.3 — 2026-09-28
+
+Fixes the sidebar staying on screen after folding it away.
+
+### Fixed
+
+- Folding the sidebar away with its button could leave it drawn on screen,
+  with the traffic lights gone, until something else redrew the window, such
+  as opening Settings. The window is now drawn again when the slide hasn't
+  finished in time.
+
 ## 0.1.2 — 2026-09-28
 
 Smoother scrolling, and tabs that stay under the pointer as you drag them.
