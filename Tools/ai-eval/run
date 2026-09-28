@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Ask Mote's assistant a fixed set of questions and measure its answers.
+
+Runs against the test world through Tools/bench (the Debug build, or `make
+reopen`, with "Let a script drive Mote" on). Each question goes in a new tab
+as ⌘Return would send it; the script waits for the reply, reads it back and
+closes the tab. For every answer it records how long it took, what the model
+searched and read, its sources, and its citations: the links in the text,
+and how many point to a page the provider actually found or read
+("grounded"). A citation to a page nobody searched up is a warning sign.
+
+    Tools/ai-eval/run                          all questions, as Mote is set up
+    Tools/ai-eval/run --provider claude-code --model haiku
+    Tools/ai-eval/run --only swift-latest,eiffel --search off
+    Tools/ai-eval/run --label new-prompt       names the run's folder
+
+Results go to build/ai-eval/<time>-<label>/: results.jsonl (everything,
+answers included) and report.md (a table to compare runs).
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime
+from urllib.parse import parse_qsl, urlencode, urlsplit
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BENCH = os.path.join(ROOT, "Tools", "bench")
+LINK = re.compile(r"(!?)\[([^\]]*)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)")
+
+
+def bench(*args, check=True):
+    done = subprocess.run([BENCH, "--test", *args], capture_output=True, text=True)
+    if check and done.returncode != 0:
+        sys.exit(f"bench {' '.join(args)} failed: {done.stderr.strip() or done.stdout.strip()}")
+    return json.loads(done.stdout) if done.stdout.strip().startswith("{") else {}
+
+
+def key(url):
+    """The page's address as Mote's Source.key reduces it."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    host = host[4:] if host.startswith("www.") else host
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_") and k.lower() not in ("fbclid", "gclid", "ref", "ref_src")]
+    return host + parts.path.rstrip("/") + ("?" + urlencode(query) if query else "")
+
+
+def citations(text):
+    """Links to web pages outside code, as the chat numbers them."""
+    found, fenced = [], False
+    for line in text.split("\n"):
+        if line.strip().startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        for bang, _, url in LINK.findall(re.sub(r"`[^`]*`", "", line)):
+            if not bang and key(url) not in found:
+                found.append(key(url))
+    return found
+
+
+def measure(entry, reply, seconds):
+    text = reply.get("text", "")
+    sources = {key(s["url"]) for s in reply.get("sources", [])}
+    cited = citations(text)
+    steps = reply.get("steps", [])
+    return {
+        **entry,
+        "seconds": round(seconds, 1),
+        "searches": sum(1 for s in steps if s["kind"] == "search"),
+        "reads": sum(1 for s in steps if s["kind"] == "read"),
+        "sources": len(sources),
+        "citations": len(cited),
+        "grounded": sum(1 for c in cited if c in sources),
+        "words": len(text.split()),
+        "author": reply.get("author", ""),
+        "steps": [s["title"] for s in steps],
+        "cited": cited,
+        "answer": text,
+    }
+
+
+def ask(entry, patience):
+    bench("chat", "ask", entry["question"])
+    started = time.time()
+    state = bench("chat", "wait", str(patience))
+    seconds = time.time() - started
+    reply = state["messages"][-1] if state.get("messages") else {}
+    result = measure(entry, reply, seconds)
+    result["phase"] = "timeout" if state.get("timeout") else state.get("phase", "?")
+    bench("press", "13", "w", "cmd", check=False)  # ⌘W: close the chat's tab
+    return result
+
+
+def report(results, title):
+    ok = [r for r in results if r["phase"] == "idle"]
+    rows = [
+        f"| {r['id']} | {r['phase'] if r['phase'] != 'idle' else 'ok'} | {r['seconds']} | {r['searches']} | {r['reads']} "
+        f"| {r['sources']} | {r['grounded']}/{r['citations']} | {r['words']} |"
+        for r in results
+    ]
+    mean = lambda field: round(sum(r[field] for r in ok) / len(ok), 1) if ok else 0
+    cited = sum(r["citations"] for r in ok)
+    grounded = sum(r["grounded"] for r in ok)
+    return "\n".join([
+        f"# {title}", "",
+        "| question | result | seconds | searches | reads | sources | grounded/citations | words |",
+        "|---|---|---|---|---|---|---|---|",
+        *rows, "",
+        f"Answered {len(ok)} of {len(results)}. Means: {mean('seconds')} s, {mean('searches')} searches, "
+        f"{mean('reads')} reads, {mean('sources')} sources, {mean('citations')} citations; "
+        f"{grounded}/{cited} citations grounded ({round(100 * grounded / cited) if cited else 0}%). "
+        f"Answers without a citation: {sum(1 for r in ok if r['citations'] == 0)}.",
+    ])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--provider", help="provider id, as Settings › AI knows it")
+    parser.add_argument("--model", help="model id for that provider")
+    parser.add_argument("--search", choices=("on", "off"), default="on")
+    parser.add_argument("--only", help="question ids, comma separated")
+    parser.add_argument("--questions", default=os.path.join(os.path.dirname(__file__), "questions.json"))
+    parser.add_argument("--patience", type=int, default=240, help="seconds to wait for each reply")
+    parser.add_argument("--label", default="")
+    options = parser.parse_args()
+
+    questions = json.load(open(options.questions))
+    if options.only:
+        wanted = options.only.split(",")
+        questions = [q for q in questions if q["id"] in wanted]
+    if options.provider:
+        bench("chat", "use", options.provider, *([options.model] if options.model else []))
+    bench("chat", "search", options.search)
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    folder = os.path.join(ROOT, "build", "ai-eval", stamp + (f"-{options.label}" if options.label else ""))
+    os.makedirs(folder, exist_ok=True)
+    results = []
+    with open(os.path.join(folder, "results.jsonl"), "w") as out:
+        for number, entry in enumerate(questions, 1):
+            print(f"[{number}/{len(questions)}] {entry['id']} …", end=" ", flush=True)
+            result = ask(entry, options.patience)
+            results.append(result)
+            out.write(json.dumps(result, ensure_ascii=False) + "\n")
+            out.flush()
+            print(f"{result['phase']} in {result['seconds']} s, {result['searches']} searches, "
+                  f"{result['grounded']}/{result['citations']} grounded citations")
+    title = f"{results[0]['author'] if results else '?'} · search {options.search} · {stamp}"
+    text = report(results, title)
+    open(os.path.join(folder, "report.md"), "w").write(text + "\n")
+    print("\n" + text + f"\n\nSaved in {os.path.relpath(folder, ROOT)}")
+
+
+if __name__ == "__main__":
+    main()
