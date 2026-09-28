@@ -10,10 +10,13 @@ final class FakeHTTP: HTTPTransport, @unchecked Sendable {
     var failure: Error?
     private(set) var asked: [URLRequest] = []
 
+    /// Answers for successive requests, in turn; `lines` once they run out.
+    var turns: [[String]] = []
+
     func lines(for request: URLRequest) async throws -> AsyncThrowingStream<String, Error> {
         asked.append(request)
         if let failure { throw failure }
-        let lines = lines
+        let lines = turns.isEmpty ? lines : turns.removeFirst()
         return AsyncThrowingStream { continuation in
             for line in lines { continuation.yield(line) }
             continuation.finish()
@@ -336,5 +339,68 @@ struct HTTPProviderTests {
                 == .http(status: 404, message: "model 'x' not found"))
         #expect(HTTPFailure.error(status: 502, body: Data("<html>Bad gateway</html>".utf8)) == .http(status: 502, message: ""))
         #expect(AIError.http(status: 429, message: "").errorDescription == "Too many requests — try again in a moment")
+    }
+}
+
+@Suite("Anthropic pauses")
+struct AnthropicPauseTests {
+    /// A turn whose server search loop paused after a search, and one that finishes it.
+    let paused = [
+        #"data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}"#,
+        #"data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"srv1","name":"web_search","input":{}}}"#,
+        #"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"query\": \"swift\"}"}}"#,
+        #"data: {"type":"content_block_stop","index":0}"#,
+        #"data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"srv1","content":[{"type":"web_search_result","title":"Swift","url":"https://swift.org","encrypted_content":"ENC","page_age":null}]}}"#,
+        #"data: {"type":"content_block_stop","index":1}"#,
+        #"data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}"#,
+        #"data: {"type":"content_block_delta","index":2,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","url":"https://swift.org","title":"Swift","cited_text":"Swift 6.4","encrypted_index":"IDX"}}}"#,
+        #"data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"Swift 6.4 is out."}}"#,
+        #"data: {"type":"content_block_stop","index":2}"#,
+        #"data: {"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":20}}"#,
+        #"data: {"type":"message_stop"}"#,
+    ]
+    let resumed = [
+        #"data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+        #"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" More."}}"#,
+        #"data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}"#,
+    ]
+    let question = ChatRequest(model: "m", messages: [Message(role: .user, text: "Swift?")], search: true)
+
+    @Test("The decoder keeps the reply's blocks as the API sent them, and says when it paused")
+    func blocks() throws {
+        var decoder = AnthropicDecoder()
+        for line in paused { _ = try decoder.read(line) }
+        #expect(decoder.paused)
+        let blocks = decoder.blocks
+        #expect(blocks.map { $0["type"]?.string } == ["server_tool_use", "web_search_tool_result", "text"])
+        #expect(blocks[0]["input"]?["query"]?.string == "swift")
+        #expect(blocks[1]["content"]?[0]?["encrypted_content"]?.string == "ENC")
+        #expect(blocks[2]["text"]?.string == "Swift 6.4 is out.")
+        #expect(blocks[2]["citations"]?[0]?["encrypted_index"]?.string == "IDX")
+    }
+
+    @Test("A paused turn is sent again with what it said so far, and carries on in the same reply")
+    func resumes() async throws {
+        let http = FakeHTTP()
+        http.turns = [paused, resumed]
+        let events = try await collect(
+            AnthropicService(base: URL(string: "https://api.anthropic.com")!, key: "k", transport: http).reply(to: question))
+        let text = events.compactMap { event in if case .text(let text) = event { text } else { nil } }.joined()
+        #expect(text == "Swift 6.4 is out. [swift.org](https://swift.org) More.")
+        #expect(http.asked.count == 2)
+        let second = try #require(http.asked[1].httpBody.flatMap { JSON(parsing: String(decoding: $0, as: UTF8.self)) })
+        let messages = second["messages"]?.array ?? []
+        #expect(messages.map { $0["role"]?.string } == ["user", "assistant"])
+        #expect(messages[1]["content"]?[1]?["content"]?[0]?["encrypted_content"]?.string == "ENC")
+        #expect(messages[1]["content"]?[0]?["input"]?["query"]?.string == "swift")
+    }
+
+    @Test("A turn that keeps pausing is carried on only so many times")
+    func limit() async throws {
+        let http = FakeHTTP()
+        http.lines = paused
+        _ = try await collect(
+            AnthropicService(base: URL(string: "https://api.anthropic.com")!, key: "k", transport: http).reply(to: question))
+        #expect(http.asked.count == AnthropicService.continuations + 1)
     }
 }

@@ -68,6 +68,25 @@ public enum JSON: Equatable, Sendable, Decodable {
         return []
     }
 
+    /// Replaces a field of an object; does nothing to anything else.
+    mutating func set(_ key: String, _ value: JSON) {
+        guard case .object(var fields) = self else { return }
+        fields[key] = value
+        self = .object(fields)
+    }
+
+    /// The value as Foundation objects, for `JSONSerialization`.
+    var plain: Any {
+        switch self {
+        case .object(let fields): fields.mapValues(\.plain)
+        case .array(let items): items.map(\.plain)
+        case .string(let value): value
+        case .number(let value): value
+        case .bool(let value): value
+        case .null: NSNull()
+        }
+    }
+
     /// Text for a JSON string made from `value`, quotes included.
     static func quote(_ value: String) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: [value], options: [.withoutEscapingSlashes])) ?? Data("[\"\"]".utf8)
