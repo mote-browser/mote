@@ -240,7 +240,7 @@ private struct Answer: View {
             }
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
-            if !text.isEmpty { MarkdownView(text: text, cites: rendered.cites).equatable() }
+            if !text.isEmpty { ReplyText(text: text, cites: rendered.cites, reply: message.id, streaming: streaming) }
             if message.interrupted {
                 Text("Stopped").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
             }
@@ -284,6 +284,29 @@ private struct Answer: View {
                     .transition(.opacity)
             }
         }
+    }
+}
+
+/// A reply's words: as it streams in, shown by a typewriter at a reader's
+/// pace, each word fading in; the rest of the answer doesn't redraw as they
+/// come, since only this reads the typewriter.
+private struct ReplyText: View {
+    let text: String
+    let cites: [String: String]
+    let reply: UUID
+    let streaming: Bool
+    @State private var typewriter = Typewriter()
+
+    var body: some View {
+        let shown = typewriter.busy || streaming ? typewriter.shown : text
+        MarkdownView(
+            text: shown, cites: cites, reply: reply,
+            tail: typewriter.busy || streaming ? MarkdownView.Tail(fresh: typewriter.fresh) : nil
+        )
+        .equatable()
+        .onAppear { typewriter.follow(text, finished: !streaming) }
+        .onChange(of: text) { _, text in typewriter.follow(text, finished: !streaming) }
+        .onChange(of: streaming) { _, streaming in typewriter.follow(text, finished: !streaming) }
     }
 }
 

@@ -9,18 +9,35 @@ struct MarkdownView: View, Equatable {
     /// Links to these pages (by `Source.key`) show as citation chips with
     /// the name given.
     var cites: [String: String] = [:]
+    /// The reply the text is from, whose parse is kept and carried on as
+    /// it streams in; nil for text parsed whole each time.
+    var reply: UUID?
+    /// While it streams in: its last words, fading in (see `Typewriter`).
+    var tail: Tail?
 
-    var body: some View {
-        Blocks(blocks: Self.blocks(of: text), cites: cites)
+    struct Tail: Equatable {
+        var fresh: [Typewriter.Fresh]
     }
 
-    /// Parsed replies, so drawing one again doesn't parse it again.
+    var body: some View {
+        Blocks(blocks: Self.blocks(of: text, reply: reply), cites: cites, tail: tail)
+    }
+
+    /// Replies as they stream in, each parsed a piece at a time.
+    @MainActor private static var streams: [UUID: Markdown.Stream] = [:]
+    /// Other text parsed, so drawing it again doesn't parse it again.
     @MainActor private static var parsed: [String: [Markdown.Block]] = [:]
 
-    @MainActor private static func blocks(of text: String) -> [Markdown.Block] {
+    @MainActor private static func blocks(of text: String, reply: UUID?) -> [Markdown.Block] {
+        if let reply {
+            var stream = streams[reply] ?? Markdown.Stream()
+            stream.update(text)
+            if streams.count > 64, streams[reply] == nil { streams.removeAll() }
+            streams[reply] = stream
+            return stream.blocks
+        }
         if let blocks = parsed[text] { return blocks }
         let blocks = Markdown.parse(text)
-        // A streaming reply leaves a version per piece; only the latest matter.
         if parsed.count > 64 { parsed.removeAll() }
         parsed[text] = blocks
         return blocks
@@ -82,12 +99,14 @@ struct MarkdownView: View, Equatable {
 private struct Blocks: View {
     let blocks: [Markdown.Block]
     let cites: [String: String]
+    /// Goes to the last block only: the words streaming in are at the end.
+    var tail: MarkdownView.Tail?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 // Equatable, so as a reply streams in only its last block is drawn again.
-                BlockView(block: block, cites: cites).equatable()
+                BlockView(block: block, cites: cites, tail: index == blocks.count - 1 ? tail : nil).equatable()
             }
         }
     }
@@ -96,13 +115,14 @@ private struct Blocks: View {
 private struct BlockView: View, Equatable {
     let block: Markdown.Block
     let cites: [String: String]
+    var tail: MarkdownView.Tail?
 
     var body: some View {
         switch block {
         case .paragraph(let text):
-            Prose(text: text, cites: cites)
+            Prose(text: text, cites: cites, tail: tail)
         case .heading(let level, let text):
-            Text(MarkdownView.inline(text, cites: cites))
+            Words(text: text, cites: cites, tail: tail)
                 .font(.system(size: level == 1 ? 19 : level == 2 ? 16.5 : 15, weight: .semibold))
                 .foregroundStyle(Palette.ink)
                 .padding(.top, level <= 2 ? 6 : 2)
@@ -113,11 +133,11 @@ private struct BlockView: View, Equatable {
         case .quote(let blocks):
             HStack(alignment: .top, spacing: 12) {
                 Capsule().fill(Palette.faint).frame(width: 3)
-                Blocks(blocks: blocks, cites: cites).opacity(0.75)
+                Blocks(blocks: blocks, cites: cites, tail: tail).opacity(0.75)
             }
             .fixedSize(horizontal: false, vertical: true)
         case .list(let list):
-            ListBlock(list: list, cites: cites)
+            ListBlock(list: list, cites: cites, tail: tail)
         case .table(let table):
             TableBlock(table: table, cites: cites)
         case .rule:
@@ -130,9 +150,10 @@ private struct BlockView: View, Equatable {
 private struct Prose: View {
     let text: String
     let cites: [String: String]
+    var tail: MarkdownView.Tail?
 
     var body: some View {
-        Text(MarkdownView.inline(text, cites: cites))
+        Words(text: text, cites: cites, tail: tail)
             .font(.system(size: MarkdownView.size))
             .lineSpacing(MarkdownView.leading)
             .foregroundStyle(Palette.ink)
@@ -144,6 +165,7 @@ private struct Prose: View {
 private struct ListBlock: View {
     let list: Markdown.List
     let cites: [String: String]
+    var tail: MarkdownView.Tail?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -151,7 +173,7 @@ private struct ListBlock: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     marker(index: index, item: item)
                         .frame(width: markerWidth, alignment: .trailing)
-                    Blocks(blocks: item.blocks, cites: cites)
+                    Blocks(blocks: item.blocks, cites: cites, tail: index == list.items.count - 1 ? tail : nil)
                 }
             }
         }
@@ -291,5 +313,103 @@ struct CopyButton: View {
         .accessibilityLabel(copied ? "Copied" : "Copy")
         .animation(Motion.hover, value: hovering)
         .animation(Motion.quick, value: copied)
+    }
+}
+
+/// Inline text; while it streams in, its end healed of half-written marks
+/// and its newest words fading in.
+private struct Words: View {
+    let text: String
+    let cites: [String: String]
+    var tail: MarkdownView.Tail?
+
+    var body: some View {
+        if let tail {
+            let styled = MarkdownView.inline(Markdown.healed(text), cites: cites)
+            if #available(macOS 15, *), !tail.fresh.isEmpty {
+                FadingWords(styled: styled, fresh: tail.fresh)
+            } else {
+                Text(styled)
+            }
+        } else {
+            Text(MarkdownView.inline(text, cites: cites))
+        }
+    }
+}
+
+/// Words fading in as they are shown: each new piece is marked with when it
+/// came, and drawn fainter the newer it is. Drawing only, so a fade never
+/// lays the text out again.
+@available(macOS 15, *)
+private struct FadingWords: View {
+    let styled: AttributedString
+    let fresh: [Typewriter.Fresh]
+    /// The fade's clock: animated on to when the newest piece is fully in,
+    /// so between pieces SwiftUI only draws again, without laying out.
+    @State private var now = Date.timeIntervalSinceReferenceDate
+
+    var body: some View {
+        Self.text(styled, fresh: fresh)
+            .textRenderer(FadeIn(now: now))
+            .onAppear(perform: run)
+            .onChange(of: fresh) { run() }
+    }
+
+    private func run() {
+        let start = Date.timeIntervalSinceReferenceDate
+        now = start
+        withAnimation(.linear(duration: Typewriter.fade)) { now = start + Typewriter.fade }
+    }
+
+    /// The text as pieces: what settled, then each fresh piece marked. Counted
+    /// from the end, since the fresh words are the last.
+    static func text(_ styled: AttributedString, fresh: [Typewriter.Fresh]) -> Text {
+        var pieces: [(AttributedString, TimeInterval?)] = []
+        var end = styled.endIndex
+        for piece in fresh.reversed() {
+            let start = styled.characters.index(end, offsetBy: -piece.count, limitedBy: styled.startIndex) ?? styled.startIndex
+            pieces.insert((AttributedString(styled[start..<end]), piece.at), at: 0)
+            end = start
+            if start == styled.startIndex { break }
+        }
+        pieces.insert((AttributedString(styled[styled.startIndex..<end]), nil), at: 0)
+        // Joined flat: interpolating Text in Text nests them, and each is read
+        // again as a localized string on every update.
+        return pieces.dropFirst().reduce(Text(pieces[0].0)) { text, piece in
+            text + (piece.1.map { Text(piece.0).customAttribute(Freshness(at: $0)) } ?? Text(piece.0))
+        }
+    }
+}
+
+/// When a piece of text was shown, for `FadeIn`.
+@available(macOS 15, *)
+private struct Freshness: TextAttribute {
+    let at: TimeInterval
+}
+
+/// Draws text marked `Freshness` fainter the newer it is, easing in.
+@available(macOS 15, *)
+private struct FadeIn: TextRenderer, Animatable {
+    var now: TimeInterval
+
+    var animatableData: TimeInterval {
+        get { now }
+        set { now = newValue }
+    }
+
+    func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+        for line in layout {
+            for run in line {
+                guard let fresh = run[Freshness.self] else {
+                    context.draw(run)
+                    continue
+                }
+                let progress = min(1, max(0, (now - fresh.at) / Typewriter.fade))
+                var faded = context
+                // Ease out: quick to show, gentle to settle.
+                faded.opacity = 1 - pow(1 - progress, 3)
+                faded.draw(run)
+            }
+        }
     }
 }

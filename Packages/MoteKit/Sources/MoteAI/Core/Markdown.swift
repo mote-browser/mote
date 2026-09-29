@@ -58,17 +58,66 @@ public enum Markdown {
     }
 
     public static func parse(_ text: String) -> [Block] {
-        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: "\n")
-        return blocks(of: lines[...])
+        blocks(of: lines(of: text)[...])
+    }
+
+    private static func lines(of text: String) -> [String] {
+        normalized(text).components(separatedBy: "\n")
+    }
+
+    private static func normalized(_ text: String) -> String {
+        // "\r\n" is one character to Swift, so look for the byte.
+        text.utf8.contains(13) ? text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n") : text
+    }
+
+    /// A reply as it streams in, parsed a piece at a time: finished blocks
+    /// are kept, and each new piece is read from the block before the last,
+    /// the only ones more text can change. Text that changes rather than
+    /// grows is read again whole.
+    public struct Stream: Sendable {
+        public private(set) var blocks: [Block] = []
+        /// The line each block starts on.
+        private var starts: [Int] = []
+        private var lines: [String] = []
+        private var text = ""
+        /// The line the last update read from.
+        private(set) var parsedFrom = 0
+
+        public init() {}
+
+        public mutating func update(_ newText: String) {
+            let newText = Markdown.normalized(newText)
+            guard newText != text else { return }
+            if !text.isEmpty, newText.utf8.count > text.utf8.count, newText.utf8.starts(with: text.utf8) {
+                let added = newText.utf8.dropFirst(text.utf8.count)
+                var pieces = String(decoding: added, as: UTF8.self).components(separatedBy: "\n")
+                lines[lines.count - 1] += pieces.removeFirst()
+                lines += pieces
+                let keep = max(0, blocks.count - 2)
+                parsedFrom = keep < starts.count ? starts[keep] : 0
+                let (more, from) = Markdown.placed(lines[parsedFrom...])
+                blocks = Array(blocks[..<keep]) + more
+                starts = Array(starts[..<keep]) + from
+            } else {
+                lines = Markdown.lines(of: newText)
+                parsedFrom = 0
+                (blocks, starts) = Markdown.placed(lines[...])
+            }
+            text = newText
+        }
     }
 
     // MARK: - Blocks
 
-    private static func blocks(of lines: ArraySlice<String>) -> [Block] {
+    private static func blocks(of lines: ArraySlice<String>) -> [Block] { placed(lines).blocks }
+
+    /// The blocks, with the line each starts on.
+    private static func placed(_ lines: ArraySlice<String>) -> (blocks: [Block], starts: [Int]) {
         var reader = Reader(lines: lines)
         var found: [Block] = []
+        var starts: [Int] = []
         while let line = reader.peek {
+            if !line.isBlank { starts.append(reader.index) }
             if line.isBlank {
                 reader.skip()
             } else if let fence = Fence(line) {
@@ -89,7 +138,7 @@ public enum Markdown {
                 found.append(.paragraph(paragraph(in: &reader)))
             }
         }
-        return found
+        return (found, starts)
     }
 
     /// Lines up to a blank one or the start of another kind of block.

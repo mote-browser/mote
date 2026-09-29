@@ -71,10 +71,11 @@ public final class Conversation: Identifiable {
     @ObservationIgnored private var searched = false
     /// Text and thinking that arrived since the reply was last shown; they
     /// go into the message together, at most every `pace`, so a reply that
-    /// comes a word at a time doesn't redraw the chat per word.
+    /// comes a word at a time doesn't redraw the chat per word. The chat
+    /// shows them at a reader's pace of its own, so this can be slow.
     @ObservationIgnored private var held = (text: "", reasoning: "")
     @ObservationIgnored private var flushing: Task<Void, Never>?
-    static let pace: Duration = .milliseconds(50)
+    static let pace: Duration = .milliseconds(150)
     @ObservationIgnored private var task: Task<Void, Never>?
     /// Counts replies, so a stopped one's late events are dropped.
     @ObservationIgnored private var turn = 0
@@ -91,6 +92,7 @@ public final class Conversation: Identifiable {
         created = saved.created
         updated = saved.updated
         messages = saved.messages
+        title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search) }
     }
 
@@ -115,7 +117,10 @@ public final class Conversation: Identifiable {
 
     public var busy: Bool { phase == .waiting || phase == .answering }
 
-    public var title: String { SavedChat.title(of: messages) }
+    /// The first question, cut short. Kept apart from `messages`, so what
+    /// shows it (a tab's label, the window's title) isn't drawn again with
+    /// every piece of a reply.
+    public private(set) var title = SavedChat.title(of: [])
 
     /// Finds the route for a turn. Asked once the question is on screen, so
     /// it can take a moment (finding a program, listing models) or fail.
@@ -128,6 +133,7 @@ public final class Conversation: Identifiable {
         guard !text.isEmpty else { return }
         stop()
         messages.append(Message(role: .user, text: text))
+        if messages.count == 1 { title = SavedChat.title(of: messages) }
         ask(routing: routing)
         touch()
     }

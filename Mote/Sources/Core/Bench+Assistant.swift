@@ -80,7 +80,8 @@ extension Bench {
             call.answer(["leads": browser.field.asksAssistant, "mode": Assistant.shared.mode.rawValue])
         case "demo":
             guard call.testRun("it would open a chat in your browser") else { return }
-            let service = DemoReply(sources: request.int("sources") ?? 400, delay: request.double("delay") ?? 0)
+            let service = DemoReply(
+                sources: request.int("sources") ?? 400, delay: request.double("delay") ?? 0, plain: request.flag("plain"))
             if browser.active?.isStart != true { browser.newTab() }
             let chat = Conversation()
             chat.send(
@@ -141,11 +142,13 @@ extension Bench {
 private struct DemoReply: ChatService {
     let sources: Int
     let delay: Double
+    /// Without the research steps: the reply alone.
+    var plain = false
 
     func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
         let (stream, continuation) = AsyncThrowingStream<ChatEvent, Error>.makeStream()
         let task = Task {
-            for part in 1...8 {
+            for part in 1...8 where !plain {
                 continuation.yield(.activity(Activity(id: "part-\(part)", title: "Demo part \(part): what matters here", kind: .task)))
                 for search in 1...6 {
                     continuation.yield(

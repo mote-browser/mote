@@ -36,7 +36,7 @@ COMMANDS = {
     "place": ("id to:int", "put a tab at another place in the row"),
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
-             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] (a long researched reply, streamed from Mote itself; test run); providers: how each stands"),
+             "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
@@ -223,12 +223,14 @@ def read_chat(args):
         return {"action": action}
     if action == "search" and len(rest) == 1 and rest[0] in ("on", "off"):
         return {"action": action, "on": rest[0] == "on"}
-    if action == "demo" and len(rest) <= 2:
+    if action == "demo" and len(rest) <= 3:
         request = {"action": action}
         if rest:
             request["sources"] = int(rest[0])
         if len(rest) > 1:
             request["delay"] = float(rest[1])
+        if len(rest) > 2:
+            request["plain"] = rest[2] == "plain"
         return request
     if action == "mode" and len(rest) == 1 and rest[0] in ("chat", "search", "research"):
         return {"action": action, "mode": rest[0]}
