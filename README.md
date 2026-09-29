@@ -24,6 +24,7 @@ Mote is the browser built around the engine you already have. It is native, it o
 - **Ads and trackers blocked** at the network level, before the page loads.
 - **Chrome extensions** from the Chrome Web Store, running on WebKit.
 - **Reading mode, floating video** and a click to hide any cookie banner for good.
+- **The AI you choose.** Press ⌘J in a new tab to ask, or research the web with cited sources. It works with the agents on your Mac (Claude Code, Codex, opencode, Gemini CLI), local models (Apple Intelligence, Ollama, LM Studio) or your own API keys. Chats are kept on your Mac, and there's no Mote server in between.
 
 <img width="2000" height="820" alt="keychain" src="https://github.com/user-attachments/assets/85b7b58a-1348-4981-b27c-d3a5e03df360" />
 
