@@ -5,8 +5,8 @@
      0–.10     the page shrinks into the card; the window forms around it
      .10–.20   the intro settles, then leaves
      .17–.50   the manifesto scrolls through the card; the tab fills as read
-     .50–.68   a new tab: the composer, a search, the suggestions
-     .66–.79   the page arrives
+     .50–.63   a new tab: ⌘J, the halo, a question in Research mode
+     .63–.79   the chat: the research, its sources, the report word by word
      .80–.86   the sidebar folds away
      .90–1     the window steps back for the last line
 
@@ -53,7 +53,7 @@
 .story-lights,
 .story-bar,
 .story-newtab,
-.story-article,
+.story-chat,
 .story-captions,
 .story-hint {
   display: none;
@@ -538,17 +538,6 @@
     }
   }
 
-  .story-load {
-    position: absolute;
-    left: 0;
-    bottom: -1px;
-    width: 100%;
-    height: 2px;
-    background: #17171773;
-    transform-origin: left;
-    opacity: 0;
-  }
-
   .story-reel {
     position: absolute;
     inset: 36px 0 0;
@@ -593,9 +582,15 @@
     filter: drop-shadow(0 5px 10px #8c54382e);
   }
 
-  .composer {
+  /* The composer and its aura behind it. */
+  .composer-box {
     position: relative;
     width: min(600px, 100% - 64px);
+  }
+
+  .composer {
+    position: relative;
+    width: 100%;
     height: 104px;
     border-radius: 18px;
     background: #fff;
@@ -606,6 +601,7 @@
   }
 
   .composer-field {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -615,6 +611,25 @@
     color: #171717;
   }
 
+  .composer-mark {
+    position: relative;
+    display: grid;
+    width: 16px;
+    place-items: center;
+    color: #8c8c8c;
+
+    & > * {
+      grid-area: 1 / 1;
+    }
+  }
+
+  .composer-hint {
+    position: absolute;
+    left: 42px;
+    color: #17171a59;
+    white-space: nowrap;
+  }
+
   .composer-typed {
     overflow: hidden;
     white-space: nowrap;
@@ -622,21 +637,61 @@
 
   .composer-foot {
     position: absolute;
-    inset: auto 10px 10px;
+    inset: auto 11px 10px 10px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
   }
 
-  .composer-engine {
+  .composer-tools {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* A switch among the composer's actions (ToolToggle): a symbol and a
+     word, on a soft ground while on. */
+  .tool {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 7px;
+    font-size: 12px;
+    line-height: 26px;
+    color: #8c8c8c;
+
+    & svg {
+      align-self: center;
+    }
+
+    & kbd {
+      margin-left: 4px;
+      font: inherit;
+      font-size: 11px;
+      opacity: 0.5;
+    }
+
+    &.is-on {
+      background: #00000014;
+      color: #171717;
+    }
+  }
+
+  .tool-rule {
+    width: 1px;
+    height: 14px;
+    background: #00000016;
+  }
+
+  .composer-model {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 11px;
-    border-radius: 14px;
-    background: #0000000a;
-    box-shadow: inset 0 0 0 1px #00000016;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
     font-size: 12px;
     color: #8c8c8c;
   }
@@ -651,109 +706,398 @@
     color: #8c8c8c;
   }
 
-  .suggestions {
+  /* The halo (AskHalo): the logo's colours turning round the border, a
+     fine line with a soft glow along it; and under the composer, a warm
+     aura (AskAura). --sweep draws it on from the top, both ways round. */
+  .composer-halo,
+  .composer-aura {
     position: absolute;
-    top: 112px;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 6px;
-    border-radius: 14px;
-    background: #fff;
-    box-shadow:
-      0 0 0 1px #e8e8e8,
-      0 10px 24px #0000001a;
+    pointer-events: none;
+  }
 
-    & > span {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 34px;
-      padding: 0 10px;
-      border-radius: 9px;
-      white-space: nowrap;
-    }
+  .composer-halo {
+    inset: -1px;
+    z-index: 2;
+    border-radius: 19px;
+    mask: conic-gradient(#000 0 var(--sweep), transparent 0 calc(360deg - var(--sweep)), #000 0);
+    filter: drop-shadow(0 0 4px #e7a58eaa);
 
     & i {
-      display: grid;
-      width: 15px;
-      height: 15px;
-      flex-shrink: 0;
-      place-items: center;
-      border-radius: 3.3px;
-      background: #1717170f;
-      font-size: 8.4px;
-      font-style: normal;
-      font-weight: 500;
-      color: #8c8c8c;
-    }
-
-    & b {
-      font-size: 13px;
-      font-weight: 400;
-      color: #171717;
-    }
-
-    & em {
-      overflow: hidden;
-      font-size: 12px;
-      font-style: normal;
-      color: #8c8c8c;
-      text-overflow: ellipsis;
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      /* The logo's colours round a circle, a cream highlight in the clay (AskGlow.swift). */
+      background: conic-gradient(
+          from var(--spin),
+          #e7a58e,
+          #f6c6a8 12%,
+          #fff3e6 20%,
+          #f6c6a8 28%,
+          #f4dcc0 45%,
+          #e7a58e 60%,
+          #eeb49b 72%,
+          #f4dcc0 86%,
+          #e7a58e
+        )
+        border-box;
+      mask:
+        linear-gradient(#000 0 0) content-box exclude,
+        linear-gradient(#000 0 0);
+      animation: spin 7s linear infinite;
     }
   }
 
-  /* The page that arrives: someone else's site. */
-  .story-article {
+  .composer-aura {
+    inset: -10px;
+    border-radius: 28px;
+
+    & i {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: #e7a58e;
+      filter: blur(22px);
+      animation: breathe 2.8s ease-in-out infinite alternate;
+    }
+  }
+
+  /* ⌘J, pressed. */
+  .story-keys {
+    display: flex;
+    gap: 6px;
+    margin-top: 22px;
+
+    & kbd {
+      display: grid;
+      min-width: 34px;
+      height: 34px;
+      place-items: center;
+      padding: 0 8px;
+      border-radius: 9px;
+      background: #fff;
+      box-shadow:
+        0 0 0 1px #00000014,
+        0 2px 0 #00000014,
+        0 6px 16px #0000000f;
+      font: 500 15px/1 -apple-system, system-ui, sans-serif;
+      color: #171717b3;
+    }
+  }
+
+  /* The logo gathers the halo round itself, closes it on its lowest point,
+     and lets a drop of it fall onto the composer (AskGlow.swift). */
+  .newtab-logo {
+    position: relative;
+    width: 58px;
+    margin-bottom: 26px;
+
+    & .story-newtab-pebble {
+      margin: 0;
+    }
+  }
+
+  .logo-ring {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    filter: drop-shadow(0 0 4px #e7a58e) drop-shadow(0 0 10px #e7a58e99);
+
+    & path {
+      fill: none;
+      stroke: url(#logo-ring-light);
+      stroke-width: 26;
+      stroke-linecap: round;
+      stroke-dasharray: var(--close) 200;
+    }
+  }
+
+  .logo-drop {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    margin: -3px 0 0 -5px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff3e6, #f6c6a8 55%, #e7a58e99);
+    box-shadow: 0 0 6px #e7a58ee6;
+  }
+
+  /* The chat (ChatView.swift): a column of 720 points, the question on the
+     right, the answer under it, the composer over the end. */
+  .story-chat {
     position: absolute;
     inset: 36px 0 0;
     display: block;
-    padding: clamp(24px, 6%, 64px) clamp(24px, 14%, 180px);
     overflow: hidden;
-    background: #fbfaf7;
-    font-family: Georgia, "Times New Roman", serif;
-    color: #2b2724;
+    background: #fff;
+    font-size: 14px;
+    color: #171717;
+  }
 
-    & .article-site {
-      font: 600 12px/1 -apple-system, system-ui, sans-serif;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #9c5b43;
+  .chat-column {
+    width: min(720px, 100% - 56px);
+    margin: 0 auto;
+    padding-top: 32px;
+  }
+
+  .chat-question {
+    width: fit-content;
+    max-width: 72%;
+    margin-left: auto;
+    padding: 9px 14px;
+    border-radius: 18px;
+    background: #efefef;
+    line-height: 1.32;
+  }
+
+  .chat-answer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  .chat-author {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #8c8c8c;
+  }
+
+  .chat-headline {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #8c8c8c;
+  }
+
+  .chat-status {
+    position: absolute;
+    left: 16px;
+    white-space: nowrap;
+  }
+
+  .chat-done {
+    position: absolute;
+    left: 0;
+  }
+
+  /* A turning ring (Ring in Buttons.swift). */
+  .chat-ring {
+    position: relative;
+    display: block;
+    width: 10px;
+    height: 10px;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 1.4px solid #8c8c8cb3;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: turn 0.85s linear infinite;
     }
 
-    & h3 {
-      margin-top: 28px;
-      font-size: clamp(30px, 3.4vw, 48px);
-      font-weight: 400;
-      line-height: 1.05;
+    &.is-small {
+      width: 9px;
+      height: 9px;
+    }
+  }
+
+  .chat-parts {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin: 10px 0 0;
+    padding: 12px;
+    border-radius: 11px;
+    background: #efefef73;
+    box-shadow: inset 0 0 0 1px #e8e8e8;
+    list-style: none;
+
+    & li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: #171717d9;
+    }
+  }
+
+  .chat-mark {
+    display: grid;
+    width: 14px;
+    place-items: center;
+    color: #8c8c8c;
+
+    & > * {
+      grid-area: 1 / 1;
+    }
+  }
+
+  .chat-part-title {
+    flex: 1;
+  }
+
+  .chat-tally {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: #8c8c8c;
+  }
+
+  .chat-page {
+    width: 7px;
+    height: 9px;
+    margin-left: 6px;
+    border: 1.2px solid currentColor;
+    border-radius: 1.5px;
+  }
+
+  /* The sources it drew on (SourcesStrip): cards 176 by 66, cited ones
+     numbered. */
+  .chat-sources {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+
+  .chat-source {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 5px;
+    width: 176px;
+    height: 66px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #efefef99;
+    box-shadow: inset 0 0 0 1px #00000016;
+
+    &.is-uncited {
+      opacity: 0.8;
+      box-shadow: inset 0 0 0 1px #e8e8e8;
+    }
+  }
+
+  .chat-source-site {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #8c8c8c;
+
+    & b {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 600;
+    }
+  }
+
+  .chat-source-title {
+    font-size: 12px;
+    line-height: 1.3;
+    color: #171717;
+  }
+
+  /* The report, as MarkdownView draws it: 14 points on 4.5 of leading,
+     citations as small chips after the claim. */
+  .chat-report {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 6px;
+
+    & h4 {
+      margin-top: 6px;
+      font-size: 16.5px;
+      font-weight: 600;
     }
 
-    & .article-by {
-      margin-top: 12px;
-      font: 400 13px/1 -apple-system, system-ui, sans-serif;
-      color: #8c847e;
+    & p {
+      line-height: 22px;
     }
+  }
 
-    & .article-image {
-      height: clamp(120px, 22%, 220px);
-      margin: 28px 0;
-      border-radius: 6px;
-      background:
-        radial-gradient(60% 90% at 25% 30%, #fff3e6, transparent 60%),
-        radial-gradient(70% 90% at 80% 40%, #f6c6a8, transparent 60%),
-        radial-gradient(80% 90% at 55% 100%, #c9d8c0, transparent 60%),
-        #e7c9ae;
+  .chat-word.is-cite {
+    display: inline-block;
+    margin: 0 4px 0 1px;
+    white-space: nowrap;
+    line-height: 1.3;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #efefef;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #8c8c8c;
+    vertical-align: 1px;
+  }
+
+  .chat-buttons {
+    display: flex;
+    gap: 16px;
+    padding-left: 1px;
+    color: #8c8c8c;
+  }
+
+  .chat-composer {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    width: min(720px, 100% - 56px);
+    height: 90px;
+    padding: 14px 14px 10px;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px #e8e8e8,
+      0 1px 1px #0000000a,
+      0 8px 22px #00000014;
+    translate: -50% 0;
+  }
+
+  .chat-composer-hint {
+    font-size: 14px;
+    color: #17171a59;
+  }
+
+  .chat-composer-foot {
+    position: absolute;
+    inset: auto 14px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    & .tool {
+      margin-right: auto;
     }
+  }
 
-    & p:not([class]) {
-      max-width: 36em;
-      font-size: 17px;
-      line-height: 1.65;
-    }
+  .chat-stop {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 50%;
+    background: #171717;
 
-    & p + p:not([class]) {
-      margin-top: 1em;
+    & i {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: #fff;
     }
   }
 
@@ -890,43 +1234,19 @@
 
   .address.is-blank {
     --from: 0.54;
-    --to: 0.69;
+    --to: 0.635;
     animation-name: visit;
   }
 
   .address.is-theirs {
-    --from: 0.68;
-    --to: 0.69;
+    --from: 0.625;
+    --to: 0.635;
     animation-name: show;
   }
 
-  .composer-typed {
-    --from: 0.57;
-    --to: 0.62;
-    animation-name: type;
-  }
-
-  .composer-send {
-    --from: 0.575;
-    --to: 0.585;
-    animation-name: armed;
-  }
-
-  .suggestions {
-    --from: 0.6;
-    --to: 0.63;
-    animation-name: drop;
-  }
-
-  .suggestions .is-picked {
-    --from: 0.63;
-    --to: 0.645;
-    animation-name: pick;
-  }
-
   .story-swap {
-    --from: 0.68;
-    --to: 0.69;
+    --from: 0.625;
+    --to: 0.635;
     animation-name: hide;
 
     &.is-after {
@@ -934,16 +1254,168 @@
     }
   }
 
-  .story-load {
-    --from: 0.67;
-    --to: 0.74;
-    animation-name: load;
+  /* ⌘J: the keys go down, the field turns to asking. */
+  .story-keys {
+    --from: 0.55;
+    --to: 0.578;
+    animation-name: keys;
   }
 
-  .story-article {
-    --from: 0.68;
-    --to: 0.72;
-    animation-name: arrive;
+  :is(.mark-search, .composer-hint.is-search) {
+    --from: 0.56;
+    --to: 0.564;
+    animation-name: hide;
+  }
+
+  .mark-ask {
+    --from: 0.56;
+    --to: 0.564;
+    animation-name: show;
+  }
+
+  .composer-hint.is-ask {
+    --from: 0.56;
+    --to: 0.588;
+    animation-name: flash;
+  }
+
+  .tool.is-ask {
+    --from: 0.56;
+    --to: 0.564;
+    animation-name: tool-on;
+  }
+
+  :is(.tool-rule, .tool.is-research, .composer-model) {
+    --from: 0.563;
+    --to: 0.568;
+    animation-name: show;
+  }
+
+  /* The halo comes round the logo and closes on its lowest point; the drop
+     falls from there, and the composer's border lights from where it lands. */
+  .logo-ring {
+    --from: 0.558;
+    --to: 0.577;
+    animation-name: gather;
+  }
+
+  .logo-drop {
+    --from: 0.575;
+    --to: 0.583;
+    animation-name: fall;
+  }
+
+  .composer-halo {
+    --from: 0.582;
+    --to: 0.6;
+    animation-name: draw-halo;
+  }
+
+  .composer {
+    --from: 0.588;
+    --to: 0.598;
+    animation-name: unline;
+  }
+
+  .composer-aura {
+    --from: 0.582;
+    --to: 0.61;
+    animation-name: show;
+  }
+
+  /* The question, Research, and send. */
+  .composer-typed {
+    --from: 0.588;
+    --to: 0.604;
+    animation-name: type;
+  }
+
+  .tool.is-research {
+    --from: 0.563;
+    --to: 0.61;
+    animation-name: research-on;
+  }
+
+  .composer-send {
+    --from: 0.598;
+    --to: 0.62;
+    animation-name: send;
+  }
+
+  .story-newtab {
+    --from: 0.54;
+    --to: 0.635;
+    animation-name: visit;
+  }
+
+  /* The chat: the question, then the research live, then done. */
+  .story-chat {
+    --from: 0.626;
+    --to: 0.634;
+    animation-name: show;
+  }
+
+  .chat-question {
+    --from: 0.63;
+    --to: 0.638;
+    animation-name: rise-part;
+  }
+
+  .chat-research {
+    --from: 0.636;
+    --to: 0.642;
+    animation-name: show;
+  }
+
+  .chat-parts li {
+    animation-name: rise-part;
+  }
+
+  :is(.chat-headline > .chat-ring, .chat-status.is-live) {
+    --from: 0.69;
+    --to: 0.692;
+    animation-name: hide;
+  }
+
+  :is(.chat-done, .chat-status.is-done) {
+    --from: 0.69;
+    --to: 0.692;
+    animation-name: show;
+  }
+
+  .chat-ring.is-small {
+    animation-name: hide;
+  }
+
+  :is(.chat-tick, .chat-tally) {
+    animation-name: show;
+  }
+
+  .chat-source {
+    animation-name: rise-part;
+  }
+
+  .chat-word {
+    animation-name: word;
+  }
+
+  /* The chat keeps to the end of the reply as it grows, as the app's does. */
+  .chat-column {
+    --from: 0.715;
+    --to: 0.785;
+    animation-name: follow;
+  }
+
+  .chat-buttons {
+    --from: 0.78;
+    --to: 0.785;
+    animation-name: show;
+  }
+
+  .chat-stop {
+    --from: 0.779;
+    --to: 0.782;
+    animation-name: stopped;
   }
 
   /* The fold: the sidebar, the card, its shadow, the page's clip and the
@@ -1014,6 +1486,225 @@
   :root[data-story] .story-caption:last-child,
   :root[data-story] .story-closing-hint {
     display: none;
+  }
+}
+
+/* The angles the halo's colours turn through, and it draws and closes over. */
+@property --spin {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --sweep {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 180deg;
+}
+
+/* How much of the pebble's outline each half of its ring covers, out of 100. */
+@property --close {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes spin {
+  to {
+    --spin: 360deg;
+  }
+}
+
+@keyframes breathe {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 0.38;
+  }
+}
+
+@keyframes keys {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  25% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  40%,
+  55% {
+    scale: 0.94;
+  }
+  70% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1;
+  }
+}
+
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tool-on {
+  to {
+    background: #00000014;
+    color: #171717;
+  }
+}
+
+@keyframes research-on {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  86% {
+    opacity: 1;
+    background: transparent;
+    color: #8c8c8c;
+  }
+  90%,
+  100% {
+    opacity: 1;
+    background: #00000014;
+    color: #171717;
+  }
+}
+
+/* Round the pebble, then closing both ways on its lowest point. */
+@keyframes gather {
+  0% {
+    opacity: 0;
+    --close: 56;
+  }
+  22%,
+  45% {
+    opacity: 1;
+    --close: 56;
+  }
+  100% {
+    opacity: 1;
+    --close: 0;
+  }
+}
+
+@keyframes fall {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+    scale: 0.5 0.5;
+  }
+  12% {
+    opacity: 1;
+    scale: 0.8 0.8;
+  }
+  80% {
+    opacity: 1;
+    translate: 0 24px;
+    scale: 0.8 1.5;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 27px;
+    scale: 2.2 0.35;
+  }
+}
+
+@keyframes draw-halo {
+  0% {
+    opacity: 0;
+    --sweep: 0deg;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    --sweep: 180deg;
+  }
+}
+
+/* The plain border gives way to the halo. */
+@keyframes unline {
+  to {
+    box-shadow:
+      0 0 0 1px #e8e8e800,
+      0 1px 1px #0000000a,
+      0 10px 24px #00000012;
+  }
+}
+
+/* Armed as the question is typed, pressed once it's done. */
+@keyframes send {
+  0% {
+    background: #0000000e;
+    color: #8c8c8c;
+  }
+  15%,
+  80% {
+    background: #171717;
+    color: #fff;
+    scale: 1;
+  }
+  90% {
+    background: #171717;
+    color: #fff;
+    scale: 0.88;
+  }
+  100% {
+    background: #171717;
+    color: #fff;
+    scale: 1;
+  }
+}
+
+@keyframes rise-part {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* A word the typewriter has just shown (Typewriter.swift): fading in. */
+@keyframes word {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+@keyframes follow {
+  to {
+    translate: 0 -64px;
+  }
+}
+
+@keyframes stopped {
+  to {
+    background: #0000000e;
+    opacity: 0.6;
   }
 }
 
@@ -1167,53 +1858,10 @@
   }
 }
 
-@keyframes armed {
-  to {
-    background: #171717;
-    color: #fff;
-  }
-}
 
-@keyframes drop {
-  from {
-    opacity: 0;
-    translate: 0 -6px;
-    scale: 0.98;
-  }
-}
 
-@keyframes pick {
-  to {
-    background: #efefef;
-  }
-}
 
-/* Hidden until the load starts, then running across and fading out. */
-@keyframes load {
-  0% {
-    opacity: 0;
-    scale: 0.08 1;
-  }
-  6% {
-    opacity: 1;
-    scale: 0.1 1;
-  }
-  80% {
-    opacity: 1;
-    scale: 1 1;
-  }
-  100% {
-    opacity: 0;
-    scale: 1 1;
-  }
-}
 
-@keyframes arrive {
-  from {
-    opacity: 0;
-    translate: 0 16px;
-  }
-}
 
 @keyframes fold {
   to {

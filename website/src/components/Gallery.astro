@@ -11,7 +11,7 @@ import Pebble from "./Pebble.astro";
 
 const captions = [
   ["Tabs, down the side.", "Pinned sites up top, and the tab you're reading fills in as you go."],
-  ["One field for everything.", "An address or a few words. Suggestions come from your own history."],
+  ["The AI you choose.", "Press ⌘J to ask. The agents on your Mac, a model that runs on it, or your own keys."],
   ["Passwords where you sign in.", "Your saved accounts appear under the field, straight from your keychain."],
   ["Extensions, pinned.", "The ones you use sit in the toolbar. The rest are a click away."],
   ["Video that floats.", "Switch tabs or apps, and it keeps playing above everything."],
@@ -55,45 +55,63 @@ const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: $
 
                 {i === 1 && (
                   <MockWindow width={700} height={740} style="left: 30px; top: 36px">
-                    <div class="g-newtab">
+                    <div class="g-newtab is-asking">
                       <span class="g-newtab-pebble">
                         <Pebble id="gallery-pebble" class="size-full" />
                       </span>
                       <div class="g-composer">
+                        <span class="g-halo"><i /></span>
                         <div class="g-composer-field">
-                          <Icon name="search" class="size-[14px] shrink-0 text-[#949494]" />
-                          <span class="g-typed part" style={range(holds[1] - 0.1, holds[1] - 0.04)}>
-                            slow sunday rec
+                          <Icon name="sparkle" class="size-[14px] shrink-0 text-[#949494]" />
+                          <span class="g-typed part" style={range(holds[1] - 0.1, holds[1] - 0.06)}>
+                            Plan a slow walk around Lisbon
                           </span>
                           <i class="g-caret" />
                         </div>
                         <div class="g-composer-foot">
-                          <span class="g-engine">
-                            <Icon name="globe" class="size-[12px]" />
-                            DuckDuckGo
+                          <span class="g-tool is-on">
+                            <Icon name="sparkle" class="size-[11px]" />Ask<kbd>⌘J</kbd>
+                          </span>
+                          <span class="g-rule" />
+                          <span class="g-tool"><Icon name="binoculars" class="size-[12px]" />Research</span>
+                          <span class="g-model">
+                            <span class="g-labels">
+                              <span class="g-swap part" style={range(holds[1] - 0.012, holds[1] - 0.006)}>Sonnet</span>
+                              <span class="g-swap is-after part" style={range(holds[1] - 0.012, holds[1] - 0.006)}>
+                                Llama 3.2
+                              </span>
+                            </span>
+                            <Icon name="chevron" class="size-[10px]" />
                           </span>
                           <span class="g-send">
                             <Icon name="up" class="size-[14px]" />
                           </span>
                         </div>
                       </div>
-                      <div class="g-panel g-suggestions part" style={range(holds[1] - 0.06, holds[1] - 0.02)}>
-                        <span class="is-picked">
-                          <Icon name="search" class="size-[12px] shrink-0 text-[#949494]" />
-                          <b>slow sunday recipes</b>
-                          <em>Search</em>
-                          <Icon name="enter" class="ml-auto size-[12px] text-[#525252]" />
-                        </span>
-                        <span>
-                          <Favicon site="kettle" class="size-[15px] shrink-0" />
-                          <b>kettle.recipes/slow-sunday</b>
-                          <em>Recipes for a slow Sunday</em>
-                        </span>
-                        <span>
-                          <Favicon site="kettle" class="size-[15px] shrink-0" />
-                          <b>kettle.recipes</b>
-                          <em>Kettle — Recipes for every day</em>
-                        </span>
+                      {/* The provider menu (AskControls.swift's ProviderMenu): the ones on the Mac, then those with a key. */}
+                      <div class="g-menu part" style={range(holds[1] - 0.06, holds[1] - 0.045)}>
+                        <p>On This Mac</p>
+                        {["Claude Code", "Codex", "opencode", "Gemini CLI", "Apple Intelligence", "Ollama", "LM Studio"].map(
+                          (name) => (
+                            <span
+                              class:list={["part", { "is-was": name === "Claude Code", "is-now": name === "Ollama" }]}
+                              style={range(holds[1] - 0.03, holds[1] - 0.015)}
+                            >
+                              <i class="part" style={range(holds[1] - 0.02, holds[1] - 0.016)}>
+                                <Icon name="check" class="size-[11px]" />
+                              </i>
+                              {name}
+                            </span>
+                          ),
+                        )}
+                        <hr />
+                        <p>With an API Key</p>
+                        {["Anthropic", "OpenAI", "Google Gemini", "OpenRouter", "xAI"].map((name) => (
+                          <span>
+                            <i />
+                            {name}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </MockWindow>
@@ -434,17 +452,145 @@ const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: $
     justify-content: space-between;
   }
 
-  .g-engine {
+  /* Asking (AskControls.swift): Ask ⌘J on, Research, the model. */
+  .g-tool {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 11px;
-    border-radius: 14px;
-    background: #ffffff0b;
-    box-shadow: inset 0 0 0 1px #ffffff12;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 7px;
     font-size: 12px;
     color: #949494;
+
+    & kbd {
+      margin-left: 4px;
+      font: inherit;
+      font-size: 11px;
+      opacity: 0.5;
+    }
+
+    &.is-on {
+      background: #ffffff1c;
+      color: #ededed;
+    }
+  }
+
+  .g-rule {
+    width: 1px;
+    height: 14px;
+    margin: 0 2px;
+    background: #ffffff1a;
+  }
+
+  .g-model {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    margin-left: auto;
+    padding: 0 8px;
+    border-radius: 7px;
+    background: #ffffff12;
+    font-size: 12px;
+    color: #ededed;
+  }
+
+  /* Both names in one place, the wider holding the room. */
+  .g-labels {
+    display: grid;
+
+    & > * {
+      grid-area: 1 / 1;
+    }
+  }
+
+  .g-newtab.is-asking {
+    padding-top: 28px;
+  }
+
+  /* The halo while asking (AskGlow.swift): the logo's colours turning round
+     the border. */
+  .g-halo {
+    position: absolute;
+    inset: -1px;
+    border-radius: 19px;
+    filter: drop-shadow(0 0 5px #e7a58e88);
+    pointer-events: none;
+
+    & i {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: conic-gradient(
+          from var(--spin),
+          #e7a58e,
+          #f6c6a8 12%,
+          #fff3e6 20%,
+          #f6c6a8 28%,
+          #f4dcc0 45%,
+          #e7a58e 60%,
+          #eeb49b 72%,
+          #f4dcc0 86%,
+          #e7a58e
+        )
+        border-box;
+      mask:
+        linear-gradient(#000 0 0) content-box exclude,
+        linear-gradient(#000 0 0);
+      animation: spin 7s linear infinite;
+    }
+  }
+
+  /* A menu in the dark appearance: sections, a check by the one chosen. */
+  .g-menu {
+    align-self: flex-end;
+    width: 220px;
+    margin: 6px calc((100% - min(600px, 100% - 64px)) / 2 + 40px) 0 0;
+    padding: 5px;
+    border-radius: 10px;
+    background: #2a2a2af2;
+    box-shadow:
+      0 0 0 0.5px #ffffff26,
+      0 0 0 1px #000000cc,
+      0 14px 32px #00000099;
+    font-size: 13px;
+    color: #ededed;
+
+    & p {
+      padding: 4px 10px 3px 26px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #8a8a8a;
+    }
+
+    & span {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 10px 0 6px;
+      border-radius: 5px;
+    }
+
+    & i {
+      display: grid;
+      width: 20px;
+      place-items: center;
+      opacity: 0;
+    }
+
+    & :is(.is-was, .is-now) i {
+      opacity: 1;
+    }
+
+    & hr {
+      height: 1px;
+      margin: 5px 10px;
+      border: 0;
+      background: #ffffff1a;
+    }
   }
 
   .g-send {
@@ -495,10 +641,7 @@ const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: $
     }
   }
 
-  .g-suggestions {
-    width: min(600px, 100% - 64px);
-    margin-top: 8px;
-  }
+
 
   /* A sign-in form on someone's site, the saved accounts under its field. */
   .g-signin {
@@ -712,8 +855,29 @@ const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: $
     animation-name: g-type;
   }
 
-  :global(:root[data-story]) :is(.g-suggestions, .g-accounts, .g-extensions) {
+  :global(:root[data-story]) :is(.g-menu, .g-accounts, .g-extensions) {
     animation-name: g-drop;
+  }
+
+  /* The pick moves from Claude Code to Ollama, and the model with it. */
+  :global(:root[data-story]) .g-menu .is-was i {
+    animation-name: hide;
+  }
+
+  :global(:root[data-story]) .g-menu .is-now i {
+    animation-name: show;
+  }
+
+  :global(:root[data-story]) .g-menu .is-now {
+    animation-name: g-pick;
+  }
+
+  :global(:root[data-story]) .g-swap {
+    animation-name: hide;
+
+    &.is-after {
+      animation-name: show;
+    }
   }
 
   :global(:root[data-story]) .g-pip {
@@ -730,6 +894,19 @@ const range = (from: number, to: number) => `--from: ${from.toFixed(3)}; --to: $
     --from: 0.645;
     --to: 0.66;
     animation-name: g-press;
+  }
+
+  @keyframes g-pick {
+    0% {
+      background: transparent;
+    }
+    40%,
+    70% {
+      background: #3a74d9;
+    }
+    100% {
+      background: transparent;
+    }
   }
 
   @keyframes g-travel {

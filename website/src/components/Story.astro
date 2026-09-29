@@ -44,10 +44,56 @@ const tabs = [
 ] as const;
 
 const captions = [
-  { text: "Start anywhere.", from: 0.52, to: 0.66 },
-  { text: "Pages arrive without the ads.", from: 0.66, to: 0.79 },
-  { text: "Then fold it all away.", from: 0.79, to: 0.9 },
+  { text: "Start anywhere.", from: 0.515, to: 0.585 },
+  { text: "Or ask, with the AI you choose.", from: 0.585, to: 0.685 },
+  { text: "It reads the web, and shows its sources.", from: 0.685, to: 0.795 },
+  { text: "Then fold it all away.", from: 0.795, to: 0.9 },
 ];
+
+// Asking, as the app does it (Omnibox.swift, AskControls.swift, AskGlow.swift):
+// ⌘J lights the composer, the halo round the logo closes on its lowest point
+// and drops onto the composer's border, which lights from there. Then a
+// question in Research mode, and the chat (ChatView.swift, SearchViews.swift).
+const question = "Is walking slowly as good for you as walking fast?";
+
+// The research's parts: each shows, turns while it's searched, then is done.
+const parts = [
+  { title: "What counts as a slow walk", searches: 2, pages: 5 },
+  { title: "Health effects of walking pace", searches: 4, pages: 8 },
+  { title: "Joints and recovery", searches: 2, pages: 4 },
+  { title: "How much walking is enough", searches: 3, pages: 6 },
+];
+const partAt = (i: number) => 0.645 + i * 0.006;
+const doneAt = (i: number) => 0.668 + i * 0.006;
+
+// The pages it drew on, cited ones numbered, as SourcesStrip shows them.
+const sources = [
+  { site: "pace", name: "Pace Lab", title: "Walking speed and everyday health", number: 1 },
+  { site: "stride", name: "Stride", title: "Why a gentle pace is easier to keep up", number: 2 },
+  { site: "trail", name: "Trailhead", title: "Brisk intervals on an ordinary walk", number: 3 },
+  { site: "notes", name: "Field Notes", title: "On walking slowly", number: 0 },
+] as const;
+const sourceAt = (i: number) => 0.683 + i * 0.004;
+
+// The report, word by word from .70 to .78 of the story, each fading in as
+// the app's typewriter shows it. A word "{n}" is the chip citing source n.
+const report = [
+  { kind: "h", words: "Slow walks still count" },
+  {
+    kind: "p",
+    words:
+      "Mostly, yes. What matters most is walking often: a relaxed pace on most days carries much of the benefit {1} A gentler pace is also easier on the joints, so it's easier to keep up for longer {2}",
+  },
+  { kind: "p", words: "Brisk stretches do more for the heart, so fold a few into the walks you already take {3}" },
+] as const;
+const reportWords = report.flatMap((block) => block.words.split(" "));
+const wordStep = 0.078 / reportWords.length;
+let wordIndex = 0;
+const wordAt = () => {
+  const from = 0.7 + wordIndex++ * wordStep;
+  return `--from: ${from.toFixed(4)}; --to: ${(from + 0.006).toFixed(4)}`;
+};
+const cite = (n: number) => sources.find((source) => source.number === n)!.name;
 ---
 
 <div class="story scene">
@@ -77,7 +123,7 @@ const captions = [
           }
           <span class="story-row story-opened part" style="--i: 8">
             <span class="story-swap part">New tab</span>
-            <span class="story-swap is-after part"><Favicon site="notes" class="size-4 shrink-0" />On walking slowly</span>
+            <span class="story-swap is-after part"><Icon name="sparkle" class="size-4 shrink-0 p-[1px] text-[#8c8c8c]" />{question}</span>
           </span>
           <span class="story-row story-new part" style="--i: 9"><Icon name="plus" class="size-3" />New tab</span>
         </div>
@@ -119,10 +165,9 @@ const captions = [
                 <Icon name="search" class="size-[12px]" />Search or enter address
               </span>
               <span class="address part is-theirs">
-                <i><Icon name="lock" class="size-[10px]" /></i>field-notes.blog
+                <i><Icon name="sparkle" class="size-[11px]" /></i>{question}
               </span>
             </span>
-            <i class="story-load part"></i>
           </div>
         </div>
 
@@ -138,42 +183,141 @@ const captions = [
         </div>
 
         <div class="story-newtab part" aria-hidden="true">
-          <Pebble id="newtab-pebble" class="story-newtab-pebble" />
-          <div class="composer">
+          <span class="newtab-logo">
+            <Pebble id="newtab-pebble" class="story-newtab-pebble" />
+            <svg class="logo-ring part" viewBox="0 0 564 550">
+              <defs>
+                <linearGradient id="logo-ring-light" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#fff3e6"></stop>
+                  <stop offset="0.4" stop-color="#f6c6a8"></stop>
+                  <stop offset="0.75" stop-color="#e7a58e"></stop>
+                  <stop offset="1" stop-color="#f4dcc0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- The pebble's outline from its lowest point, each way round (Logomark.round). -->
+              <g transform="translate(282 275) scale(1.045) translate(-282 -275)">
+                <path pathLength="100" d="M284 540C124 550 0 470 2 318C4 170 94 58 234 32C404 0 564 100 560 270C556 420 454 530 284 540Z"></path>
+                <path pathLength="100" d="M284 540C454 530 556 420 560 270C564 100 404 0 234 32C94 58 4 170 2 318C0 470 124 550 284 540Z"></path>
+              </g>
+            </svg>
+            <span class="logo-drop part"></span>
+          </span>
+          <div class="composer-box">
+          <span class="composer-aura part"><i></i></span>
+          <div class="composer part">
+            <span class="composer-halo part"><i></i></span>
             <div class="composer-field">
-              <Icon name="search" class="size-[14px] text-[#8c8c8c]" />
-              <span class="composer-typed part">field notes walking</span>
+              <span class="composer-mark">
+                <Icon name="search" class="mark-search part size-[13px]" />
+                <Icon name="sparkle" class="mark-ask part size-[14px]" />
+              </span>
+              <span class="composer-hint is-search part">Search or enter an address</span>
+              <span class="composer-hint is-ask part">Ask anything</span>
+              <span class="composer-typed part">{question}</span>
             </div>
             <div class="composer-foot">
-              <span class="composer-engine"><Icon name="globe" class="size-[12px]" />DuckDuckGo</span>
+              <span class="composer-tools">
+                <span class="tool is-ask part"><Icon name="sparkle" class="size-[11px]" />Ask<kbd>⌘J</kbd></span>
+                <span class="tool-rule part"></span>
+                <span class="tool is-research part"><Icon name="binoculars" class="size-[12px]" />Research</span>
+              </span>
+              <span class="composer-model part">Sonnet<Icon name="chevron" class="size-[10px]" /></span>
               <span class="composer-send part"><Icon name="up" class="size-[14px]" /></span>
             </div>
-            <div class="suggestions part">
-              <span class="is-picked part">
-                <Icon name="search" class="size-[12px] shrink-0 text-[#8c8c8c]" /><b>field notes walking</b><em>Search</em>
-                <Icon name="enter" class="ml-auto size-[12px] text-[#d4d4d4]" />
-              </span>
-              <span><Favicon site="notes" class="size-[15px] shrink-0" /><b>field-notes.blog</b><em>Field Notes</em></span>
-              <span
-                ><Favicon site="notes" class="size-[15px] shrink-0" /><b>field-notes.blog/on-walking-slowly</b><em
-                  >On walking slowly</em
-                ></span
-              >
+          </div>
+          </div>
+          <span class="story-keys part"><kbd>⌘</kbd><kbd>J</kbd></span>
+        </div>
+
+        <div class="story-chat part" aria-hidden="true">
+          <div class="chat-column part">
+            <p class="chat-question part">{question}</p>
+            <div class="chat-answer">
+              <p class="chat-author"><Icon name="sparkle" class="size-[10px]" />Claude Code · Sonnet</p>
+              <div class="chat-research part">
+                <p class="chat-headline">
+                  <span class="chat-ring part"></span>
+                  <Icon name="search" class="chat-done part size-[12px]" />
+                  <span class="chat-status is-live part">Researching · planning</span>
+                  <span class="chat-status is-done part">Researched 4 parts · 11 searches · 23 pages</span>
+                </p>
+                <ol class="chat-parts">
+                  {
+                    parts.map((part, i) => (
+                      <li class="part" style={`--from: ${partAt(i).toFixed(3)}; --to: ${(partAt(i) + 0.006).toFixed(3)}`}>
+                        <span class="chat-mark">
+                          <span class="chat-ring is-small part" style={`--from: ${doneAt(i).toFixed(3)}; --to: ${(doneAt(i) + 0.002).toFixed(3)}`} />
+                          <span class="chat-tick part" style={`--from: ${doneAt(i).toFixed(3)}; --to: ${(doneAt(i) + 0.003).toFixed(3)}`}>
+                            <Icon name="check" class="size-[11px]" />
+                          </span>
+                        </span>
+                        <span class="chat-part-title">{part.title}</span>
+                        <span class="chat-tally part" style={`--from: ${doneAt(i).toFixed(3)}; --to: ${(doneAt(i) + 0.003).toFixed(3)}`}>
+                          <Icon name="search" class="size-[9px]" />
+                          {part.searches}
+                          <span class="chat-page" />
+                          {part.pages}
+                        </span>
+                      </li>
+                    ))
+                  }
+                </ol>
+              </div>
+              <div class="chat-sources">
+                {
+                  sources.map((source, i) => (
+                    <span
+                      class:list={["chat-source part", { "is-uncited": source.number === 0 }]}
+                      style={`--from: ${sourceAt(i).toFixed(3)}; --to: ${(sourceAt(i) + 0.005).toFixed(3)}`}
+                    >
+                      <span class="chat-source-site">
+                        <Favicon site={source.site} class="size-[14px] shrink-0" />
+                        {source.name}
+                        {source.number > 0 && <b>{source.number}</b>}
+                      </span>
+                      <span class="chat-source-title">{source.title}</span>
+                    </span>
+                  ))
+                }
+              </div>
+              <div class="chat-report">
+                {
+                  report.map((block) => {
+                    const Tag = block.kind === "h" ? "h4" : "p";
+                    return (
+                      <Tag>
+                        {block.words.split(" ").map((word) => {
+                          const citation = word.match(/^\{(\d)\}$/);
+                          return citation ? (
+                            <span class="chat-word is-cite part" style={wordAt()}>
+                              {cite(Number(citation[1]))}
+                            </span>
+                          ) : (
+                            <span class="chat-word part" style={wordAt()}>
+                              {word}{" "}
+                            </span>
+                          );
+                        })}
+                      </Tag>
+                    );
+                  })
+                }
+              </div>
+              <p class="chat-buttons part">
+                <Icon name="copy" class="size-[12px]" />
+                <Icon name="reload" class="size-[12px]" />
+              </p>
+            </div>
+          </div>
+          <div class="chat-composer">
+            <span class="chat-composer-hint">Ask a follow-up</span>
+            <div class="chat-composer-foot">
+              <span class="tool is-research is-on"><Icon name="binoculars" class="size-[12px]" />Research</span>
+              <span class="composer-model">Sonnet<Icon name="chevron" class="size-[10px]" /></span>
+              <span class="chat-stop part"><i></i></span>
             </div>
           </div>
         </div>
-
-        <article class="story-article part" aria-hidden="true">
-          <p class="article-site">Field Notes</p>
-          <h3>On walking slowly</h3>
-          <p class="article-by">Essay · 6 min read</p>
-          <div class="article-image"></div>
-          <p>
-            The best walks have no destination. You leave the house with a vague idea of a direction and let the streets
-            decide the rest.
-          </p>
-          <p>Somewhere past the third corner, the list in your head goes quiet, and you start noticing things again.</p>
-        </article>
         </div>
       </div>
 
