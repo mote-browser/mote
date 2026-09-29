@@ -10,6 +10,30 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.2.0 — 2026-09-29
+
+Ask the AI you choose, right from a new tab, and research the web with sources.
+
+### Added
+
+- **Ask in a new tab.** Press ⌘J (or the Ask button) and Return asks the
+  assistant instead of searching; the composer lights up while it does. The
+  answer opens as a chat you can follow up in.
+- **The AI you choose.** The agents already on your Mac (Claude Code, Codex,
+  opencode, Gemini CLI), models that run on it (Apple Intelligence, Ollama,
+  LM Studio) or your own API keys (Anthropic, OpenAI, Google Gemini,
+  OpenRouter, Mistral, Groq, DeepSeek, xAI and any OpenAI-compatible server).
+  Keys stay in the Keychain, and questions go straight to the provider.
+- **Answers from the web.** The assistant searches when a question needs it,
+  with each claim cited and its sources listed under the answer.
+- **Research.** Turn it on for a question and the assistant plans the parts
+  to look into, researches them side by side, and writes a report with its
+  sources.
+- **Chats are kept.** Recent chats show under the new tab's composer, and all
+  of them, by date and searchable, in a tab of their own; chat tabs come back
+  when Mote opens again. Private tabs keep nothing.
+- Replies appear word by word at a reading pace, each word fading in.
+
 ## 0.1.4 — 2026-09-28
 
 Fixes the sidebar staying on screen after folding it away, for real this time.
