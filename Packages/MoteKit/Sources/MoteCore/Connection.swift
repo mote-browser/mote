@@ -38,3 +38,22 @@ extension Address {
         return url.isFileURL ? "File" : url.scheme ?? url.absoluteString
     }
 }
+
+extension Address {
+    /// What the toolbar shows for a page's address: all of it, or with `whole`
+    /// off the site of a web page (its port too, which tells local servers
+    /// apart), and for anything else the address without its scheme and `www.`.
+    public static func shown(_ url: URL, whole: Bool) -> String {
+        guard !whole else { return url.absoluteString }
+        return switch url.scheme?.lowercased() {
+        case "http", "https": siteWithPort(of: url)
+        default: displayString(for: url)
+        }
+    }
+
+    private static func siteWithPort(of url: URL) -> String {
+        let site = siteName(for: url)
+        guard let port = url.port else { return site }
+        return (site.contains(":") ? "[\(site)]" : site) + ":\(port)"
+    }
+}

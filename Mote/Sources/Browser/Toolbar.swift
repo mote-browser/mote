@@ -204,17 +204,8 @@ struct AddressBar: View {
         }
     }
 
-    /// What the bar shows for an address: all of it, or with `whole` off the
-    /// site for web pages (files and extension pages always show it all).
-    static func display(_ url: URL, whole: Bool) -> String {
-        switch url.scheme?.lowercased() {
-        case "http",
-            "https" where !whole:
-            SiteCard.site(url)
-        case "http", "https": url.absoluteString
-        default: Address.displayString(for: url)
-        }
-    }
+    /// What the bar shows for an address (see `Address.shown`).
+    static func display(_ url: URL, whole: Bool) -> String { Address.shown(url, whole: whole) }
 }
 
 /// The connection's padlock at the start of the address, which opens the site

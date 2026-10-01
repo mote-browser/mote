@@ -70,3 +70,46 @@ struct AddressTests {
         #expect(Address.siteHost(of: nil) == nil)
     }
 }
+
+@Suite("The address the toolbar shows")
+struct ShownAddressTests {
+    @Test(
+        "Whole, it is the address untouched, whatever the scheme",
+        arguments: [
+            "https://www.github.com/mote-browser/mote?tab=readme#top",
+            "http://example.com/page",
+            "http://localhost:3000/",
+            "http://localhost:5173/app/#/route?x=1",
+            "http://127.0.0.1:8080/",
+            "http://192.168.1.20:3000/admin",
+            "http://[::1]:3000/",
+            "http://app.localhost:3000/",
+            "https://user@example.com:8443/path",
+            "file:///Users/someone/notes.html",
+            "about:blank",
+            "chrome-extension://abcdefghijklmnop/popup.html",
+        ])
+    func whole(address: String) throws {
+        let url = try #require(URL(string: address))
+        #expect(Address.shown(url, whole: true) == address)
+    }
+
+    @Test(
+        "Site only, web pages show their site, with the port when there is one",
+        arguments: [
+            ("https://www.github.com/mote-browser/mote", "github.com"),
+            ("http://example.com/page", "example.com"),
+            ("http://localhost:3000/", "localhost:3000"),
+            ("http://localhost/", "localhost"),
+            ("http://127.0.0.1:8080/x", "127.0.0.1:8080"),
+            ("http://app.localhost:3000/", "app.localhost:3000"),
+            ("https://example.com:8443/", "example.com:8443"),
+            ("http://[::1]:3000/", "[::1]:3000"),
+            ("file:///Users/someone/notes.html", "file:///Users/someone/notes.html"),
+            ("about:blank", "about:blank"),
+        ])
+    func siteOnly(address: String, shown: String) throws {
+        let url = try #require(URL(string: address))
+        #expect(Address.shown(url, whole: false) == shown)
+    }
+}
