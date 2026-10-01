@@ -31,6 +31,8 @@ final class Preferences: ObservableObject {
     @Published var bookmarksBar: Bool
     /// The tab's reading bar.
     @Published var showsReading: Bool
+    /// The toolbar shows the page's whole address; off, only its site.
+    @Published var showsFullAddress: Bool
 
     // Searching and pages
     @Published var engine: SearchEngine
@@ -104,6 +106,7 @@ final class Preferences: ObservableObject {
         glyph = store.value("glyph", or: .letters)
         bookmarksBar = store.value("bookmarks.bar", or: false)
         showsReading = store.value("tabs.reading", or: true)
+        showsFullAddress = store.value("address.full", or: true)
         engine = store.value("search.engine", or: .standard)
         customEngine = store.value("search.custom", or: "")
         autocorrect = store.value("autocorrect", or: false)
@@ -162,6 +165,7 @@ final class Preferences: ObservableObject {
         keep($glyph, "glyph")
         keep($bookmarksBar, "bookmarks.bar")
         keep($showsReading, "tabs.reading")
+        keep($showsFullAddress, "address.full")
         keep($engine, "search.engine")
         keep($customEngine, "search.custom")
         keep($autocorrect, "autocorrect") { Preferences.tellWebKit(autocorrect: $0) }

@@ -81,15 +81,27 @@ struct ChromeTests {
     }
 
     @Test(
-        "The toolbar shows the site for web pages and the whole address otherwise",
+        "With the whole address off, the toolbar shows the site for web pages and the whole address otherwise",
         arguments: [
             ("https://www.github.com/mote-browser/mote", "github.com"),
             ("http://example.com/page", "example.com"),
             ("file:///Users/someone/notes.html", "file:///Users/someone/notes.html"),
         ])
-    func shownAddress(address: String, shown: String) throws {
+    func shownSite(address: String, shown: String) throws {
         let url = try #require(URL(string: address))
-        #expect(AddressBar.display(url) == shown)
+        #expect(AddressBar.display(url, whole: false) == shown)
+    }
+
+    @Test(
+        "The toolbar shows the address untouched by default",
+        arguments: [
+            "https://www.github.com/mote-browser/mote?tab=readme#top",
+            "http://example.com/page",
+            "file:///Users/someone/notes.html",
+        ])
+    func shownWholeAddress(address: String) throws {
+        let url = try #require(URL(string: address))
+        #expect(AddressBar.display(url, whole: true) == address)
     }
 
     // MARK: - Layout

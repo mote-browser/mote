@@ -23,6 +23,10 @@ struct GeneralSettings: View {
             ) {
                 Segmented(options: Look.allCases.map { ($0, $0.title) }, selection: $prefs.look)
             }
+            RowRule()
+            SettingRow(
+                "Show the whole address", "The full web address in the toolbar. Off, it shows only the site", symbol: "link",
+                tint: Tint.teal, on: $prefs.showsFullAddress)
         }
 
         SettingsSection("Searching", note: searchNote) {

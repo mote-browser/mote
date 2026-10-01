@@ -45,7 +45,7 @@ struct Toolbar: View {
                     .padding(.trailing, 4)
                 }
                 Helm(browser: browser)
-                AddressBar(browser: browser)
+                AddressBar(browser: browser, prefs: prefs)
                     .padding(.horizontal, 6)
                     .layoutPriority(1)
                 ExtensionSlot()
@@ -124,6 +124,7 @@ struct Helm: View {
 /// suggestions below it.
 struct AddressBar: View {
     @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
 
     @State private var hovering = false
     @State private var shake: CGFloat = 0
@@ -145,7 +146,7 @@ struct AddressBar: View {
                 .frame(height: 18)
                 .transition(.opacity)
             } else if let tab = browser.active {
-                Shown(tab: tab)
+                Shown(tab: tab, whole: prefs.showsFullAddress)
                     .transition(.opacity)
             }
         }
@@ -179,14 +180,15 @@ struct AddressBar: View {
         }
     }
 
-    /// The site of the page, or a prompt on a blank tab.
+    /// The address of the page, or a prompt on a blank tab.
     private struct Shown: View {
         @ObservedObject var tab: Tab
+        let whole: Bool
 
         var body: some View {
             Group {
                 if let url = tab.address {
-                    Text(AddressBar.display(url))
+                    Text(AddressBar.display(url, whole: whole))
                         .foregroundStyle(Palette.ink.opacity(0.88))
                 } else if let chat = tab.chat {
                     Text(chat.title)
@@ -202,11 +204,14 @@ struct AddressBar: View {
         }
     }
 
-    /// What the bar shows for an address: the site for web pages, the whole
-    /// address otherwise (files, extension pages).
-    static func display(_ url: URL) -> String {
+    /// What the bar shows for an address: all of it, or with `whole` off the
+    /// site for web pages (files and extension pages always show it all).
+    static func display(_ url: URL, whole: Bool) -> String {
         switch url.scheme?.lowercased() {
-        case "http", "https": SiteCard.site(url)
+        case "http",
+            "https" where !whole:
+            SiteCard.site(url)
+        case "http", "https": url.absoluteString
         default: Address.displayString(for: url)
         }
     }
