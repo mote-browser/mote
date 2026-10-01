@@ -10,6 +10,18 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.2.2 — 2026-10-01
+
+The whole address now shows for local and plain-http pages too.
+
+### Fixed
+
+- "Show the whole address" ignored `http://` pages, localhost and local
+  servers included, and showed only their site. Every address now shows in
+  full, extension pages too.
+- With it off, local servers keep their port (`localhost:3000`), so two of
+  them no longer look the same.
+
 ## 0.2.1 — 2026-10-01
 
 The toolbar shows the whole address again.
