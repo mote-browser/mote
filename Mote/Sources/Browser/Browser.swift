@@ -18,10 +18,15 @@ final class Browser: NSObject, ObservableObject {
     @Published private(set) var tabs: [Tab] = []
     @Published var activeID: Tab.ID? {
         didSet {
-            guard oldValue != activeID, let old = oldValue else { return }
-            linkStatus.dismiss()
-            // Tab sleep measures idle time from the moment a tab stops showing.
-            tab(old)?.touch()
+            guard oldValue != activeID else { return }
+            if let old = oldValue {
+                linkStatus.dismiss()
+                // Tab sleep measures idle time from the moment a tab stops showing.
+                tab(old)?.touch()
+            }
+            // The panel shows the page the visible tab is on, so a switch while
+            // it is open takes up the new page.
+            syncPageChat()
         }
     }
 
@@ -159,14 +164,40 @@ final class Browser: NSObject, ObservableObject {
     var chatting: Bool { showingPageChat && pageChatPossible }
 
     /// Opens or closes the chat about the page showing. Opening makes the
-    /// chat, so it outlives the navigation from its first ask on.
+    /// chat, so it outlives the navigation from its first ask on, and takes
+    /// up the page at once, on the fold spring the sidebar uses.
     func togglePageChat() {
         guard pageChatPossible else { return }
         if showingPageChat {
-            showingPageChat = false
+            slidingFold { showingPageChat = false }
         } else {
             active?.ensurePageChat()
-            showingPageChat = true
+            slidingFold { showingPageChat = true }
+            syncPageChat()
+        }
+    }
+
+    /// Takes up the page the active tab shows for the chat about it, as the
+    /// panel opens or the tab changes, so the chip never reads as unshared
+    /// over a page the model can be told about. The page is taken at once with
+    /// its address and title, so it shows on the panel's first frame, and its
+    /// text is read after. A page already held — even one let go on purpose —
+    /// is left as it is, so looking away and back does not share it again.
+    func syncPageChat() {
+        guard chatting, let tab = active else { return }
+        // The panel always has a chat to show over the visible page, so an
+        // unreadable page still gets its calm note.
+        tab.ensurePageChat()
+        guard let address = tab.address, PageSharing.takesUp(address, chatting: true, holding: tab.pageChat?.page?.url)
+        else { return }
+        tab.attachPage(PageContext(url: address, title: tab.title))
+        Task { [weak self, weak tab] in
+            guard let self, let tab, self.active === tab, let page = await tab.capturePageContext() else { return }
+            // The person may have let the page go, or the visible tab moved on,
+            // while it was read; then the page is left as it is.
+            guard self.active === tab, tab.pageChat?.page?.isActive == true, PageSharing.isSamePage(page.url, tab.address)
+            else { return }
+            tab.attachPage(page)
         }
     }
 

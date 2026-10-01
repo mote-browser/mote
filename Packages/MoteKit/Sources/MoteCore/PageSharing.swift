@@ -31,6 +31,15 @@ public enum PageSharing {
         return !isSamePage(shared, url)
     }
 
+    /// Whether a chat on screen takes up the page at `address` without being
+    /// asked: it does when the page can be read and it is not already holding
+    /// that same page. A page held but let go (detached) still counts as held,
+    /// so merely looking away to another tab and back does not share it again.
+    public static func takesUp(_ address: URL?, chatting: Bool, holding: URL?) -> Bool {
+        guard chatting, canShare(address) else { return false }
+        return !isSamePage(holding, address)
+    }
+
     /// The address without its fragment, so two moves within one page compare equal.
     private static func withoutFragment(_ url: URL) -> String {
         var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)

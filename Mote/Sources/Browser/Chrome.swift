@@ -53,11 +53,17 @@ struct Chrome: View {
 
                 // The chat about the page, the mirror of the sidebar: full window
                 // height on the trailing edge, outside the card, so the card gives
-                // up the width it takes and keeps its rounded corners.
-                if let panel = layout.chatPanel, let tab = browser.active {
+                // up the width it takes and keeps its rounded corners. Like the
+                // sidebar it stays in the tree while a page shows, just slid off
+                // the window, so the slide back costs no first frames; it moves on
+                // the sidebar's own fold spring.
+                if browser.active?.immersed != true, let tab = browser.active, !tab.isBlank || browser.showingPageChat {
+                    let docked = layout.chatPanel != nil
                     PageChatPanel(browser: browser, tab: tab)
-                        .frame(width: panel.width, height: geo.size.height)
-                        .offset(x: panel.minX)
+                        .frame(width: prefs.chatWidth, height: geo.size.height)
+                        .offset(x: docked ? geo.size.width - prefs.chatWidth : geo.size.width + ChromeLayout.gap)
+                        .allowsHitTesting(docked)
+                        .accessibilityHidden(!docked)
                         .transition(.move(edge: .trailing))
                 }
 
@@ -84,7 +90,7 @@ struct Chrome: View {
                 // The same handle mirrored on the panel's edge: dragging the gap
                 // between card and panel is what resizes the panel.
                 if let panel = layout.chatPanel {
-                    ResizeGrip(prefs: prefs, edge: .trailing) { browser.showingPageChat = false }
+                    ResizeGrip(prefs: prefs, edge: .trailing) { browser.togglePageChat() }
                         .frame(width: ResizeGrip.width, height: panel.height)
                         .offset(x: panel.minX - ResizeGrip.over)
                 }
@@ -92,7 +98,7 @@ struct Chrome: View {
         }
         .ignoresSafeArea()
         .animation(Motion.glide, value: prefs.sidebar)
-        .animation(Motion.glide, value: browser.chatting)
+        .animation(Motion.fold, value: browser.chatting)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
     }
 }

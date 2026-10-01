@@ -29,6 +29,18 @@ struct PageSharingTests {
         #expect(!PageSharing.isSamePage(article, nil))
     }
 
+    @Test("A chat on screen takes up a page it can read, unless it already holds that same page")
+    func takesUp() {
+        let other = URL(string: "https://example.com/other")!
+        #expect(!PageSharing.takesUp(article, chatting: false, holding: nil))
+        #expect(PageSharing.takesUp(article, chatting: true, holding: nil))
+        #expect(!PageSharing.takesUp(article, chatting: true, holding: article))
+        #expect(PageSharing.takesUp(article, chatting: true, holding: other))
+        #expect(!PageSharing.takesUp(article, chatting: true, holding: URL(string: "https://example.com/article#part")!))
+        #expect(!PageSharing.takesUp(URL(string: "about:blank")!, chatting: true, holding: nil))
+        #expect(!PageSharing.takesUp(nil, chatting: true, holding: nil))
+    }
+
     @Test("Moving within a shared page keeps it; moving away, or to nowhere, lets it go; nothing shared detaches nothing")
     func detaches() {
         #expect(!PageSharing.detaches(from: nil, movingTo: article))

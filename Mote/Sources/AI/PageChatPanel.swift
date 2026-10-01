@@ -6,10 +6,10 @@ import SwiftUI
 /// mirror of the sidebar: full height, on the frame, the page card losing width
 /// beside it.
 ///
-/// The page is shared only when the person asks something: the first question
-/// takes the page's context, so nothing is read until the chat is used. The
-/// chip above the composer says what is shared and lets it go; let go, the
-/// chip offers it again.
+/// The page is taken up as the panel opens: the chip shows it at once with its
+/// address and title, and its text is read a moment later, so the model always
+/// answers about the page on screen. The chip lets the page go, and offers it
+/// again once it has.
 struct PageChatPanel: View {
     @ObservedObject var browser: Browser
     @ObservedObject var tab: Tab
@@ -17,12 +17,18 @@ struct PageChatPanel: View {
     /// The brand moment on opening: a short breath of the logo's light.
     @State private var glowing = false
 
+    /// Whether the conversation is built. It is kept through the close slide,
+    /// so the panel does not empty as it goes, and dropped after it, so a chat
+    /// the panel is not showing never takes the keyboard (see ChatView's
+    /// `onAppear`).
+    @State private var filled = false
+
     /// Whether this page may be shared with the assistant at all.
     private var shareable: Bool { PageSharing.canShare(tab.address) }
 
     var body: some View {
         Group {
-            if let chat = tab.pageChat {
+            if let chat = tab.pageChat, browser.chatting || filled {
                 ChatView(
                     browser: browser, conversation: chat,
                     accessory: { chip(chat) },
@@ -43,9 +49,27 @@ struct PageChatPanel: View {
             AskAura(on: glowing)
         }
         .onAppear {
-            tab.ensurePageChat()
-            glow()
+            // The panel is in the tree as soon as a page shows; the brand
+            // moment is for the moment it is opened, not merely built.
+            if browser.chatting { show() }
         }
+        .onChange(of: browser.chatting) { _, chatting in
+            if chatting {
+                show()
+            } else {
+                // Let the conversation ride the slide out, then let it go.
+                Task {
+                    try? await Task.sleep(for: .seconds(Motion.foldResponse))
+                    if !browser.chatting { filled = false }
+                }
+            }
+        }
+    }
+
+    /// Brings the conversation out and plays the brand moment.
+    private func show() {
+        filled = true
+        glow()
     }
 
     // MARK: - What is shared
@@ -184,10 +208,11 @@ struct PageChatPanel: View {
 
     // MARK: - Sharing
 
-    /// Shares the page with the chat, reading it only now. The first question
-    /// does this; the chip does it again after the page has been let go.
+    /// The page is taken up as the panel opens; this reads its text if the
+    /// first question beats that read, so the model is never asked about a
+    /// page it cannot see. A page let go is left let go.
     private func shareIfNeeded() async {
-        guard tab.pageChat?.page == nil else { return }
+        guard let page = tab.pageChat?.page, page.isActive, page.text == nil else { return }
         await tab.attachCurrentPage()
     }
 
