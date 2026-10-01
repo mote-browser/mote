@@ -58,7 +58,7 @@ extension Bench {
                 // A moment for the page's scripts.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                     var out = call.describe(tab)
-                    if let failure = tab.failure { out["failure"] = failure }
+                    if let failure = tab.failure { out["failure"] = failure.title }
                     call.answer(out)
                 }
             } else if Date() >= limit {

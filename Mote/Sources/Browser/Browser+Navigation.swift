@@ -197,7 +197,9 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         let tab = tab(for: webView)
         tab?.uncover()
         let error = error as NSError
-        if let message = LoadFailure.message(domain: error.domain, code: error.code) { tab?.failure = message }
+        let url = error.userInfo[NSURLErrorFailingURLErrorKey] as? URL
+            ?? (error.userInfo[NSURLErrorFailingURLStringErrorKey] as? String).flatMap(URL.init(string:))
+        if let failure = LoadFailure(domain: error.domain, code: error.code, url: url) { tab?.failure = failure }
     }
 }
 

@@ -37,7 +37,7 @@ struct Page: View {
                     .transition(.opacity)
             }
             if let failure = tab.failure {
-                LoadTrouble(message: failure) { tab.reload() }.transition(.opacity)
+                LoadFailurePage(failure: failure, retry: tab.tryAgain, proceed: tab.continueAnyway).transition(.opacity)
             }
             if let pull = tab.pull {
                 Disc(pull: pull)
@@ -81,20 +81,5 @@ private struct Disc: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: pull.back ? .leading : .trailing)
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.22), value: pull.going)
-    }
-}
-
-/// Why a page didn't load, and a way to try again.
-private struct LoadTrouble: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text(message).font(.system(size: 14)).foregroundStyle(Palette.ink)
-            Button("Try Again", action: retry).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.muted)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.ground)
     }
 }

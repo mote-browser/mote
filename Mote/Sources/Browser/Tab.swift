@@ -40,7 +40,7 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     /// Why the page didn't load, shown in its place.
-    @Published var failure: String?
+    @Published var failure: LoadFailure?
     /// How far down the page is scrolled, for the tab's reading bar. Its own
     /// object, watched only by the bar: it changes as the page scrolls, and
     /// published from the tab it redrew and laid out every view on the tab
@@ -273,6 +273,20 @@ final class Tab: ObservableObject, Identifiable {
         // A waiting tab has no view to reload; waking it loads the page.
         guard !wake() else { return }
         if hollow, let address { web.open(address) } else { web.reloadFromOrigin() }
+    }
+
+    /// Opens the address that failed again, or reloads when it isn't known.
+    func tryAgain() {
+        guard let url = failure?.url else { return reload() }
+        go(to: url)
+    }
+
+    /// Lets the failing host's bad certificate through for the rest of the
+    /// launch, and opens the address again.
+    func continueAnyway() {
+        guard let failure, failure.canContinue, let host = failure.host, let url = failure.url else { return }
+        Dialogs.excused.insert(host)
+        go(to: url)
     }
 
     func stop() { web.stopLoading() }
