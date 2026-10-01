@@ -9,6 +9,21 @@ import Observation
 @MainActor
 @Observable
 public final class Conversation: Identifiable {
+    /// The shared context a provider session has heard. Page URLs alone are
+    /// insufficient: a same-URL read, title, or selection update changes the
+    /// next request's instructions.
+    private struct SharedPage: Equatable {
+        var url: String
+        var title: String
+        var text: String?
+        var selection: String?
+    }
+
+    private struct SharedContext: Equatable {
+        var page: SharedPage?
+        var mentions: [SharedPage]
+    }
+
     /// Where a message goes: the provider, its model, and the service that answers.
     public struct Route: Sendable {
         public var provider: String
@@ -74,9 +89,11 @@ public final class Conversation: Identifiable {
     /// the provider then starts afresh with the whole conversation.
     /// It was opened searching or not, and its instructions say so; a turn
     /// the other way starts afresh too.
-    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool, shared: String?)] = [:]
+    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool, shared: SharedContext?)] = [:]
     /// The session opened or carried on by the reply under way.
     @ObservationIgnored private var opened: String?
+    /// Context captured when that request was built, not when its reply ends.
+    @ObservationIgnored private var openedShared: SharedContext?
     /// Whether the reply under way searches.
     @ObservationIgnored private var searched = false
     /// Text and thinking that arrived since the reply was last shown; they
@@ -176,14 +193,18 @@ public final class Conversation: Identifiable {
     }
 
     /// What the model is told the chat is about, for providers that keep
-    /// their own sessions: the page shared and every tab mentioned. A change
-    /// starts the provider afresh, as turning search on or off does. Before
-    /// any mention, this is the page's address alone, exactly as it was.
-    @ObservationIgnored private var shared: String? {
-        var parts: [String] = []
-        if let page, page.isActive { parts.append(page.url.absoluteString) }
-        for mention in mentions where mention.isActive { parts.append("@" + mention.url.absoluteString) }
-        return parts.isEmpty ? nil : parts.joined(separator: "|")
+    /// their own sessions: the effective details of the page shared and every
+    /// tab mentioned. A change starts the provider afresh, as turning search
+    /// on or off does.
+    @ObservationIgnored private var shared: SharedContext? {
+        func snapshot(_ page: PageContext) -> SharedPage {
+            SharedPage(url: page.url.absoluteString, title: page.title, text: page.text, selection: page.selection)
+        }
+
+        let page = page.flatMap { $0.isActive ? snapshot($0) : nil }
+        let mentions = mentions.filter(\.isActive).map(snapshot)
+        guard page != nil || !mentions.isEmpty else { return nil }
+        return SharedContext(page: page, mentions: mentions)
     }
 
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
@@ -250,6 +271,7 @@ public final class Conversation: Identifiable {
     private func request(for route: Route) -> ChatRequest {
         let asked = Array(messages.dropLast())
         if let last = messages.indices.last { messages[last].author = route.author }
+        let shared = self.shared
         // Up to date if it heard everything but the new question, and was
         // told the same things (search, shared page).
         let session = sessions[route.provider].flatMap {
@@ -257,6 +279,7 @@ public final class Conversation: Identifiable {
         }
         // An agent that carries a session on may not name it again.
         opened = session
+        openedShared = shared
         searched = route.search
         return ChatRequest(
             model: route.model, messages: asked, instructions: instructions(for: route), resume: session, search: route.search
@@ -333,7 +356,7 @@ public final class Conversation: Identifiable {
         task = nil
         activities = []
         guard let failure, !(failure is CancellationError) else {
-            if let provider, let opened { sessions[provider] = (opened, messages.count, searched, shared) }
+            if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
             phase = .idle
             touch()
             return
