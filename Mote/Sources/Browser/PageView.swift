@@ -11,6 +11,9 @@ final class PageView: WKWebView {
     /// The engine's name for "Search with …", and what to do with the words.
     var searchName: (() -> String?)?
     var onSearch: ((String) -> Void)?
+    /// "Ask about This": what to do with the selected text, as a chat about
+    /// the page the selection sits on.
+    var onAsk: ((String) -> Void)?
     /// A swipe's progress, or nil when there is none to show.
     var onPull: ((Pull?) -> Void)?
     /// Any click or scroll, so a wake snapshot never gets in the way.
@@ -29,17 +32,23 @@ final class PageView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
-        if let item = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }),
-            let name = searchName?()
-        {
-            webSearch = (item.target, item.action)
+        if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
+            // Read the selection once, for both items: the search, and the
+            // chat about the page the selection sits on. WebKit offers its own
+            // search only when text is selected, so the two live together.
             selection = nil
             callAsyncJavaScript(Self.selected, arguments: [:], in: nil, in: .defaultClient) { [weak self] result in
                 self?.selection = (try? result.get()) as? String ?? ""
             }
-            item.title = "Search with \(name)"
-            item.target = self
-            item.action = #selector(searchSelection(_:))
+            if let name = searchName?() {
+                webSearch = (search.target, search.action)
+                search.title = "Search with \(name)"
+                search.target = self
+                search.action = #selector(searchSelection(_:))
+            }
+            if let index = menu.items.firstIndex(of: search) {
+                menu.insertItem(ask(), at: index + 1)
+            }
         }
         // Extensions' items go last.
         guard #available(macOS 15.4, *), let tab = Extensions.shared.browser?.tab(for: self) else { return }
@@ -47,6 +56,22 @@ final class PageView: WKWebView {
         guard !items.isEmpty else { return }
         menu.addItem(.separator())
         items.forEach(menu.addItem)
+    }
+
+    /// The chat's way in from the page: the words under the pointer are quoted
+    /// in the composer, and the page they sit on is shared with it.
+    private func ask() -> NSMenuItem {
+        let item = NSMenuItem(title: "Ask about This", action: #selector(askAboutSelection(_:)), keyEquivalent: "")
+        item.target = self
+        item.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: nil)
+        return item
+    }
+
+    @objc private func askAboutSelection(_ item: NSMenuItem) {
+        defer { selection = nil }
+        let words = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !words.isEmpty else { return }
+        onAsk?(words)
     }
 
     @objc private func searchSelection(_ item: NSMenuItem) {

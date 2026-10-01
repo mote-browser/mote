@@ -40,6 +40,16 @@ public enum PageSharing {
         return !isSamePage(holding, address)
     }
 
+    /// Whether a fresh read of the page at `address` may replace the page a
+    /// chat already holds. It may for that held page, unless the page was
+    /// taken up with a selection: the person's own ask, which a later,
+    /// automatic read must not drop. A page not held at all is never replaced
+    /// by a read — only the page on screen is read.
+    public static func replaces(_ address: URL?, holding: URL?, selection: Bool) -> Bool {
+        guard canShare(address), isSamePage(holding, address) else { return false }
+        return !selection
+    }
+
     /// The address without its fragment, so two moves within one page compare equal.
     private static func withoutFragment(_ url: URL) -> String {
         var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)

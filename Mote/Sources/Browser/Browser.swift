@@ -202,8 +202,10 @@ final class Browser: NSObject, ObservableObject {
             guard let self, let tab, self.active === tab, tab.chatOpen, let page = await tab.capturePageContext() else { return }
             // The person may have let the page go, closed the panel, or the
             // visible tab moved on, while it was read; then the page is left as
-            // it is.
-            guard self.active === tab, tab.chatOpen, tab.pageChat?.page?.isActive == true, PageSharing.isSamePage(page.url, tab.address)
+            // it is. A page they asked about by selecting its text is left as
+            // it is too: the read must not drop that selection.
+            guard self.active === tab, tab.chatOpen, tab.pageChat?.page?.isActive == true, PageSharing.isSamePage(page.url, tab.address),
+                PageSharing.replaces(page.url, holding: tab.pageChat?.page?.url, selection: tab.pageChat?.page?.selection != nil)
             else { return }
             tab.attachPage(page)
         }

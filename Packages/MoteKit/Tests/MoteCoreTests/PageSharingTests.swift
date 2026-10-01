@@ -41,6 +41,17 @@ struct PageSharingTests {
         #expect(!PageSharing.takesUp(nil, chatting: true, holding: nil))
     }
 
+    @Test("A fresh read replaces the page a chat holds, unless the person asked about it by selecting text")
+    func replaces() {
+        let other = URL(string: "https://example.com/other")!
+        #expect(PageSharing.replaces(article, holding: article, selection: false))
+        // The selection is the person's own ask; a later, automatic read must not drop it.
+        #expect(!PageSharing.replaces(article, holding: article, selection: true))
+        #expect(!PageSharing.replaces(article, holding: other, selection: false))
+        #expect(!PageSharing.replaces(article, holding: nil, selection: false))
+        #expect(!PageSharing.replaces(URL(string: "about:blank")!, holding: nil, selection: false))
+    }
+
     @Test("Moving within a shared page keeps it; moving away, or to nowhere, lets it go; nothing shared detaches nothing")
     func detaches() {
         #expect(!PageSharing.detaches(from: nil, movingTo: article))

@@ -81,6 +81,10 @@ final class Tab: ObservableObject, Identifiable {
     /// its own open or closed state: a new tab — including one a link opened —
     /// starts closed, and coming back to a tab brings its panel back as it was.
     @Published var chatOpen = false
+    /// A draft waiting for the page chat's composer, put there by asking about
+    /// a selection on the page. Taken up once, then cleared (see ChatView),
+    /// so reopening the panel does not put it back.
+    @Published var pendingAsk: String?
     /// Shows every kept chat in place of a page (see ChatsPage.swift). Going to
     /// an address or opening a chat replaces it.
     @Published var chats = false
@@ -160,6 +164,7 @@ final class Tab: ObservableObject, Identifiable {
             guard let self else { return }
             owner?.tab(self, searches: text)
         }
+        web.onAsk = { [weak self] text in self?.openPageChat(withSelection: text) }
         web.holdForFirstFrame()
         // Inspectable from Safari's Develop menu and Inspect Element, whoever
         // made the configuration.
@@ -323,6 +328,21 @@ final class Tab: ObservableObject, Identifiable {
     /// Shares `page` with this tab's chat, making the chat if it must.
     func attachPage(_ page: PageContext) {
         ensurePageChat().attach(page)
+    }
+
+    /// Asks about the selected words on this tab's page: opens the chat about
+    /// it (even from closed), shares the page with `selection` quoted, and
+    /// leaves the composer a draft to send or edit.
+    ///
+    /// The page is taken up directly, with the menu's own selection: this is an
+    /// explicit act, so it is not the automatic take-up that `PageSharing`
+    /// guards against repeating (`takesUp`), and no read runs after it to
+    /// overwrite the selection (`replaces`).
+    func openPageChat(withSelection selection: String) {
+        guard let address, PageSharing.canShare(address), let draft = SelectionAsk.draft(for: selection) else { return }
+        ensurePageChat().attach(PageContext(url: address, title: title, selection: selection))
+        pendingAsk = draft
+        chatOpen = true
     }
 
     /// Shares the page showing now with the chat about it. Returns whether
@@ -703,6 +723,7 @@ final class Tab: ObservableObject, Identifiable {
         web.onTouch = nil
         web.searchName = nil
         web.onSearch = nil
+        web.onAsk = nil
         web.stopLoading()
         web.navigationDelegate = nil
         web.uiDelegate = nil

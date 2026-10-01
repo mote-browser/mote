@@ -57,6 +57,9 @@ struct ChatInput: NSViewRepresentable {
         guard let view = coordinator.view else { return }
         if view.string != text {
             view.string = text
+            // A draft seeded from outside (a selection asked about) leaves the
+            // caret at its end, ready to edit; typing itself never lands here.
+            view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             coordinator.measure()
         }
         if coordinator.focused != focus {

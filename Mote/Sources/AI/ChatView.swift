@@ -19,6 +19,11 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// The surface the conversation reads on: the card for a chat in a tab, the
     /// window frame for the page chat docked on it, the mirror of the sidebar.
     var ground: Color = Palette.ground
+    /// A draft the composer opens with, seeded from outside — the page chat
+    /// puts the selection asked about here. Taken up once, then reported
+    /// through `took`, so it is not put back on the next draw.
+    var seed: String? = nil
+    var took: () -> Void = {}
 
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
@@ -101,7 +106,11 @@ struct ChatView<Accessory: View, Start: View>: View {
             }
         }
         .background(ground)
-        .onAppear { focus += 1 }
+        .onAppear {
+            focus += 1
+            take()
+        }
+        .onChange(of: seed) { _, _ in take() }
         .environment(
             \.openURL,
             OpenURLAction { url in
@@ -125,6 +134,14 @@ struct ChatView<Accessory: View, Start: View>: View {
     }
 
     private func retry() { Assistant.shared.retry(in: conversation) }
+
+    /// Takes up a seeded draft: the selection asked about, quoted, ready to
+    /// send or edit. Reported taken so the panel does not put it back.
+    private func take() {
+        guard let seed, !seed.isEmpty else { return }
+        draft = seed
+        Task { @MainActor in took() }
+    }
 
 }
 

@@ -34,7 +34,9 @@ struct PageChatPanel: View {
                     accessory: { chip(chat) },
                     start: { start() },
                     beforeSend: { await shareIfNeeded() },
-                    ground: Palette.frame
+                    ground: Palette.frame,
+                    seed: tab.pendingAsk,
+                    took: { tab.pendingAsk = nil }
                 )
                 .id(chat.id)
             } else {
