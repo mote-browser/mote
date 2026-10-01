@@ -276,6 +276,86 @@ struct ConversationTests {
         #expect(conversation.messages.last?.text.hasSuffix("w299 ") == true)
         #expect(count.changes < 30)
     }
+
+    @Test("A chat carrying a shared page tells the model about it, after the standing instructions")
+    func sharedPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.send("What is this?", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("An article"))
+        #expect(instructions.contains("https://example.com/a"))
+    }
+
+    @Test("A chat with no page is asked exactly as before")
+    func noPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[0].instructions == "Be brief")
+    }
+
+    @Test("Detaching the page stops sharing it, and the chat carries on")
+    func detachPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.detachPage()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[0].instructions == "Be brief")
+    }
+
+    @Test("A page attached in place of another replaces what the model is shown")
+    func reattach() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "First"))
+        conversation.detachPage()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/b")!, title: "Second"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.contains("Second"))
+        #expect(!instructions.contains("First"))
+    }
+
+    @Test("Sharing a page with a provider that already heard the chat starts it afresh")
+    func pageChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        service.events = [.text("About that page")]
+        conversation.send("And now?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].instructions?.contains("An article") == true)
+    }
+
+    @Test("The same page kept across turns carries the provider's session on")
+    func samePageResumes() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        service.events = [.text("Sure")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == "s-1")
+    }
 }
 
 /// Counts how often a conversation's messages change, as a view watching them would see.

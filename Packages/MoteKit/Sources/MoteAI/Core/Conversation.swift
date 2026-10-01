@@ -55,6 +55,9 @@ public final class Conversation: Identifiable {
     public private(set) var activities: [Activity] = []
     /// What the last reply cost.
     public private(set) var usage: Usage?
+    /// The page the person has shared with this chat, if any. Kept as the tab
+    /// moves: the page is detached on navigation, not thrown away.
+    public private(set) var page: PageContext?
 
     /// Sessions providers opened, by provider.
     ///
@@ -64,7 +67,7 @@ public final class Conversation: Identifiable {
     /// the provider then starts afresh with the whole conversation.
     /// It was opened searching or not, and its instructions say so; a turn
     /// the other way starts afresh too.
-    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool)] = [:]
+    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool, shared: String?)] = [:]
     /// The session opened or carried on by the reply under way.
     @ObservationIgnored private var opened: String?
     /// Whether the reply under way searches.
@@ -93,7 +96,7 @@ public final class Conversation: Identifiable {
         updated = saved.updated
         messages = saved.messages
         title = SavedChat.title(of: saved.messages)
-        sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search) }
+        sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
 
     /// The chat as it is now, for keeping. A reply still coming is kept as
@@ -125,6 +128,29 @@ public final class Conversation: Identifiable {
     /// Finds the route for a turn. Asked once the question is on screen, so
     /// it can take a moment (finding a program, listing models) or fail.
     public typealias Routing = @MainActor @Sendable () async throws -> Route
+
+    /// Shares `page` with the chat, so the model answers about it from the
+    /// next turn on. Replaces any page already shared.
+    public func attach(_ page: PageContext) {
+        var page = page
+        page.attach()
+        self.page = page
+    }
+
+    /// Stops sharing the page, keeping the chat. The next turn starts
+    /// providers that keep their own sessions afresh, since what they were
+    /// told has changed.
+    public func detachPage() {
+        page?.detach()
+    }
+
+    /// The address of the page shared with the model now, or nil when none
+    /// is. A change starts a provider that keeps its own session afresh, as
+    /// turning search on or off does.
+    @ObservationIgnored private var shared: String? {
+        guard let page, page.isActive else { return nil }
+        return page.url.absoluteString
+    }
 
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
 
@@ -190,12 +216,26 @@ public final class Conversation: Identifiable {
     private func request(for route: Route) -> ChatRequest {
         let asked = Array(messages.dropLast())
         if let last = messages.indices.last { messages[last].author = route.author }
-        // Up to date if it heard everything but the new question.
-        let session = sessions[route.provider].flatMap { $0.heard == asked.count - 1 && $0.search == route.search ? $0.id : nil }
+        // Up to date if it heard everything but the new question, and was
+        // told the same things (search, shared page).
+        let session = sessions[route.provider].flatMap {
+            $0.heard == asked.count - 1 && $0.search == route.search && $0.shared == shared ? $0.id : nil
+        }
         // An agent that carries a session on may not name it again.
         opened = session
         searched = route.search
-        return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session, search: route.search)
+        return ChatRequest(
+            model: route.model, messages: asked, instructions: instructions(for: route), resume: session, search: route.search
+        )
+    }
+
+    /// The route's standing instructions with the shared page described after
+    /// them: exactly the route's instructions when no page is shared.
+    private func instructions(for route: Route) -> String? {
+        let page = Instructions.page(self.page)
+        guard !page.isEmpty else { return route.instructions }
+        guard let standing = route.instructions, !standing.isEmpty else { return page }
+        return standing + "\n\n" + page
     }
 
     /// Shows what's held: the first words at once, the rest a pace later.
@@ -255,7 +295,7 @@ public final class Conversation: Identifiable {
         task = nil
         activities = []
         guard let failure, !(failure is CancellationError) else {
-            if let provider, let opened { sessions[provider] = (opened, messages.count, searched) }
+            if let provider, let opened { sessions[provider] = (opened, messages.count, searched, shared) }
             phase = .idle
             touch()
             return

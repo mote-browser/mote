@@ -22,6 +22,32 @@ public enum Instructions {
         return search ? chat + "\n\n" + Self.whenNeeded : chat
     }
 
+    /// What Mote tells the provider about the page the person is looking at,
+    /// when they share it.
+    ///
+    /// The page is named by title and address. Its text, when it was read,
+    /// goes in a block of its own, and what the person has selected is quoted
+    /// apart from it. A page that is absent, or no longer shared, says
+    /// nothing, so a chat outlives navigation. Joins after the standing
+    /// instructions without disturbing them.
+    public static func page(_ context: PageContext?) -> String {
+        guard let context, context.isActive else { return "" }
+        var lines = [
+            "The person is looking at a web page in Mote and has shared it with you. Answer their questions about this page.",
+            "",
+            "Page: \(context.title.isEmpty ? "Untitled" : context.title)",
+            "URL: \(context.url.absoluteString)",
+        ]
+        if let text = context.text {
+            lines += ["", "The page's text:", "<<<", text, ">>>"]
+        }
+        if let selection = context.selection {
+            lines += ["", "The person has selected this text on the page:"]
+            lines += selection.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// For a reply that may search: the model decides, as ChatGPT and
     /// Claude do, and searches like an answer engine when it does.
     public static let whenNeeded = """
