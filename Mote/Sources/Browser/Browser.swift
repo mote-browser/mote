@@ -51,6 +51,9 @@ final class Browser: NSObject, ObservableObject {
     @Published var recalling = false
     @Published var showingDownloads = false
     /// The chat about the active page is docked at the card's trailing edge.
+    /// Kept in memory, like the other panel and mode flags (`showingDownloads`,
+    /// `bookmarking`, `recalling`): Mote persists no panel visibility, and the
+    /// kept page chats survive the session through their tabs, not this flag.
     @Published var showingPageChat = false
     @Published var historyQuery = ""
 

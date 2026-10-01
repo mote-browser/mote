@@ -49,7 +49,7 @@ struct Toolbar: View {
                     .padding(.horizontal, 6)
                     .layoutPriority(1)
                 ExtensionSlot()
-                Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page") {
+                Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
                     browser.togglePageChat()
                 }
                 .disabled(!browser.pageChatPossible)

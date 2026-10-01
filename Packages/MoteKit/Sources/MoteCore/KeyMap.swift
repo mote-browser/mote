@@ -30,6 +30,7 @@ public enum KeyMap {
         case editAddress, switcher, pasteAndGo, copyAddress
         case find, findAgain(backwards: Bool)
         case print, pauseSound, floatVideo
+        case pageChat
         case toggleSidebar, foldTabs
         case bookmark, history, downloads, settings
         case hideElements, hiddenElements, undoHiding
@@ -88,6 +89,8 @@ public enum KeyMap {
         case ("f", false): return .find
         case ("g", let shift): return .findAgain(backwards: shift)
         case ("m", true): return .pauseSound
+        // ⇧⌘A: the assistant's view toggle, beside the other View-menu toggles.
+        case ("a", true): return .pageChat
         case ("s", true): return .toggleSidebar
         case ("s", false): return .foldTabs
         case ("b", true): return .bookmark

@@ -110,6 +110,11 @@ final class KeyRouter {
             (browser.editing && browser.active?.isStart == false, browser.dismiss),
             // Last, so Escape first closes whatever is over the chat.
             (browser.active?.chat?.busy == true, { browser.active?.chat?.stop() }),
+            // The chat about the page: Escape stops its answer first, then the
+            // panel itself. It sits above the page but under the sheets and
+            // overlays earlier in the list, so those close first.
+            (browser.active?.pageChat?.busy == true, { browser.active?.pageChat?.stop() }),
+            (browser.chatting, browser.togglePageChat),
         ]
         guard let step = steps.first(where: \.0) else { return false }
         step.1()
@@ -144,6 +149,7 @@ final class KeyRouter {
         case .print: browser.printPage()
         case .pauseSound: browser.pauseMedia()
         case .floatVideo: browser.toggleFloat()
+        case .pageChat: browser.togglePageChat()
         case .toggleSidebar: browser.toggleSidebar()
         case .foldTabs: browser.toggleFold()
         case .bookmark: browser.bookmarkCurrent()

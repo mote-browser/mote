@@ -82,6 +82,12 @@ private struct MenuBar: Commands {
         Button("Reload Page", action: browser.reload).keyboardShortcut("r")
         Button("Reading Mode", action: browser.toggleReader).keyboardShortcut("r", modifiers: [.command, .shift])
         Button("Float Video", action: browser.toggleFloat).keyboardShortcut("p", modifiers: [.command, .shift])
+        Toggle(
+            "Chat about This Page",
+            isOn: Binding(get: { browser.chatting }, set: { _ in browser.togglePageChat() })
+        )
+        .keyboardShortcut("a", modifiers: [.command, .shift])
+        .disabled(!browser.pageChatPossible)
         Divider()
         Button("Hide Elements…", action: browser.toggleHiding).keyboardShortcut("h", modifiers: [.command, .shift])
         Button("Hidden on This Site…") { browser.reviewing.toggle() }.keyboardShortcut("u", modifiers: [.command, .shift])
