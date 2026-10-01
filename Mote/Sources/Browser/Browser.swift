@@ -217,6 +217,20 @@ final class Browser: NSObject, ObservableObject {
     func tab(_ id: Tab.ID) -> Tab? { tabs.first { $0.id == id } }
     func tab(for webView: WKWebView) -> Tab? { tabs.first { $0.built === webView } }
 
+    /// The other tabs a chat may @-mention: this window's open, named tabs,
+    /// except the one given and any already mentioned. Blank tabs, which have
+    /// no page to share, are left out. Read-only: the chat does the mentioning.
+    func mentionCandidates(excluding tab: Tab?, mentioned: Set<URL> = []) -> [MentionMenu.Candidate] {
+        tabs.compactMap { other in
+            guard other.id != tab?.id, !other.isBlank, let url = other.address, !mentioned.contains(url) else { return nil }
+            let title = other.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return MentionMenu.Candidate(
+                id: other.id.uuidString,
+                title: title.isEmpty ? (url.host() ?? url.absoluteString) : title,
+                host: url.host() ?? "")
+        }
+    }
+
     private var row: TabRow<Tab> { TabRow(tabs, isPinned: { $0.pin != nil }) }
 
     /// Changes the tab order under `TabRow`'s rules.

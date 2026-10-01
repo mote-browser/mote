@@ -356,6 +356,112 @@ struct ConversationTests {
         await settle(conversation)
         #expect(service.requests[1].resume == "s-1")
     }
+
+    // MARK: - Mentioned tabs
+
+    private func page(_ host: String, title: String, text: String? = nil) -> PageContext {
+        PageContext(url: URL(string: "https://\(host)/")!, title: title, text: text)
+    }
+
+    @Test("Mentioned tabs are held, in the order they were named")
+    func mentions() {
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.mention(page("b.com", title: "B"))
+        #expect(conversation.mentions.map { $0.url.host() } == ["a.com", "b.com"])
+    }
+
+    @Test("Naming the same tab again updates it in place rather than adding it twice")
+    func mentionUpdatesInPlace() {
+        let conversation = Conversation()
+        conversation.mention(PageContext(url: URL(string: "https://a.com/")!, title: "A"))
+        conversation.mention(PageContext(url: URL(string: "https://a.com/")!, title: "A", text: "Read now"))
+        #expect(conversation.mentions.count == 1)
+        #expect(conversation.mentions[0].text == "Read now")
+    }
+
+    @Test("A chat is told about at most the limit of tabs at once, and refuses the rest")
+    func mentionCap() {
+        let conversation = Conversation()
+        for n in 0..<Conversation.mentionLimit {
+            #expect(conversation.mention(page("s\(n).com", title: "S\(n)")))
+        }
+        #expect(conversation.mentions.count == Conversation.mentionLimit)
+        #expect(!conversation.mention(page("over.com", title: "Over")))
+        #expect(conversation.mentions.count == Conversation.mentionLimit)
+    }
+
+    @Test("A tab let go stops being told to the model, the others kept")
+    func unmention() {
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.mention(page("b.com", title: "B"))
+        conversation.unmention(URL(string: "https://a.com/")!)
+        #expect(conversation.mentions.map { $0.url.host() } == ["b.com"])
+    }
+
+    @Test("A mentioned tab is rendered after the page, and the model is asked about all of them")
+    func mentionedInstructions() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(page("main.com", title: "Main"))
+        conversation.mention(page("extra.com", title: "Extra", text: "More words"))
+        conversation.send("Compare them", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("Main"))
+        #expect(instructions.contains("Extra"))
+        #expect(instructions.contains("More words"))
+    }
+
+    @Test("A blank tab's chat has no page, but its mentioned tabs carry the context")
+    func mentionedWithoutPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.mention(page("only.com", title: "Only"))
+        conversation.send("What's this?", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("Only"))
+        #expect(!instructions.contains("looking at a web page"))
+    }
+
+    @Test("Naming or letting go of a tab starts the provider afresh, so it gets the new context")
+    func mentionChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        conversation.mention(page("a.com", title: "A"))
+        service.events = [.text("On it")]
+        conversation.send("And this?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+        conversation.unmention(URL(string: "https://a.com/")!)
+        service.events = [.text("Back")]
+        conversation.send("And now?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[2].resume == nil)
+    }
+
+    @Test("The same mentioned tabs kept across turns carry the provider's session on")
+    func sameMentionsResume() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        service.events = [.text("Sure")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == "s-1")
+    }
 }
 
 /// Counts how often a conversation's messages change, as a view watching them would see.

@@ -58,6 +58,13 @@ public final class Conversation: Identifiable {
     /// The page the person has shared with this chat, if any. Kept as the tab
     /// moves: the page is detached on navigation, not thrown away.
     public private(set) var page: PageContext?
+    /// The other tabs the person has mentioned with @, shared as further
+    /// context after the page. Ordered as they were named, and kept as the
+    /// tabs move; letting one go removes it from here.
+    public private(set) var mentions: [PageContext] = []
+
+    /// How many tabs a chat may be told about at once.
+    public static let mentionLimit = 5
 
     /// Sessions providers opened, by provider.
     ///
@@ -144,12 +151,39 @@ public final class Conversation: Identifiable {
         page?.detach()
     }
 
-    /// The address of the page shared with the model now, or nil when none
-    /// is. A change starts a provider that keeps its own session afresh, as
-    /// turning search on or off does.
+    /// Shares `page` as an additional tab the chat is told about, for its
+    /// questions to range over. A tab already mentioned is brought up to date
+    /// in place; a new one once the limit is reached is left out. Returns
+    /// whether the chat holds it now.
+    @discardableResult
+    public func mention(_ page: PageContext) -> Bool {
+        var page = page
+        page.attach()
+        if let index = mentions.firstIndex(where: { $0.url == page.url }) {
+            mentions[index] = page
+            return true
+        }
+        guard mentions.count < Self.mentionLimit else { return false }
+        mentions.append(page)
+        return true
+    }
+
+    /// Stops telling the model about a mentioned tab, keeping the chat. A
+    /// change starts providers that keep their own sessions afresh, as
+    /// sharing or detaching the page does.
+    public func unmention(_ url: URL) {
+        mentions.removeAll { $0.url == url }
+    }
+
+    /// What the model is told the chat is about, for providers that keep
+    /// their own sessions: the page shared and every tab mentioned. A change
+    /// starts the provider afresh, as turning search on or off does. Before
+    /// any mention, this is the page's address alone, exactly as it was.
     @ObservationIgnored private var shared: String? {
-        guard let page, page.isActive else { return nil }
-        return page.url.absoluteString
+        var parts: [String] = []
+        if let page, page.isActive { parts.append(page.url.absoluteString) }
+        for mention in mentions where mention.isActive { parts.append("@" + mention.url.absoluteString) }
+        return parts.isEmpty ? nil : parts.joined(separator: "|")
     }
 
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
@@ -229,13 +263,17 @@ public final class Conversation: Identifiable {
         )
     }
 
-    /// The route's standing instructions with the shared page described after
-    /// them: exactly the route's instructions when no page is shared.
+    /// The route's standing instructions with the shared page, and any tabs
+    /// mentioned with @, described after them: exactly the route's
+    /// instructions when there is nothing shared.
     private func instructions(for route: Route) -> String? {
-        let page = Instructions.page(self.page)
-        guard !page.isEmpty else { return route.instructions }
-        guard let standing = route.instructions, !standing.isEmpty else { return page }
-        return standing + "\n\n" + page
+        let context =
+            [Instructions.page(self.page), Instructions.mentions(self.mentions)]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        guard !context.isEmpty else { return route.instructions }
+        guard let standing = route.instructions, !standing.isEmpty else { return context }
+        return standing + "\n\n" + context
     }
 
     /// Shows what's held: the first words at once, the rest a pace later.

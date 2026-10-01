@@ -9,7 +9,7 @@ import SwiftUI
 /// conversation (its quick actions), and `accessory` sits above the composer
 /// (its context chip). A blank tab's chat leaves both empty.
 struct ChatView<Accessory: View, Start: View>: View {
-    let browser: Browser
+    @ObservedObject var browser: Browser
     let conversation: Conversation
     @ViewBuilder let accessory: () -> Accessory
     @ViewBuilder let start: () -> Start
@@ -87,9 +87,10 @@ struct ChatView<Accessory: View, Start: View>: View {
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
                     accessory()
+                    if !conversation.mentions.isEmpty { mentioned(conversation) }
                     ChatComposer(
                         browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
-                        send: send
+                        mentionables: mentionables, choseMention: chose, send: send
                     )
                     .frame(maxWidth: Self.column)
                 }
@@ -141,6 +142,44 @@ struct ChatView<Accessory: View, Start: View>: View {
         guard let seed, !seed.isEmpty else { return }
         draft = seed
         Task { @MainActor in took() }
+    }
+
+    // MARK: - Mentioned tabs
+
+    /// The other open tabs the @-picker may offer: this window's named tabs
+    /// but the one this chat is about, and none already mentioned. Empty once
+    /// the chat holds as many as it may.
+    private var mentionables: [MentionMenu.Candidate] {
+        guard conversation.mentions.count < Conversation.mentionLimit else { return [] }
+        return browser.mentionCandidates(excluding: browser.active, mentioned: Set(conversation.mentions.map(\.url)))
+    }
+
+    /// Shares a chosen tab with the chat as further context. Taken up at once
+    /// with its name and address, so its chip shows on the first frame, and
+    /// its text read after; a late read attaches only while the tab is still
+    /// open and still mentioned.
+    private func chose(_ candidate: MentionMenu.Candidate) {
+        guard let tab = browser.tabs.first(where: { $0.id.uuidString == candidate.id }), let url = tab.address else { return }
+        conversation.mention(PageContext(url: url, title: tab.title))
+        Task { [weak conversation] in
+            guard browser.tab(tab.id) != nil, conversation?.mentions.contains(where: { $0.url == url }) == true,
+                let page = await tab.capturePageContext()
+            else { return }
+            conversation?.mention(page)
+        }
+    }
+
+    /// The tabs mentioned with @, each a small chip that lets it go.
+    private func mentioned(_ conversation: Conversation) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(conversation.mentions, id: \.url) { page in
+                    MentionChip(page: page) { conversation.unmention(page.url) }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+        .frame(maxWidth: Self.column, alignment: .leading)
     }
 
 }
@@ -501,22 +540,51 @@ private struct JumpDown: View {
 // MARK: - Composer
 
 /// The next message, and who it goes to, in the same rounded box as the new
-/// tab's composer. While a reply comes, the send button stops it.
+/// tab's composer. While a reply comes, the send button stops it. A mention
+/// being typed with @ opens a quiet picker of the window's other tabs above
+/// the field; choosing one shares that tab with the chat.
 private struct ChatComposer: View {
     let browser: Browser
     let conversation: Conversation
     @Binding var draft: String
     @Binding var height: CGFloat
     let focus: Int
+    /// The other tabs the @-picker offers, and what to do when one is chosen.
+    let mentionables: [MentionMenu.Candidate]
+    let choseMention: (MentionMenu.Candidate) -> Void
     let send: () -> Void
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
+    /// The tabs the mention being typed offers, if any is being typed.
+    private var matches: [MentionMenu.Candidate] {
+        guard let query = MentionMenu.query(in: draft) else { return [] }
+        return MentionMenu.matching(query, in: mentionables)
+    }
+
+    /// Return picks the first offered tab while the picker is up, and sends
+    /// the message otherwise.
+    private func submit() {
+        if let first = matches.first {
+            choose(first)
+        } else if !conversation.busy || hasText {
+            send()
+        }
+    }
+
+    private func choose(_ candidate: MentionMenu.Candidate) {
+        choseMention(candidate)
+        draft = MentionMenu.cleared(draft)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if !matches.isEmpty {
+                picker
+            }
             ChatInput(
                 text: $draft, height: $height, placeholder: "Ask a follow-up", focus: focus,
-                submit: { if !conversation.busy || hasText { send() } },
+                submit: submit,
                 escape: {
                     guard conversation.busy else { return false }
                     conversation.stop()
@@ -556,6 +624,96 @@ private struct ChatComposer: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1).allowsHitTesting(false)
         }
         .animation(Motion.quick, value: conversation.busy)
+        .animation(Motion.quick, value: matches)
+    }
+
+    /// The @-picker: the tabs the query matches, a calm list above the field.
+    private var picker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(matches.prefix(6)) { candidate in
+                MentionRow(candidate: candidate) { choose(candidate) }
+            }
+        }
+        .padding(.vertical, 3)
+        .background(Palette.wash, in: Rounded.card)
+        .overlay(Rounded.card.strokeBorder(Palette.hairline))
+        .transition(.opacity.combined(with: .offset(y: 4)))
+    }
+}
+
+/// One tab in the @-picker: its name, and the site it is on.
+private struct MentionRow: View {
+    let candidate: MentionMenu.Candidate
+    let act: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: act) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.muted)
+                    .frame(width: 14)
+                Text(candidate.title)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.ink.opacity(0.85))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if !candidate.host.isEmpty {
+                    Text(candidate.host)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(hovering ? Palette.hover : .clear, in: Rounded.row)
+            .contentShape(Rounded.row)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+        .help("Mention \(candidate.title)")
+        .accessibilityLabel("Mention \(candidate.title)")
+    }
+}
+
+/// A tab mentioned with @: a small chip that lets it go.
+private struct MentionChip: View {
+    let page: PageContext
+    let remove: () -> Void
+
+    private var name: String {
+        page.title.isEmpty ? (page.url.host() ?? page.url.absoluteString) : page.title
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "at")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Palette.muted)
+            Text(name)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Palette.ink.opacity(0.8))
+                .lineLimit(1)
+            Button(action: remove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(Palette.muted)
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Stop mentioning this tab")
+            .accessibilityLabel("Stop mentioning \(name)")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .frame(height: 26)
+        .background(Palette.wash, in: Rounded.row)
+        .overlay(Rounded.row.strokeBorder(Palette.hairline))
     }
 }
 

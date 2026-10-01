@@ -51,4 +51,44 @@ struct PageContextInstructionsTests {
         #expect(text.contains("Untitled"))
         #expect(text.contains("https://example.com/article"))
     }
+
+    // MARK: - Mentioned tabs
+
+    @Test("No mentioned tabs, or none still shared, tells the model nothing")
+    func mentionsAbsent() {
+        #expect(Instructions.mentions([]).isEmpty)
+        var page = PageContext(url: url, title: "Another")
+        page.detach()
+        #expect(Instructions.mentions([page]).isEmpty)
+    }
+
+    @Test("Each mentioned tab is a labelled block of its own: title and address")
+    func mentionsLabeled() {
+        let text = Instructions.mentions([
+            PageContext(url: URL(string: "https://a.com/")!, title: "First"),
+            PageContext(url: URL(string: "https://b.com/")!, title: "Second"),
+        ])
+        #expect(text.contains("Mentioned page: First"))
+        #expect(text.contains("URL: https://a.com/"))
+        #expect(text.contains("Mentioned page: Second"))
+        #expect(text.contains("URL: https://b.com/"))
+        // The order they were named is the order they are told.
+        #expect(text.range(of: "First")!.lowerBound < text.range(of: "Second")!.lowerBound)
+    }
+
+    @Test("A mentioned tab's text goes in a block of its own only when it was read")
+    func mentionsText() {
+        let without = Instructions.mentions([PageContext(url: url, title: "An article")])
+        #expect(!without.contains("Its text"))
+        let with = Instructions.mentions([PageContext(url: url, title: "An article", text: "Body here")])
+        #expect(with.contains("Its text"))
+        #expect(with.contains("Body here"))
+    }
+
+    @Test("A mentioned tab with no title is still named by its address")
+    func mentionsUntitled() {
+        let text = Instructions.mentions([PageContext(url: url, title: "")])
+        #expect(text.contains("Mentioned page: Untitled"))
+        #expect(text.contains("https://example.com/article"))
+    }
 }
