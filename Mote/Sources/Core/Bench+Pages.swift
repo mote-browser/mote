@@ -10,7 +10,7 @@ extension Bench {
             "tabs": { $0.answer(["tabs": $0.browser.tabs.map($0.describe)]) },
             "open": Self.open, "go": Self.go, "close": Self.close, "wait": Self.wait, "sleep": Self.sleep, "select": Self.select,
             "text": Self.text, "eval": Self.eval, "tap": Self.tap, "click": Self.act, "type": Self.act, "submit": Self.act,
-            "shot": Self.shot, "place": Self.place,
+            "shot": Self.shot, "place": Self.place, "failure": Self.failure,
         ]
     }
 
@@ -32,6 +32,21 @@ extension Bench {
     private static func go(_ call: BenchCall) {
         guard let tab = call.tab(), let url = address(call) else { return }
         tab.go(to: url)
+        call.answer(call.describe(tab))
+    }
+
+    /// The buttons on a bench tab's failure page: "again" or "continue".
+    private static func failure(_ call: BenchCall) {
+        guard let tab = call.tab() else { return }
+        guard tab.bench else { return call.fail("not a bench tab") }
+        guard tab.failure != nil else { return call.fail("no failure page on that tab") }
+        switch call.request.string("action") {
+        case "again": tab.tryAgain()
+        case "continue":
+            guard tab.failure?.canContinue == true else { return call.fail("that failure has no way past it") }
+            tab.continueAnyway()
+        default: return call.fail("failure needs again or continue")
+        }
         call.answer(call.describe(tab))
     }
 

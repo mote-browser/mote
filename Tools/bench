@@ -33,6 +33,7 @@ COMMANDS = {
     "tap": ("id selector [mods…]", "a real mouse click on an element (or text=Words), shift/cmd/opt held — test runs only"),
     "shot": ("id [path:path] [width:float]", "a PNG of the page → its path"),
     "close": ("id", "a tab the bench opened, or all of them"),
+    "failure": ("id again|continue", "press a bench tab's failure page button: Try Again, or Continue past a bad certificate"),
     "place": ("id to:int", "put a tab at another place in the row"),
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
