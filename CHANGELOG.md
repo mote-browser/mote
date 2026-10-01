@@ -10,6 +10,16 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.2.1 — 2026-10-01
+
+The toolbar shows the whole address again.
+
+### Changed
+
+- The address bar now shows the page's full web address, exactly as it is,
+  instead of only its site. If you prefer the short form, turn off "Show the
+  whole address" in Settings.
+
 ## 0.2.0 — 2026-09-29
 
 Ask the AI you choose, right from a new tab, and research the web with sources.
