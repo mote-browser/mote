@@ -63,13 +63,50 @@ struct NavigationPolicyTests {
         #expect(!NavigationPolicy.downloads(status: nil, disposition: "inline", canShow: true))
     }
 
-    @Test("Cancelled and interrupted loads show nothing; others explain themselves")
-    func failures() {
-        #expect(LoadFailure.message(domain: NSURLErrorDomain, code: NSURLErrorCancelled) == nil)
-        #expect(LoadFailure.message(domain: "WebKitErrorDomain", code: 102) == nil)
-        #expect(LoadFailure.message(domain: NSURLErrorDomain, code: NSURLErrorCannotFindHost) == "No site at that address.")
-        #expect(LoadFailure.message(domain: NSURLErrorDomain, code: NSURLErrorTimedOut) == "The site took too long to answer.")
-        #expect(LoadFailure.message(domain: NSURLErrorDomain, code: -99999) == "The page didn't load.")
+    @Test("Cancelled and interrupted loads show nothing")
+    func quietFailures() {
+        let url = URL(string: "https://example.com")
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorCancelled, url: url) == nil)
+        #expect(LoadFailure(domain: "WebKitErrorDomain", code: 102, url: url) == nil)
+    }
+
+    @Test("Load errors are told apart by kind")
+    func failureKinds() {
+        let url = URL(string: "https://example.com/a")
+        let kinds: [(Int, LoadFailure.Kind)] = [
+            (NSURLErrorCannotFindHost, .noHost), (NSURLErrorDNSLookupFailed, .noHost),
+            (NSURLErrorNotConnectedToInternet, .offline), (NSURLErrorNetworkConnectionLost, .offline),
+            (NSURLErrorTimedOut, .timedOut), (NSURLErrorCannotConnectToHost, .refused),
+            (NSURLErrorSecureConnectionFailed, .certificate), (NSURLErrorServerCertificateHasBadDate, .certificate),
+            (NSURLErrorServerCertificateUntrusted, .certificate), (NSURLErrorServerCertificateHasUnknownRoot, .certificate),
+            (NSURLErrorServerCertificateNotYetValid, .certificate), (NSURLErrorClientCertificateRejected, .certificate),
+            (-99999, .other),
+        ]
+        for (code, kind) in kinds {
+            #expect(LoadFailure(domain: NSURLErrorDomain, code: code, url: url)?.kind == kind, "\(code)")
+        }
+    }
+
+    @Test("A failure keeps its address and explains itself")
+    func failureCopy() throws {
+        let url = URL(string: "https://Bad.Example/path")
+        let failure = try #require(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted, url: url))
+        #expect(failure.url == url)
+        #expect(failure.host == "bad.example")
+        #expect(!failure.title.isEmpty)
+        #expect(failure.detail.contains("read or change"))
+        let other = try #require(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, url: nil))
+        #expect(other.host == nil)
+        #expect(!other.title.isEmpty && !other.detail.isEmpty)
+        #expect(other.title != failure.title)
+    }
+
+    @Test("Only a certificate failure with a host can be continued past")
+    func continues() {
+        let url = URL(string: "https://bad.example")
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted, url: url)?.canContinue == true)
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted, url: nil)?.canContinue == false)
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, url: url)?.canContinue == false)
     }
 }
 

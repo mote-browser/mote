@@ -87,27 +87,83 @@ public enum NavigationPolicy {
     }
 }
 
-/// The line shown on a page that failed to load.
-public enum LoadFailure {
-    /// The message for a load error, or nil when it isn't one worth showing:
+/// A page that failed to load: what went wrong, where, and what to say.
+public struct LoadFailure: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        case certificate, noHost, offline, timedOut, refused, other
+    }
+
+    public var kind: Kind
+    /// The address that failed, when WebKit says.
+    public var url: URL?
+
+    public init(kind: Kind, url: URL?) {
+        self.kind = kind
+        self.url = url
+    }
+
+    /// The failure for a load error, or nil when it isn't one worth showing:
     /// cancellations (redirects, stopped loads) and WebKit's "frame load
     /// interrupted", which ends a navigation that became a download.
-    public static func message(domain: String, code: Int) -> String? {
+    public init?(domain: String, code: Int, url: URL?) {
         if code == NSURLErrorCancelled { return nil }
         if domain == "WebKitErrorDomain", code == 102 { return nil }
+        self.init(kind: Self.kind(code), url: url)
+    }
+
+    static func kind(_ code: Int) -> Kind {
         switch code {
         case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
-            return "No site at that address."
+            return .noHost
         case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
-            return "No connection."
+            return .offline
         case NSURLErrorTimedOut:
-            return "The site took too long to answer."
+            return .timedOut
         case NSURLErrorCannotConnectToHost:
-            return "The site refused the connection."
-        case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateUntrusted:
-            return "The connection isn't secure."
+            return .refused
+        case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateHasBadDate,
+            NSURLErrorServerCertificateUntrusted, NSURLErrorServerCertificateHasUnknownRoot,
+            NSURLErrorServerCertificateNotYetValid, NSURLErrorClientCertificateRejected:
+            return .certificate
         default:
-            return "The page didn't load."
+            return .other
         }
     }
+
+    /// The failing host, lowercased.
+    public var host: String? {
+        guard let host = url?.host(), !host.isEmpty else { return nil }
+        return host.lowercased()
+    }
+
+    public var title: String {
+        switch kind {
+        case .certificate: "This connection isn't private"
+        case .noHost: "No site at that address"
+        case .offline: "You're offline"
+        case .timedOut: "The site took too long"
+        case .refused: "The site refused to connect"
+        case .other: "The page didn't load"
+        }
+    }
+
+    public var detail: String {
+        switch kind {
+        case .certificate:
+            "The site's certificate can't be trusted, so it may not be who it says it is. Someone could read or change what you send."
+        case .noHost:
+            "Check the address for typos. The site may have moved or no longer exist."
+        case .offline:
+            "Mote can't reach the internet. Check your Wi-Fi or network, then try again."
+        case .timedOut:
+            "The site didn't answer in time. It may be busy or down for a moment."
+        case .refused:
+            "The site is there but isn't accepting connections right now."
+        case .other:
+            "Something went wrong while loading this page."
+        }
+    }
+
+    /// Whether the person may go ahead anyway: a bad certificate, on a known host.
+    public var canContinue: Bool { kind == .certificate && host != nil }
 }
