@@ -1,4 +1,5 @@
 import Foundation
+import MoteAI
 import MoteCore
 import Observation
 
@@ -17,7 +18,24 @@ final class AddressEntry {
     private(set) var focusRequest = 0
     /// Return asks the assistant rather than searching: switched on in a new
     /// tab's composer (⌘J), and off again for every new tab.
-    var asksAssistant = false
+    var asksAssistant = false {
+        didSet {
+            guard oldValue != asksAssistant else { return }
+            clearStagedMentions()
+            refresh()
+        }
+    }
+    struct StagedMention: Equatable, Identifiable {
+        let id: UUID
+        let url: URL
+        let title: String
+    }
+
+    /// Temporary selections for the initial new-tab assistant ask.
+    private(set) var stagedMentions: [StagedMention] = []
+    var stagedMentionIDs: [UUID] { stagedMentions.map(\.id) }
+    /// The selected pages are being freshly read before the first request.
+    var capturingMentionContext = false
     /// Whether ⌘ is still held since the first ⌘K.
     @ObservationIgnored var cycling = false
 
@@ -39,6 +57,7 @@ final class AddressEntry {
         set {
             guard input.switching != newValue else { return }
             input.switching = newValue
+            if newValue { clearStagedMentions() }
             refresh()
         }
     }
@@ -56,14 +75,27 @@ final class AddressEntry {
     func clear() {
         input.switching = false
         asksAssistant = false
+        clearStagedMentions()
         typed = ""
     }
 
     /// Opens the field in switcher mode, empty.
     func startSwitching() {
         input.switching = true
+        clearStagedMentions()
         typed = ""
     }
+
+    @discardableResult
+    func stageMention(_ id: UUID, url: URL, title: String) -> Bool {
+        guard !stagedMentionIDs.contains(id), stagedMentions.count < Conversation.mentionLimit else { return false }
+        stagedMentions.append(StagedMention(id: id, url: url, title: title))
+        return true
+    }
+
+    func unstageMention(_ id: UUID) { stagedMentions.removeAll { $0.id == id } }
+
+    func clearStagedMentions() { stagedMentions = [] }
 
     func walk(_ step: Int) { input.walk(step) }
     func stopCompleting() { input.stopCompleting() }

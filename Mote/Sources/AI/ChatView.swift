@@ -171,10 +171,12 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     /// The tabs mentioned with @, each a small chip that lets it go.
     private func mentioned(_ conversation: Conversation) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             HStack(spacing: 6) {
                 ForEach(conversation.mentions, id: \.url) { page in
-                    MentionChip(page: page) { conversation.unmention(page.url) }
+                    ContextChip(title: page.title.isEmpty ? (page.url.host() ?? page.url.absoluteString) : page.title) {
+                        conversation.unmention(page.url)
+                    }
                 }
             }
             .padding(.vertical, 1)
@@ -555,6 +557,9 @@ private struct ChatComposer: View {
     let mentionables: [MentionMenu.Candidate]
     let choseMention: (MentionMenu.Candidate) -> Void
     let send: () -> Void
+    @State private var selection = ComposerSelection()
+    @State private var dismissedMenu: ComposerMenu?
+    @State private var escapePick: Int?
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -575,15 +580,22 @@ private struct ChatComposer: View {
         return MentionMenu.matching(query, in: mentionables)
     }
 
+    private var pickerItems: [ComposerPickerItem] {
+        switch menu {
+        case .skills: skills.map(ComposerPickerItem.skill)
+        case .mentions: matches.map(ComposerPickerItem.mention)
+        case .none: []
+        }
+    }
+
+    private var pickerVisible: Bool { !pickerItems.isEmpty && dismissedMenu != menu }
+
     /// Return picks the first offered row while a picker is up, and sends the
     /// message otherwise. A finished `/command` with text after it is expanded
     /// into its prompt and sent.
     private func submit() {
-        if menu == .skills, let first = skills.first {
-            chooseSkill(first)
-        } else if let first = matches.first {
-            choose(first)
-        } else if let expanded = Skill.expand(draft) {
+        if pickerVisible, confirmSelection() { return }
+        if let expanded = Skill.expand(draft) {
             draft = expanded
             send()
         } else if !conversation.busy || hasText {
@@ -591,28 +603,67 @@ private struct ChatComposer: View {
         }
     }
 
-    private func choose(_ candidate: MentionMenu.Candidate) {
-        choseMention(candidate)
-        draft = MentionMenu.cleared(draft)
+    @discardableResult
+    private func confirmSelection() -> Bool {
+        guard pickerVisible, let index = selection.confirmedIndex(count: pickerItems.count), pickerItems.indices.contains(index)
+        else { return false }
+        choose(pickerItems[index])
+        return true
     }
 
-    /// Choosing a skill replaces the draft with its prompt, ready to edit or
-    /// send. Focus stays in the field.
-    private func chooseSkill(_ skill: Skill.Item) {
-        draft = skill.prompt
+    private func choose(_ item: ComposerPickerItem) {
+        switch item {
+        case .mention(let candidate):
+            choseMention(candidate)
+            draft = MentionMenu.cleared(draft)
+        case .skill(let skill):
+            draft = skill.prompt
+        }
+        dismissedMenu = nil
+        selection.reset()
+        releaseEscapePick()
+    }
+
+    private func moveSelection(_ step: Int) -> Bool {
+        guard pickerVisible else { return false }
+        selection.move(step, count: pickerItems.count)
+        return true
+    }
+
+    private func dismissPicker() {
+        guard pickerVisible else { return }
+        dismissedMenu = menu
+        selection.reset()
+        releaseEscapePick()
+    }
+
+    private func holdEscapePick() {
+        guard pickerVisible, escapePick == nil, browser.field.picked == nil else { return }
+        escapePick = -1
+        browser.field.picked = -1
+    }
+
+    private func releaseEscapePick() {
+        guard escapePick != nil else { return }
+        escapePick = nil
+        if browser.field.picked == -1 { browser.field.picked = nil }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if menu == .skills, !skills.isEmpty {
-                skillPicker
-            } else if !matches.isEmpty {
-                picker
+            if pickerVisible {
+                ComposerPicker(items: pickerItems, highlighted: selection.highlightedIndex, choose: choose)
             }
             ChatInput(
                 text: $draft, height: $height, placeholder: "Ask a follow-up", focus: focus,
                 submit: submit,
+                moveSelection: moveSelection,
+                choose: { pickerVisible && confirmSelection() },
                 escape: {
+                    if pickerVisible {
+                        dismissPicker()
+                        return true
+                    }
                     guard conversation.busy else { return false }
                     conversation.stop()
                     return true
@@ -651,148 +702,22 @@ private struct ChatComposer: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1).allowsHitTesting(false)
         }
         .animation(Motion.quick, value: conversation.busy)
-        .animation(Motion.quick, value: matches)
-        .animation(Motion.quick, value: skills)
-    }
-
-    /// The `/` picker: the built-in skills the command matches, a calm list
-    /// above the field, the same shape as the @-picker.
-    private var skillPicker: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(skills.prefix(6)) { skill in
-                SkillRow(skill: skill) { chooseSkill(skill) }
-            }
+        .animation(Motion.quick, value: pickerItems)
+        .onChange(of: draft) { _, _ in
+            selection.reset()
+            dismissedMenu = nil
         }
-        .padding(.vertical, 3)
-        .background(Palette.wash, in: Rounded.card)
-        .overlay(Rounded.card.strokeBorder(Palette.hairline))
-        .transition(.opacity.combined(with: .offset(y: 4)))
-    }
-
-    /// The @-picker: the tabs the query matches, a calm list above the field.
-    private var picker: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(matches.prefix(6)) { candidate in
-                MentionRow(candidate: candidate) { choose(candidate) }
-            }
+        .onChange(of: pickerItems) { _, _ in selection.reset() }
+        .onChange(of: pickerVisible) { _, visible in
+            if visible { holdEscapePick() } else { releaseEscapePick() }
         }
-        .padding(.vertical, 3)
-        .background(Palette.wash, in: Rounded.card)
-        .overlay(Rounded.card.strokeBorder(Palette.hairline))
-        .transition(.opacity.combined(with: .offset(y: 4)))
-    }
-}
-
-/// One tab in the @-picker: its name, and the site it is on.
-private struct MentionRow: View {
-    let candidate: MentionMenu.Candidate
-    let act: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: act) {
-            HStack(spacing: 8) {
-                Image(systemName: "globe")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.muted)
-                    .frame(width: 14)
-                Text(candidate.title)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.ink.opacity(0.85))
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if !candidate.host.isEmpty {
-                    Text(candidate.host)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(hovering ? Palette.hover : .clear, in: Rounded.row)
-            .contentShape(Rounded.row)
+        .onChange(of: browser.field.picked) { oldValue, newValue in
+            guard oldValue == escapePick, newValue == nil, pickerVisible else { return }
+            escapePick = nil
+            dismissedMenu = menu
+            selection.reset()
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(Motion.hover, value: hovering)
-        .help("Mention \(candidate.title)")
-        .accessibilityLabel("Mention \(candidate.title)")
-    }
-}
-
-/// One skill in the `/` picker: the command as typed, and a short name.
-private struct SkillRow: View {
-    let skill: Skill.Item
-    let act: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: act) {
-            HStack(spacing: 8) {
-                Image(systemName: "slash.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.muted)
-                    .frame(width: 14)
-                Text(skill.typed)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.ink.opacity(0.85))
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text(skill.title)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.muted)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(hovering ? Palette.hover : .clear, in: Rounded.row)
-            .contentShape(Rounded.row)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(Motion.hover, value: hovering)
-        .help(skill.prompt)
-        .accessibilityLabel("\(skill.typed): \(skill.title)")
-    }
-}
-
-/// A tab mentioned with @: a small chip that lets it go.
-private struct MentionChip: View {
-    let page: PageContext
-    let remove: () -> Void
-
-    private var name: String {
-        page.title.isEmpty ? (page.url.host() ?? page.url.absoluteString) : page.title
-    }
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "at")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Palette.muted)
-            Text(name)
-                .font(.system(size: 11.5))
-                .foregroundStyle(Palette.ink.opacity(0.8))
-                .lineLimit(1)
-            Button(action: remove) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(Palette.muted)
-                    .frame(width: 14, height: 14)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Stop mentioning this tab")
-            .accessibilityLabel("Stop mentioning \(name)")
-        }
-        .padding(.leading, 8)
-        .padding(.trailing, 4)
-        .frame(height: 26)
-        .background(Palette.wash, in: Rounded.row)
-        .overlay(Rounded.row.strokeBorder(Palette.hairline))
+        .onDisappear { releaseEscapePick() }
     }
 }
 

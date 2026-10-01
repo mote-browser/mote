@@ -18,6 +18,7 @@ extension Browser {
     /// address. Open tabs are left to ⌘K to keep the list short.
     func suggestions(for typed: String, switching: Bool) -> ([Suggestion], String?) {
         if switching { return (openPages(matching: typed), nil) }
+        if assistantLeads, MentionMenu.query(in: typed) != nil { return ([], nil) }
         guard !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], nil) }
         var list = history.suggestions(for: typed, limit: 3)
         // Where the assistant leads, Return asks rather than searches, so
@@ -116,7 +117,55 @@ extension Browser {
     func ask() {
         let text = field.typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return field.refuse() }
+        guard !field.capturingMentionContext else { return }
+        let staged = field.stagedMentions
+        guard !staged.isEmpty else { return startAssistantChat(text, with: []) }
+        guard assistantLeads, let source = active, source.isStart else {
+            field.refuse()
+            return
+        }
+        let typed = field.typed
+        let sourceID = source.id
+        let selected = staged.compactMap { mention in
+            tab(mention.id).map { (mention: mention, tab: $0) }
+        }
+        guard selected.count == staged.count,
+            selected.allSatisfy({ $0.tab.address == $0.mention.url && PageSharing.canShare($0.mention.url) && !$0.tab.loading })
+        else {
+            field.refuse()
+            announce("A selected page is unavailable or still loading")
+            return
+        }
+
+        field.capturingMentionContext = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { field.capturingMentionContext = false }
+            var contexts: [PageContext] = []
+            for target in selected {
+                guard isCurrentMentionAsk(typed: typed, staged: staged, sourceID: sourceID),
+                    let context = await target.tab.capturePageContext(),
+                    tab(target.mention.id) === target.tab, target.tab.address == target.mention.url,
+                    context.url == target.mention.url, context.title == target.tab.title, !target.tab.loading
+                else {
+                    field.refuse()
+                    announce("A selected page changed while it was being read; try again")
+                    return
+                }
+                contexts.append(context)
+            }
+            guard isCurrentMentionAsk(typed: typed, staged: staged, sourceID: sourceID) else { return }
+            startAssistantChat(text, with: contexts)
+        }
+    }
+
+    private func isCurrentMentionAsk(typed: String, staged: [AddressEntry.StagedMention], sourceID: Tab.ID) -> Bool {
+        assistantLeads && activeID == sourceID && active?.isStart == true && field.typed == typed && field.stagedMentions == staged
+    }
+
+    private func startAssistantChat(_ text: String, with contexts: [PageContext]) {
         let chat = Conversation()
+        for context in contexts { chat.mention(context) }
         // Private tabs keep nothing.
         if active?.shy != true { Assistant.shared.keep(chat) }
         Assistant.shared.ask(text, in: chat)

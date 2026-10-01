@@ -12,6 +12,10 @@ struct ChatInput: NSViewRepresentable {
     /// Incremented to ask for the keyboard.
     var focus: Int
     let submit: () -> Void
+    /// Move a highlight while a picker is open. False leaves normal navigation alone.
+    let moveSelection: (Int) -> Bool
+    /// Confirm the highlighted picker item. False leaves normal Tab handling alone.
+    let choose: () -> Bool
     /// Escape; true when it was used.
     let escape: () -> Bool
 
@@ -108,6 +112,12 @@ struct ChatInput: NSViewRepresentable {
                     parent.submit()
                 }
                 return true
+            case #selector(NSResponder.insertTab(_:)):
+                return parent.choose()
+            case #selector(NSResponder.moveDown(_:)):
+                return parent.moveSelection(1)
+            case #selector(NSResponder.moveUp(_:)):
+                return parent.moveSelection(-1)
             case #selector(NSResponder.cancelOperation(_:)):
                 return parent.escape()
             default:
