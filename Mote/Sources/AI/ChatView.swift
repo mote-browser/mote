@@ -542,7 +542,9 @@ private struct JumpDown: View {
 /// The next message, and who it goes to, in the same rounded box as the new
 /// tab's composer. While a reply comes, the send button stops it. A mention
 /// being typed with @ opens a quiet picker of the window's other tabs above
-/// the field; choosing one shares that tab with the chat.
+/// the field; choosing one shares that tab with the chat. A `/` typed first
+/// opens the same kind of picker for the built-in skills, whose prompt fills
+/// the field.
 private struct ChatComposer: View {
     let browser: Browser
     let conversation: Conversation
@@ -556,17 +558,34 @@ private struct ChatComposer: View {
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-    /// The tabs the mention being typed offers, if any is being typed.
+    /// Which picker the draft calls for: the `/` skills, the `@` mentions, or
+    /// none. The two never argue, so a leading slash is a skill and a slash
+    /// anywhere else is literal.
+    private var menu: ComposerMenu { ComposerMenu.of(draft) }
+
+    /// The skills the command being typed offers, if one is.
+    private var skills: [Skill.Item] {
+        guard let query = Skill.query(in: draft) else { return [] }
+        return Skill.matching(query)
+    }
+
+    /// The tabs the mention being typed offers, if one is.
     private var matches: [MentionMenu.Candidate] {
-        guard let query = MentionMenu.query(in: draft) else { return [] }
+        guard menu == .mentions, let query = MentionMenu.query(in: draft) else { return [] }
         return MentionMenu.matching(query, in: mentionables)
     }
 
-    /// Return picks the first offered tab while the picker is up, and sends
-    /// the message otherwise.
+    /// Return picks the first offered row while a picker is up, and sends the
+    /// message otherwise. A finished `/command` with text after it is expanded
+    /// into its prompt and sent.
     private func submit() {
-        if let first = matches.first {
+        if menu == .skills, let first = skills.first {
+            chooseSkill(first)
+        } else if let first = matches.first {
             choose(first)
+        } else if let expanded = Skill.expand(draft) {
+            draft = expanded
+            send()
         } else if !conversation.busy || hasText {
             send()
         }
@@ -577,9 +596,17 @@ private struct ChatComposer: View {
         draft = MentionMenu.cleared(draft)
     }
 
+    /// Choosing a skill replaces the draft with its prompt, ready to edit or
+    /// send. Focus stays in the field.
+    private func chooseSkill(_ skill: Skill.Item) {
+        draft = skill.prompt
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !matches.isEmpty {
+            if menu == .skills, !skills.isEmpty {
+                skillPicker
+            } else if !matches.isEmpty {
                 picker
             }
             ChatInput(
@@ -625,6 +652,21 @@ private struct ChatComposer: View {
         }
         .animation(Motion.quick, value: conversation.busy)
         .animation(Motion.quick, value: matches)
+        .animation(Motion.quick, value: skills)
+    }
+
+    /// The `/` picker: the built-in skills the command matches, a calm list
+    /// above the field, the same shape as the @-picker.
+    private var skillPicker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(skills.prefix(6)) { skill in
+                SkillRow(skill: skill) { chooseSkill(skill) }
+            }
+        }
+        .padding(.vertical, 3)
+        .background(Palette.wash, in: Rounded.card)
+        .overlay(Rounded.card.strokeBorder(Palette.hairline))
+        .transition(.opacity.combined(with: .offset(y: 4)))
     }
 
     /// The @-picker: the tabs the query matches, a calm list above the field.
@@ -677,6 +719,43 @@ private struct MentionRow: View {
         .animation(Motion.hover, value: hovering)
         .help("Mention \(candidate.title)")
         .accessibilityLabel("Mention \(candidate.title)")
+    }
+}
+
+/// One skill in the `/` picker: the command as typed, and a short name.
+private struct SkillRow: View {
+    let skill: Skill.Item
+    let act: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: act) {
+            HStack(spacing: 8) {
+                Image(systemName: "slash.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.muted)
+                    .frame(width: 14)
+                Text(skill.typed)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.ink.opacity(0.85))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(skill.title)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.muted)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(hovering ? Palette.hover : .clear, in: Rounded.row)
+            .contentShape(Rounded.row)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+        .help(skill.prompt)
+        .accessibilityLabel("\(skill.typed): \(skill.title)")
     }
 }
 

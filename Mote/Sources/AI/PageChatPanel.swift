@@ -203,11 +203,12 @@ struct PageChatPanel: View {
         return tab.address?.host()
     }
 
-    /// Three ways in, each a question the shared page answers.
+    /// Three ways in, each a question the shared page answers. The wording is
+    /// the `/` skills' own, so the two never drift.
     private static let suggestions: [(title: String, prompt: String)] = [
-        ("Summarize", "Summarize this page."),
-        ("Explain simply", "Explain this page simply, as if to someone new to it."),
-        ("Key points", "What are the key points on this page?"),
+        (Skill.summary.title, Skill.summary.prompt),
+        (Skill.eli5.title, Skill.eli5.prompt),
+        (Skill.keypoints.title, Skill.keypoints.prompt),
     ]
 
     // MARK: - Sharing
