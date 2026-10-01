@@ -12,21 +12,21 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping () -> Void
+        completionHandler: @escaping @MainActor @Sendable () -> Void
     ) {
         Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK"]), over: webView) { _ in completionHandler() }
     }
 
     func webView(
         _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping (Bool) -> Void
+        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK", "Cancel"]), over: webView, then: completionHandler)
     }
 
     func webView(
         _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
-        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
     ) {
         let alert = Dialogs.fromPage(frame, prompt, buttons: ["OK", "Cancel"])
         let field = Dialogs.field(NSTextField.self, text: defaultText ?? "")
@@ -39,7 +39,7 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping ([URL]?) -> Void
+        completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void
     ) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -58,7 +58,7 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         switch challenge.protectionSpace.authenticationMethod {
         case NSURLAuthenticationMethodServerTrust:
@@ -75,7 +75,7 @@ extension Browser {
     /// the host is let through for the rest of the launch.
     private func trust(
         _ challenge: URLAuthenticationChallenge, from webView: WKWebView,
-        _ done: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        _ done: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         guard let trust = challenge.protectionSpace.serverTrust else { return done(.performDefaultHandling, nil) }
         let host = challenge.protectionSpace.host
@@ -90,7 +90,7 @@ extension Browser {
     /// HTTP Basic, Digest and NTLM: a name and a password, asked twice at most.
     private func signIn(
         _ challenge: URLAuthenticationChallenge, from webView: WKWebView,
-        _ done: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        _ done: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         let failures = challenge.previousFailureCount
         guard Challenge.mayAskToSignIn(failures: failures) else { return done(.cancelAuthenticationChallenge, nil) }

@@ -22,6 +22,12 @@ struct DelegateConformanceTests {
             "webView:didFailProvisionalNavigation:withError:",
             "webView:didCommitNavigation:",
             "webView:didFinishNavigation:",
+            "webView:didReceiveAuthenticationChallenge:completionHandler:",
+            "webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:",
+            "webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:",
+            "webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:",
+            "webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
+            "webViewWebContentProcessDidTerminate:",
             "download:decideDestinationUsingResponse:suggestedFilename:completionHandler:",
             "download:didFailWithError:resumeData:",
         ])
