@@ -23,11 +23,17 @@ public struct ChromeLayout: Equatable, Sendable {
     public static let strip: CGFloat = 40
     /// Height of the bookmarks bar under the toolbar.
     public static let bookmarks: CGFloat = 30
+    /// Width of the chat panel docked at the card's trailing edge.
+    public static let panel: CGFloat = 360
 
     /// The card: toolbar, bookmarks bar and page.
     public let card: CGRect
     /// The page, inside the card, under the toolbar and bookmarks bar.
     public let page: CGRect
+    /// The chat panel docked at the card's trailing edge, under the bars, or
+    /// nil when it is not shown. The page keeps the rest of the card's width;
+    /// the panel is docked, never laid over the page.
+    public let chatPanel: CGRect?
     public let corner: CGFloat
     /// Heights of the bars at the top of the card; zero when hidden.
     public let toolbar: CGFloat
@@ -41,12 +47,13 @@ public struct ChromeLayout: Equatable, Sendable {
     ///   - folded: the sidebar or strip is put away (it may still peek out over the card).
     ///   - immersed: a page is in full-screen video; the card fills the window bare.
     ///   - bookmarked: the bookmarks bar is shown.
+    ///   - chatting: the chat panel is docked at the card's trailing edge.
     public init(
-        window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool
+        window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, chatting: Bool = false
     ) {
         let whole = CGRect(origin: .zero, size: window)
         guard !immersed else {
-            self.init(card: whole, corner: 0, toolbar: 0, bookmarks: 0, sidebar: nil, strip: nil)
+            self.init(card: whole, corner: 0, toolbar: 0, bookmarks: 0, sidebar: nil, strip: nil, chatting: false)
             return
         }
         let gap = ChromeLayout.gap
@@ -75,10 +82,12 @@ public struct ChromeLayout: Equatable, Sendable {
         let card = CGRect(x: left, y: top, width: right - left, height: bottom - top)
         self.init(
             card: card, corner: ChromeLayout.corner, toolbar: ChromeLayout.toolbar,
-            bookmarks: bookmarked ? ChromeLayout.bookmarks : 0, sidebar: sidebar, strip: strip)
+            bookmarks: bookmarked ? ChromeLayout.bookmarks : 0, sidebar: sidebar, strip: strip, chatting: chatting)
     }
 
-    private init(card: CGRect, corner: CGFloat, toolbar: CGFloat, bookmarks: CGFloat, sidebar: CGRect?, strip: CGRect?) {
+    private init(
+        card: CGRect, corner: CGFloat, toolbar: CGFloat, bookmarks: CGFloat, sidebar: CGRect?, strip: CGRect?, chatting: Bool
+    ) {
         self.card = card
         self.corner = corner
         self.toolbar = toolbar
@@ -86,7 +95,14 @@ public struct ChromeLayout: Equatable, Sendable {
         self.sidebar = sidebar
         self.strip = strip
         let top = min(card.height, toolbar + bookmarks)
-        page = CGRect(x: card.minX, y: card.minY + top, width: card.width, height: card.height - top)
+        // The panel takes its width off the page rather than covering it, and
+        // never more than the card has to give.
+        let panel = chatting ? min(ChromeLayout.panel, card.width) : 0
+        page = CGRect(x: card.minX, y: card.minY + top, width: card.width - panel, height: card.height - top)
+        chatPanel =
+            chatting
+            ? CGRect(x: card.minX + card.width - panel, y: card.minY + top, width: panel, height: card.height - top)
+            : nil
     }
 
     /// Centre of the close button for the traffic lights, from the window's

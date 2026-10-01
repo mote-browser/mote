@@ -50,6 +50,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var bookmarksOpen = false
     @Published var recalling = false
     @Published var showingDownloads = false
+    /// The chat about the active page is docked at the card's trailing edge.
+    @Published var showingPageChat = false
     @Published var historyQuery = ""
 
     /// ⌘S collapses the sidebar; `peeking` slides it out over the page while
@@ -146,6 +148,24 @@ final class Browser: NSObject, ObservableObject {
 
     var active: Tab? { activeID.flatMap(tab) }
     var fieldShowing: Bool { editing || active?.isStart ?? true }
+    /// A page the chat can be opened over: a tab showing a page, not a new
+    /// tab, a chat, or the list of kept chats.
+    var pageChatPossible: Bool { active.map { !$0.isBlank } ?? false }
+    /// The chat about the active page is on screen.
+    var chatting: Bool { showingPageChat && pageChatPossible }
+
+    /// Opens or closes the chat about the page showing. Opening makes the
+    /// chat, so it outlives the navigation from its first ask on.
+    func togglePageChat() {
+        guard pageChatPossible else { return }
+        if showingPageChat {
+            showingPageChat = false
+        } else {
+            active?.ensurePageChat()
+            showingPageChat = true
+        }
+    }
+
     var pinnedCount: Int { row.pinnedCount }
     var recentlyVisited: [History.Entry] { history.recent() }
 

@@ -9,9 +9,9 @@ enum Reader {
     /// The page's text, read without entering reading mode.
     ///
     /// `script` puts the article on screen, so calling it to read a page for
-    /// the model would make the person's page disappear. This returns the text
-    /// the page already shows instead, leaving it where it is. The article
-    /// `script` finds is the text wanted; exposing that extraction here needs
-    /// a script that reads the article without replacing the page.
-    static let text = "return document.body ? document.body.innerText : '';"
+    /// the model would make the person's page disappear. This reads the same
+    /// article through the script's `text()`, which cleans a copy and never
+    /// touches the page; when no article scores, it falls back to the page's
+    /// own text.
+    static let text = InjectedScript.source("reader") + "\nreturn \(InjectedScript.globalName("reader")).text();"
 }

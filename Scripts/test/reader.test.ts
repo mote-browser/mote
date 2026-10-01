@@ -7,6 +7,7 @@ import {
   resolveImages,
   siteName,
 } from '../src/reader/article';
+import { text } from '../src/reader';
 
 const paragraph = `<p>${'Mote keeps the article and drops what was arranged around it. '.repeat(3)}</p>`;
 const article = `<article id="story"><h1>The headline</h1>${paragraph.repeat(4)}</article>`;
@@ -97,5 +98,27 @@ describe('articleTitle and siteName', () => {
   it('drops www. from the host', () => {
     expect(siteName('www.example.com')).toBe('example.com');
     expect(siteName('news.example.com')).toBe('news.example.com');
+  });
+});
+
+describe('text', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('reads the article, leaving the page where it is', () => {
+    document.body.innerHTML = `<nav>${'<a href="/">Link</a>'.repeat(30)}</nav>${article}<aside>${paragraph.repeat(3)}${'<a href="/r">Related</a>'.repeat(20)}</aside>`;
+    const before = document.body.innerHTML;
+    const read = text();
+    expect(read).toContain('Mote keeps the article');
+    expect(read).not.toContain('Related');
+    expect(read).not.toContain('Link');
+    expect(document.body.innerHTML).toBe(before);
+  });
+
+  it('falls back to the whole page when nothing reads like an article', () => {
+    document.body.innerHTML = '<p>Short.</p><a href="/">Home</a>';
+    expect(text()).toContain('Short.');
+    expect(text()).toContain('Home');
   });
 });

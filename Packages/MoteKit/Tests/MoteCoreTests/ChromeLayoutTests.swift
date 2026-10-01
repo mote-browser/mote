@@ -9,9 +9,11 @@ struct ChromeLayoutTests {
     private let gap = ChromeLayout.gap
 
     private func layout(
-        _ tabs: ChromeLayout.Tabs, folded: Bool = false, immersed: Bool = false, bookmarked: Bool = false, side: CGFloat = 240
+        _ tabs: ChromeLayout.Tabs, folded: Bool = false, immersed: Bool = false, bookmarked: Bool = false, side: CGFloat = 240,
+        chatting: Bool = false
     ) -> ChromeLayout {
-        ChromeLayout(window: window, tabs: tabs, sideWidth: side, folded: folded, immersed: immersed, bookmarked: bookmarked)
+        ChromeLayout(
+            window: window, tabs: tabs, sideWidth: side, folded: folded, immersed: immersed, bookmarked: bookmarked, chatting: chatting)
     }
 
     @Test("Beside a sidebar the card starts where the sidebar ends and keeps a gap on the other sides")
@@ -50,6 +52,42 @@ struct ChromeLayoutTests {
         let marked = layout(.sidebar, bookmarked: true)
         #expect(marked.bookmarks == ChromeLayout.bookmarks)
         #expect(marked.page.minY == marked.card.minY + ChromeLayout.toolbar + ChromeLayout.bookmarks)
+    }
+
+    @Test("A chat panel docks at the card's trailing edge and narrows the page, never the card")
+    func chatPanel() throws {
+        let chrome = layout(.sidebar, chatting: true)
+        let panel = try #require(chrome.chatPanel)
+        #expect(panel.width == ChromeLayout.panel)
+        #expect(panel.maxX == chrome.card.maxX)
+        #expect(panel.minY == chrome.page.minY)
+        #expect(panel.maxY == chrome.card.maxY)
+        #expect(chrome.page.width == chrome.card.width - ChromeLayout.panel)
+        #expect(chrome.page.maxX == panel.minX)
+        #expect(chrome.card.width == 1200 - 240 - gap)
+    }
+
+    @Test("No chat panel leaves the page across the whole card")
+    func noChatPanel() {
+        let chrome = layout(.sidebar)
+        #expect(chrome.chatPanel == nil)
+        #expect(chrome.page.width == chrome.card.width)
+    }
+
+    @Test("Full-screen video leaves no room for a chat panel, however it was asked for", arguments: [true, false])
+    func chatPanelImmersed(chatting: Bool) {
+        let chrome = layout(.sidebar, immersed: true, chatting: chatting)
+        #expect(chrome.chatPanel == nil)
+        #expect(chrome.page == chrome.card)
+    }
+
+    @Test("A window too small for the panel keeps a non-negative page")
+    func chatPanelTiny() {
+        let chrome = ChromeLayout(
+            window: CGSize(width: 100, height: 20), tabs: .sidebar, sideWidth: 240, folded: false, immersed: false, bookmarked: true,
+            chatting: true)
+        #expect(chrome.page.width >= 0)
+        #expect((chrome.chatPanel?.width ?? 0) >= 0)
     }
 
     @Test("Full-screen video fills the window with a bare page", arguments: [ChromeLayout.Tabs.sidebar, .strip])

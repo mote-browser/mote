@@ -4,9 +4,18 @@ import SwiftUI
 /// A chat in a tab: the conversation in a readable column, and a composer
 /// along the bottom for the next message. Questions sit in bubbles on the
 /// right; answers read as plain text, signed with who wrote them.
-struct ChatView: View {
+///
+/// Its two slots are for the page chat: `start` stands in for the empty
+/// conversation (its quick actions), and `accessory` sits above the composer
+/// (its context chip). A blank tab's chat leaves both empty.
+struct ChatView<Accessory: View, Start: View>: View {
     let browser: Browser
     let conversation: Conversation
+    @ViewBuilder let accessory: () -> Accessory
+    @ViewBuilder let start: () -> Start
+    /// Run before a question goes, so the page chat can share the page on its
+    /// first turn; the question waits for it.
+    var beforeSend: (() async -> Void)? = nil
 
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
@@ -18,14 +27,15 @@ struct ChatView: View {
     /// and coming back down takes it up again.
     @State private var pinned = true
 
-    static let column: CGFloat = 720
-    private static let end = "end"
+    static var column: CGFloat { 720 }
+    private static var end: String { "end" }
 
     var body: some View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) {
+                        if conversation.messages.isEmpty { start() }
                         ForEach(conversation.messages) { message in
                             let last = message.id == conversation.messages.last?.id
                             MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
@@ -68,6 +78,7 @@ struct ChatView: View {
                         }
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
+                    accessory()
                     ChatComposer(
                         browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
                         send: send
@@ -103,11 +114,22 @@ struct ChatView: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
-        Assistant.shared.ask(text, in: conversation)
+        guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
+        Task {
+            await beforeSend()
+            Assistant.shared.ask(text, in: conversation)
+        }
     }
 
     private func retry() { Assistant.shared.retry(in: conversation) }
 
+}
+
+extension ChatView where Accessory == EmptyView, Start == EmptyView {
+    /// A chat with no page slots: the blank tab's, as before.
+    init(browser: Browser, conversation: Conversation) {
+        self.init(browser: browser, conversation: conversation, accessory: { EmptyView() }, start: { EmptyView() })
+    }
 }
 
 /// How far below the view the end of the conversation is.

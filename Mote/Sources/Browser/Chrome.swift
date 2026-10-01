@@ -22,7 +22,7 @@ extension Browser {
     func layout(in window: CGSize) -> ChromeLayout {
         ChromeLayout(
             window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: prefs.sideWidth, folded: folded,
-            immersed: active?.immersed == true, bookmarked: bookmarksShown)
+            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting)
     }
 }
 
@@ -74,6 +74,7 @@ struct Chrome: View {
         }
         .ignoresSafeArea()
         .animation(Motion.glide, value: prefs.sidebar)
+        .animation(Motion.glide, value: browser.chatting)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
     }
 }
@@ -105,19 +106,29 @@ private struct PageCard: View {
             // The page takes its new size at once, without animating, and keeps to the
             // card's far corner while the card's near edge slides over it or away; a
             // picture of how it was dissolves on top (see `Browser.dissolvingPage`).
-            stage
-                .frame(width: layout.page.width, height: layout.page.height)
-                .transaction { $0.animation = nil }
-                .overlay(alignment: .bottomTrailing) {
-                    if let veil = browser.pageVeil {
-                        Image(nsImage: veil)
-                            .frame(width: veil.size.width, height: veil.size.height)
-                            .allowsHitTesting(false)
-                            .transition(.opacity)
+            // The page and, when it is asked for, the chat about it docked at
+            // the card's trailing edge. The panel takes its width off the page
+            // rather than covering it, so the page geometry stays honest.
+            HStack(spacing: 0) {
+                stage
+                    .frame(width: layout.page.width, height: layout.page.height)
+                    .transaction { $0.animation = nil }
+                    .overlay(alignment: .bottomTrailing) {
+                        if let veil = browser.pageVeil {
+                            Image(nsImage: veil)
+                                .frame(width: veil.size.width, height: veil.size.height)
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                        }
                     }
+                if let panel = layout.chatPanel, let tab = browser.active {
+                    PageChatPanel(browser: browser, tab: tab)
+                        .frame(width: panel.width, height: panel.height)
+                        .transition(.move(edge: .trailing))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .clipped()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .clipped()
         }
         .background {
             if layout.corner > 0 {
