@@ -32,7 +32,7 @@ a new Mote/Sources/Browser/LoadFailurePage.swift.
 ## Tasks
 - [x] T1 MoteCore: `LoadFailure` value (kind, url, host, title, detail, canContinue) + `Challenge.trust` without `.ask` — tests first. Route: delegated (writer trigger: 2+ non-trivial files).
 - [x] T2 App: Tab/Browser/Dialogs wiring + redesigned failure page with Try Again and Continue anyway. Route: delegated (same writer).
-- [ ] T3 Verify in the running app against self-signed.badssl.com / expired.badssl.com and an unreachable host.
+- [x] T3 Verify in the running app against self-signed.badssl.com / expired.badssl.com and an unreachable host.
 
 ## Acceptance criteria
 - Opening https://self-signed.badssl.com from another page shows the failure page with
@@ -52,3 +52,6 @@ a new Mote/Sources/Browser/LoadFailurePage.swift.
 - T2 done in e659ee6. `Tab.failure: LoadFailure?`, `Tab.tryAgain()` / `continueAnyway()` reuse `go(to:)`; `Dialogs.trust` no longer asks; new `LoadFailurePage` replaces `LoadTrouble`; bench `wait` reports the failure's title. `make build`: BUILD SUCCEEDED; `swift test`: all pass.
 - T3 (partial, inline): test world on the new build. example.com -> self-signed.badssl.com, expired.badssl.com, an .invalid host and https://localhost:9 all show the page with the right title (certificate / "No site at that address" / "The page didn't load"). Found the toolbar kept the previous page's address with a padlock; fixed in 0407c8b (`Tab.shownAddress`, lock.slash in amber for certificate failures), verified by screenshot. Pending: pressing Details / Continue / Try Again — this shell has no Accessibility permission and real clicks would take the person's mouse, so the user checks it by hand.
 - Known: the tab's title stays on the previous page's title while the failure is up.
+- User report: Continue showed the failure again. Root cause: every delegate method in Mote/Sources/Page/Dialogs.swift used plain `@escaping` handlers while the SDK wants `@escaping @MainActor @Sendable`, so none were witnesses and WebKit never called them (certificates, alert/confirm/prompt, file picker, sign-in were all dead; pre-existing on main). RED: DelegateConformanceTests failed for the new selectors; GREEN after fixing the types (74ebcf2). Bench `failure ID again|continue` added (0928ce7). Verified in the test world: Continue loads self-signed.badssl.com, a second visit loads directly, expired.badssl.com still fails.
+- UI refined (centered layout, tinted icon circle, host capsule, Show Details fold, larger buttons); screenshots checked in dark (closed and open) and light.
+- Known, not fixed: the tab title keeps the previous page's title while the failure is up (title is synced from WebKit in Tab.webChanged()).
