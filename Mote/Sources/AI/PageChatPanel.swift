@@ -2,8 +2,9 @@ import MoteAI
 import MoteCore
 import SwiftUI
 
-/// The chat about the page showing, docked at the card's trailing edge beside
-/// the page it is about.
+/// The chat about the page showing, docked on the window's trailing edge as the
+/// mirror of the sidebar: full height, on the frame, the page card losing width
+/// beside it.
 ///
 /// The page is shared only when the person asks something: the first question
 /// takes the page's context, so nothing is read until the chat is used. The
@@ -26,23 +27,20 @@ struct PageChatPanel: View {
                     browser: browser, conversation: chat,
                     accessory: { chip(chat) },
                     start: { start() },
-                    beforeSend: { await shareIfNeeded() }
+                    beforeSend: { await shareIfNeeded() },
+                    ground: Palette.frame
                 )
                 .id(chat.id)
             } else {
-                Palette.ground
+                Palette.frame
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            Palette.ground
+            // On the window's frame, like the sidebar it mirrors; the ask glow
+            // gathers behind the panel on opening.
+            Palette.frame
             AskAura(on: glowing)
-        }
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Palette.hairline)
-                .frame(width: 1)
-                .allowsHitTesting(false)
         }
         .onAppear {
             tab.ensurePageChat()

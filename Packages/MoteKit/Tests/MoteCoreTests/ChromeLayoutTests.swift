@@ -10,10 +10,11 @@ struct ChromeLayoutTests {
 
     private func layout(
         _ tabs: ChromeLayout.Tabs, folded: Bool = false, immersed: Bool = false, bookmarked: Bool = false, side: CGFloat = 240,
-        chatting: Bool = false
+        chatting: Bool = false, panel: CGFloat = ChromeLayout.panel
     ) -> ChromeLayout {
         ChromeLayout(
-            window: window, tabs: tabs, sideWidth: side, folded: folded, immersed: immersed, bookmarked: bookmarked, chatting: chatting)
+            window: window, tabs: tabs, sideWidth: side, folded: folded, immersed: immersed, bookmarked: bookmarked, chatting: chatting,
+            panelWidth: panel)
     }
 
     @Test("Beside a sidebar the card starts where the sidebar ends and keeps a gap on the other sides")
@@ -54,17 +55,38 @@ struct ChromeLayoutTests {
         #expect(marked.page.minY == marked.card.minY + ChromeLayout.toolbar + ChromeLayout.bookmarks)
     }
 
-    @Test("A chat panel docks at the card's trailing edge and narrows the page, never the card")
+    @Test("A chat panel docks full height on the window's trailing edge, the mirror of the sidebar, and takes its width off the card")
     func chatPanel() throws {
         let chrome = layout(.sidebar, chatting: true)
         let panel = try #require(chrome.chatPanel)
         #expect(panel.width == ChromeLayout.panel)
-        #expect(panel.maxX == chrome.card.maxX)
-        #expect(panel.minY == chrome.page.minY)
-        #expect(panel.maxY == chrome.card.maxY)
-        #expect(chrome.page.width == chrome.card.width - ChromeLayout.panel)
+        #expect(panel.minX == chrome.card.maxX)
+        #expect(panel.maxX == window.width)
+        #expect(panel.minY == 0)
+        #expect(panel.maxY == window.height)
+        // The card gives the panel its width; the page keeps the whole card.
+        #expect(chrome.card.width == 1200 - 240 - ChromeLayout.panel)
+        #expect(chrome.page.width == chrome.card.width)
         #expect(chrome.page.maxX == panel.minX)
-        #expect(chrome.card.width == 1200 - 240 - gap)
+    }
+
+    @Test("The chat panel runs the window's full height even when the card carries the bars")
+    func chatPanelBars() throws {
+        let chrome = layout(.sidebar, bookmarked: true, chatting: true)
+        let panel = try #require(chrome.chatPanel)
+        #expect(panel.minY == 0)
+        #expect(panel.maxY == window.height)
+        #expect(chrome.page.minY == chrome.card.minY + ChromeLayout.toolbar + ChromeLayout.bookmarks)
+        #expect(chrome.page.maxY == chrome.card.maxY)
+    }
+
+    @Test("The chat panel's width comes from the caller, not a fixed size")
+    func chatPanelWidth() throws {
+        let width: CGFloat = 300
+        let chrome = layout(.sidebar, chatting: true, panel: width)
+        let panel = try #require(chrome.chatPanel)
+        #expect(panel.width == width)
+        #expect(chrome.card.width == 1200 - 240 - width)
     }
 
     @Test("No chat panel leaves the page across the whole card")

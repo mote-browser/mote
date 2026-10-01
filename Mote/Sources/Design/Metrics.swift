@@ -19,6 +19,11 @@ enum Metrics {
     static let side: CGFloat = 240
     static let sideMin: CGFloat = 180
     static let sideMax: CGFloat = 440
+    /// The page chat panel's usual, narrowest and widest width. It docks on the
+    /// window's trailing edge, the mirror of the sidebar.
+    static let chat: CGFloat = 360
+    static let chatMin: CGFloat = 280
+    static let chatMax: CGFloat = 560
     /// A tab in the sidebar.
     static let row: CGFloat = 32
     /// A toolbar button.

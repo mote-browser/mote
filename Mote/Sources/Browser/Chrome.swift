@@ -22,7 +22,7 @@ extension Browser {
     func layout(in window: CGSize) -> ChromeLayout {
         ChromeLayout(
             window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: prefs.sideWidth, folded: folded,
-            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting)
+            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth)
     }
 }
 
@@ -51,6 +51,16 @@ struct Chrome: View {
                         .transition(.move(edge: .leading))
                 }
 
+                // The chat about the page, the mirror of the sidebar: full window
+                // height on the trailing edge, outside the card, so the card gives
+                // up the width it takes and keeps its rounded corners.
+                if let panel = layout.chatPanel, let tab = browser.active {
+                    PageChatPanel(browser: browser, tab: tab)
+                        .frame(width: panel.width, height: geo.size.height)
+                        .offset(x: panel.minX)
+                        .transition(.move(edge: .trailing))
+                }
+
                 PageCard(browser: browser, prefs: prefs, layout: layout)
                     .frame(width: layout.card.width, height: layout.card.height)
                     .offset(x: layout.card.minX, y: layout.card.minY)
@@ -66,9 +76,17 @@ struct Chrome: View {
                 // Over the card's edge, so the gap beside the page is what resizes the
                 // sidebar; no line is drawn for it.
                 if let side = layout.sidebar {
-                    ResizeGrip(prefs: prefs) { browser.toggleFold() }
+                    ResizeGrip(prefs: prefs, edge: .leading) { browser.toggleFold() }
                         .frame(width: ResizeGrip.width, height: side.height)
                         .offset(x: side.maxX - ResizeGrip.width + ResizeGrip.over)
+                }
+
+                // The same handle mirrored on the panel's edge: dragging the gap
+                // between card and panel is what resizes the panel.
+                if let panel = layout.chatPanel {
+                    ResizeGrip(prefs: prefs, edge: .trailing) { browser.showingPageChat = false }
+                        .frame(width: ResizeGrip.width, height: panel.height)
+                        .offset(x: panel.minX - ResizeGrip.over)
                 }
             }
         }
@@ -106,29 +124,19 @@ private struct PageCard: View {
             // The page takes its new size at once, without animating, and keeps to the
             // card's far corner while the card's near edge slides over it or away; a
             // picture of how it was dissolves on top (see `Browser.dissolvingPage`).
-            // The page and, when it is asked for, the chat about it docked at
-            // the card's trailing edge. The panel takes its width off the page
-            // rather than covering it, so the page geometry stays honest.
-            HStack(spacing: 0) {
-                stage
-                    .frame(width: layout.page.width, height: layout.page.height)
-                    .transaction { $0.animation = nil }
-                    .overlay(alignment: .bottomTrailing) {
-                        if let veil = browser.pageVeil {
-                            Image(nsImage: veil)
-                                .frame(width: veil.size.width, height: veil.size.height)
-                                .allowsHitTesting(false)
-                                .transition(.opacity)
-                        }
+            stage
+                .frame(width: layout.page.width, height: layout.page.height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .transaction { $0.animation = nil }
+                .overlay(alignment: .bottomTrailing) {
+                    if let veil = browser.pageVeil {
+                        Image(nsImage: veil)
+                            .frame(width: veil.size.width, height: veil.size.height)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
                     }
-                if let panel = layout.chatPanel, let tab = browser.active {
-                    PageChatPanel(browser: browser, tab: tab)
-                        .frame(width: panel.width, height: panel.height)
-                        .transition(.move(edge: .trailing))
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .clipped()
+                .clipped()
         }
         .background {
             if layout.corner > 0 {
@@ -212,14 +220,21 @@ private struct PageCard: View {
 
 // MARK: - Resize Grip
 
-/// The invisible handle between the sidebar and the card. Dragging it sets the
-/// sidebar's width, a double-click puts the default back, and letting go well
-/// short of the narrowest width folds the sidebar away, as in Arc.
+/// The invisible handle between the sidebar and the card, and the same handle
+/// mirrored between the card and the trailing chat panel. Dragging it sets the
+/// panel's width, a double-click puts the default back, and letting go well
+/// short of the narrowest width folds the sidebar (or closes the chat panel)
+/// away, as in Arc.
 ///
 /// AppKit rather than a SwiftUI gesture: the cursor has to win over the web
 /// view's cursor rects beside it, and the drag must keep tracking once the
 /// pointer leaves the handle.
 struct ResizeGrip: NSViewRepresentable {
+    /// Which of the two docks the handle belongs to.
+    enum Edge {
+        case leading, trailing
+    }
+
     /// Width of the handle, and how far of it lies over the card.
     static let width: CGFloat = 10
     static let over: CGFloat = 3
@@ -227,20 +242,33 @@ struct ResizeGrip: NSViewRepresentable {
     static let foldBeyond: CGFloat = 64
 
     let prefs: Preferences
+    var edge: Edge = .leading
     let fold: () -> Void
 
     func makeNSView(context: Context) -> Grip { Grip() }
 
     func updateNSView(_ grip: Grip, context: Context) {
         grip.prefs = prefs
+        grip.edge = edge
         grip.fold = fold
     }
 
     final class Grip: NSView {
         var prefs: Preferences?
+        var edge: ResizeGrip.Edge = .leading
         var fold: () -> Void = {}
         private var start: (x: CGFloat, width: CGFloat)?
         private var wanted: CGFloat = 0
+
+        /// The narrowest and widest this dock may be dragged.
+        private var least: CGFloat { edge == .leading ? Metrics.sideMin : Metrics.chatMin }
+        private var most: CGFloat { edge == .leading ? Metrics.sideMax : Metrics.chatMax }
+        /// The width on its double-click default.
+        private var usual: CGFloat { edge == .leading ? Metrics.side : Metrics.chat }
+        private func width(_ prefs: Preferences) -> CGFloat { edge == .leading ? prefs.sideWidth : prefs.chatWidth }
+        private func setWidth(_ value: CGFloat, of prefs: Preferences) {
+            if edge == .leading { prefs.sideWidth = value } else { prefs.chatWidth = value }
+        }
 
         override var mouseDownCanMoveWindow: Bool { false }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -263,27 +291,30 @@ struct ResizeGrip: NSViewRepresentable {
             guard let prefs else { return }
             if event.clickCount == 2 {
                 start = nil
-                withAnimation(Motion.settle) { prefs.sideWidth = Metrics.side }
+                withAnimation(Motion.settle) { setWidth(usual, of: prefs) }
                 return
             }
-            start = (event.locationInWindow.x, prefs.sideWidth)
-            wanted = prefs.sideWidth
+            start = (event.locationInWindow.x, width(prefs))
+            wanted = width(prefs)
         }
 
         override func mouseDragged(with event: NSEvent) {
             guard let prefs, let start else { return }
             NSCursor.resizeLeftRight.set()
-            wanted = start.width + event.locationInWindow.x - start.x
-            let width = min(Metrics.sideMax, max(Metrics.sideMin, wanted))
-            guard width != prefs.sideWidth else { return }
+            // The leading handle grows as the pointer moves right; the trailing
+            // one, mirrored, grows as it moves left.
+            let travel = event.locationInWindow.x - start.x
+            wanted = edge == .leading ? start.width + travel : start.width - travel
+            let held = min(most, max(least, wanted))
+            guard held != width(prefs) else { return }
             var still = Transaction()
             still.disablesAnimations = true
-            withTransaction(still) { prefs.sideWidth = width }
+            withTransaction(still) { setWidth(held, of: prefs) }
         }
 
         override func mouseUp(with event: NSEvent) {
             defer { start = nil }
-            guard start != nil, wanted < Metrics.sideMin - ResizeGrip.foldBeyond else { return }
+            guard start != nil, wanted < least - ResizeGrip.foldBeyond else { return }
             fold()
         }
     }

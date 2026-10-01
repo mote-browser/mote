@@ -16,6 +16,9 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// Run before a question goes, so the page chat can share the page on its
     /// first turn; the question waits for it.
     var beforeSend: (() async -> Void)? = nil
+    /// The surface the conversation reads on: the card for a chat in a tab, the
+    /// window frame for the page chat docked on it, the mirror of the sidebar.
+    var ground: Color = Palette.ground
 
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
@@ -90,14 +93,14 @@ struct ChatView<Accessory: View, Start: View>: View {
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
                     // The conversation fades out under the composer.
-                    LinearGradient(colors: [Palette.ground.opacity(0), Palette.ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
+                    LinearGradient(colors: [ground.opacity(0), ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
                         .frame(height: inputHeight + 110)
                         .allowsHitTesting(false)
                 }
                 .animation(Motion.quick, value: distance == .far)
             }
         }
-        .background(Palette.ground)
+        .background(ground)
         .onAppear { focus += 1 }
         .environment(
             \.openURL,
