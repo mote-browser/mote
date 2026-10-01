@@ -41,6 +41,9 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var canGoForward = false
     /// Why the page didn't load, shown in its place.
     @Published var failure: LoadFailure?
+    /// The address the toolbar shows: the one that failed while its failure
+    /// is up, since WebKit keeps `address` on the page before it.
+    var shownAddress: URL? { failure?.url ?? address }
     /// How far down the page is scrolled, for the tab's reading bar. Its own
     /// object, watched only by the bar: it changes as the page scrolls, and
     /// published from the tab it redrew and laid out every view on the tab
