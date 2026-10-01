@@ -57,7 +57,7 @@ struct Chrome: View {
                 // sidebar it stays in the tree while a page shows, just slid off
                 // the window, so the slide back costs no first frames; it moves on
                 // the sidebar's own fold spring.
-                if browser.active?.immersed != true, let tab = browser.active, !tab.isBlank || browser.showingPageChat {
+                if browser.active?.immersed != true, let tab = browser.active, !tab.isBlank || tab.chatOpen {
                     let docked = layout.chatPanel != nil
                     PageChatPanel(browser: browser, tab: tab)
                         .frame(width: prefs.chatWidth, height: geo.size.height)

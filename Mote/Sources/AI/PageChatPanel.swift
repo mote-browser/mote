@@ -28,7 +28,7 @@ struct PageChatPanel: View {
 
     var body: some View {
         Group {
-            if let chat = tab.pageChat, browser.chatting || filled {
+            if let chat = tab.pageChat, tab.chatOpen || filled {
                 ChatView(
                     browser: browser, conversation: chat,
                     accessory: { chip(chat) },
@@ -51,13 +51,15 @@ struct PageChatPanel: View {
         .onAppear {
             // The panel is in the tree as soon as a page shows; the brand
             // moment is for the moment it is opened, not merely built.
-            if browser.chatting { show() }
+            if tab.chatOpen { show() }
         }
-        .onChange(of: browser.chatting) { _, chatting in
-            if chatting {
+        .onChange(of: tab.chatOpen) { _, open in
+            if open {
                 show()
             } else {
-                // Let the conversation ride the slide out, then let it go.
+                // Let the conversation ride the slide out, then let it go. The
+                // check reads the live state, so reopening (or a tab whose own
+                // panel is open taking over) keeps the conversation.
                 Task {
                     try? await Task.sleep(for: .seconds(Motion.foldResponse))
                     if !browser.chatting { filled = false }

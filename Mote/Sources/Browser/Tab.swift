@@ -77,6 +77,10 @@ final class Tab: ObservableObject, Identifiable {
     /// Separate from `chat`: it is made on first use and kept as the tab
     /// navigates. Only the page is let go on navigation, never the chat.
     @Published private(set) var pageChat: Conversation?
+    /// Whether this tab's page chat panel is open. Per tab, so each tab keeps
+    /// its own open or closed state: a new tab — including one a link opened —
+    /// starts closed, and coming back to a tab brings its panel back as it was.
+    @Published var chatOpen = false
     /// Shows every kept chat in place of a page (see ChatsPage.swift). Going to
     /// an address or opening a chat replaces it.
     @Published var chats = false
