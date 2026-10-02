@@ -10,6 +10,35 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-02
+
+Chat about the page you're on, bring your other tabs into it, and get past a page that won't load.
+
+### Added
+
+- **Chat about this page.** ⇧⌘A (or the View menu) docks a chat beside the page
+  you're reading, with its own conversation per tab, closed again with Escape.
+- **Mention other tabs.** Type `@` in the composer to bring another open tab's
+  page into the chat, so an answer can range across the pages you have open;
+  remove a mention from its chip.
+- **Ask about a selection.** Right-click selected text and choose "Ask about
+  This" to open that tab's chat with your selection quoted, ready to send.
+- **Slash skills.** Type `/` in the composer for the built-in skills; the one
+  you pick fills the field, ready to edit or send.
+- **A page that won't load.** Mote now shows its own failure page explaining
+  what went wrong, and when a certificate can't be trusted, a way to go on
+  anyway.
+
+### Fixed
+
+- The page chat's open state is kept per tab, and reopening it docks
+  full-height like the left sidebar, with the sidebar's own animation.
+- A chat's provider session stays in step with the page and tabs it has shared;
+  changing that context starts the provider afresh.
+- Page dialogs and certificate prompts now reach Mote, with WebKit's handler
+  types matched.
+- While a failure page is up, the toolbar shows the address that failed.
+
 ## 0.2.2 — 2026-10-01
 
 The whole address now shows for local and plain-http pages too.
