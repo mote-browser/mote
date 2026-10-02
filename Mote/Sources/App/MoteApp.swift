@@ -97,6 +97,9 @@ private struct MenuBar: Commands {
         Button("Actual Size", action: browser.resetZoom).keyboardShortcut("0")
         Divider()
         // Chrome's shortcuts (see Inspector.swift).
+        Button("Responsive Preview", action: browser.showResponsive)
+            .keyboardShortcut("m", modifiers: [.command, .option])
+            .disabled(browser.active?.address.map(ResponsiveSession.allows) != true)
         Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut("i", modifiers: [.command, .option])
         Button("JavaScript Console", action: browser.showConsole).keyboardShortcut("j", modifiers: [.command, .option])
         Button("Inspect Element", action: browser.inspectElement).keyboardShortcut("c", modifiers: [.command, .option])

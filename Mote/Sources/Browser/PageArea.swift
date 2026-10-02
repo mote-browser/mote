@@ -16,9 +16,14 @@ struct Page: View {
             // Blank and sleeping tabs have no page, and asking would make an empty
             // one. A floating page is left out so its return is a change and the
             // stage takes it back.
-            WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web)
+            WebStage(
+                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web,
+                overlay: tab.responsive == nil ? nil : tab.development?.canvas,
+                stage: tab.stage
+            )
+            .id(tab.id)
 
-            if let cover = tab.cover {
+            if tab.responsive == nil, let cover = tab.cover {
                 // The snapshot while a sleeping page comes back; it never takes clicks.
                 Image(nsImage: cover)
                     .resizable()
@@ -36,10 +41,10 @@ struct Page: View {
                     .background(Palette.ground)
                     .transition(.opacity)
             }
-            if let failure = tab.failure {
+            if tab.responsive == nil, let failure = tab.failure {
                 LoadFailurePage(failure: failure, retry: tab.tryAgain, proceed: tab.continueAnyway).transition(.opacity)
             }
-            if let pull = tab.pull {
+            if tab.responsive == nil, let pull = tab.pull {
                 Disc(pull: pull)
                     // One view per edge: a changing alignment would slide it across the window.
                     .id(pull.back)

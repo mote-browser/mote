@@ -1,4 +1,5 @@
 import AppKit
+import Network
 import XCTest
 
 /// End-to-end tests: the real app, driven through its interface, in its own
@@ -9,9 +10,9 @@ final class MoteUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(sidebar: Bool = false) -> XCUIApplication {
+    private func launch(sidebar: Bool = false, world: String = "ui-tests") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchEnvironment["MOTE_PROBE"] = "ui-tests"
+        app.launchEnvironment["MOTE_PROBE"] = world
         // Property-list values, so settings read as booleans see booleans rather than strings.
         app.launchArguments += ["-welcomed", "YES", "-sidebar", sidebar ? "<true/>" : "<false/>", "-sidebar.hides", "<false/>"]
         app.launch()
@@ -22,6 +23,69 @@ final class MoteUITests: XCTestCase {
     func testLaunchShowsTheBrowserWindow() {
         let app = launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testResponsiveInspectorChangesTheMainViewportAndRestoresTheTab() throws {
+        let server = try NWListener(using: .tcp, on: .any)
+        let ready = expectation(description: "Local responsive page server")
+        server.stateUpdateHandler = { state in if case .ready = state { ready.fulfill() } }
+        server.newConnectionHandler = { connection in
+            connection.start(queue: .global())
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 16384) { _, _, _, _ in
+                let html =
+                    "<!doctype html><title>Responsive UI fixture</title><meta name='viewport' content='width=device-width'><p>Responsive fixture</p><input value='Original page'>"
+                let response =
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(html.utf8.count)\r\nConnection: close\r\n\r\n\(html)"
+                connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        server.start(queue: .global())
+        defer { server.cancel() }
+        wait(for: [ready], timeout: 5)
+        let port = try XCTUnwrap(server.port)
+        let app = launch(world: "responsive-ui")
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("http://127.0.0.1:\(port.rawValue)/", forType: .string)
+        app.typeKey("t", modifierFlags: .command)
+        app.typeKey("v", modifierFlags: .command)
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitUntilGone(app.textFields.firstMatch))
+        XCTAssertTrue(app.webViews.staticTexts["Responsive fixture"].firstMatch.waitForExistence(timeout: 10))
+        app.menuBars.menuBarItems["View"].click()
+        app.menuItems["Web Inspector"].click()
+        // A narrow side dock puts extension tabs in WebKit's overflow menu.
+        let dock = app.buttons["Dock to bottom of window"]
+        let responsive = app.descendants(matching: .tab).matching(identifier: "Responsive").firstMatch
+        if dock.waitForExistence(timeout: 2) { dock.click() }
+        XCTAssertTrue(responsive.waitForExistence(timeout: 10))
+        responsive.click()
+        let main = app.windows["Mote"]
+        let phone = main.descendants(matching: .any).matching(identifier: "Options for Phone").firstMatch
+        XCTAssertTrue(phone.waitForExistence(timeout: 10), "Responsive views must appear in the normal browser window")
+        XCTAssertFalse(app.windows["Responsive Workspace"].exists)
+        // The native canvas sits over WebKit's accessibility tree; click its actual bounds.
+        phone.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        XCTAssertTrue(app.menuItems["Edit View…"].waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        for _ in 0..<3 {
+            app.typeKey("t", modifierFlags: .command)
+            XCTAssertTrue(waitUntilGone(phone))
+            main.descendants(matching: .any).matching(identifier: "Responsive UI fixture").firstMatch.click()
+            XCTAssertTrue(phone.waitForExistence(timeout: 10))
+            XCTAssertTrue(responsive.waitForExistence(timeout: 5), "The inspector must return with its canvas")
+            XCTAssertTrue(responsive.isHittable, "Inspector tab: \(responsive.frame), window: \(main.frame), preview: \(phone.frame)")
+        }
+        app.menuBars.menuBarItems["View"].click()
+        app.menuItems["Web Inspector"].click()
+        XCTAssertTrue(waitUntilGone(phone))
+        XCTAssertTrue(main.exists)
+        app.menuBars.menuBarItems["View"].click()
+        app.menuItems["Responsive Preview"].click()
+        XCTAssertTrue(phone.waitForExistence(timeout: 10), "Closing the inspector must preserve its source tab")
+        app.menuBars.menuBarItems["View"].click()
+        app.menuItems["Web Inspector"].click()
     }
 
     /// Pastes the address rather than typing it: synthesized typing drops

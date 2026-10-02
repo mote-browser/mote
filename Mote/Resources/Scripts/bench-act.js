@@ -57,11 +57,11 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	* Sets the value through the native setter and dispatches input and change
 	* events, so frameworks that track the value (React) notice the change.
 	*/
-	function setValue(element, prototype, value) {
+	function setValue(element, prototype, value, events = ["input", "change"]) {
 		const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
 		if (setter) setter.call(element, value);
 		else element.value = value;
-		changed(element);
+		changed(element, events);
 	}
 	/** Selects the option whose value is `wanted`, or else whose text is, alone. */
 	function choose(select, wanted, selector) {
@@ -72,9 +72,8 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		changed(select);
 		return "ok";
 	}
-	function changed(element) {
-		element.dispatchEvent(new Event("input", { bubbles: true }));
-		element.dispatchEvent(new Event("change", { bubbles: true }));
+	function changed(element, events = ["input", "change"]) {
+		for (const event of events) element.dispatchEvent(new Event(event, { bubbles: true }));
 	}
 
 //#endregion

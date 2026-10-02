@@ -1,0 +1,18 @@
+#!/bin/sh
+# Run the actual coordinator against a controlled WebKit host, without opening the app.
+set -eu
+cd "$(dirname "$0")/.."
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+bundle="$work/Checks.app/Contents"
+mkdir -p "$bundle/MacOS" "$bundle/Resources"
+printf '%s' '<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>io.github.mote-browser.responsive-checks</string><key>CFBundleExecutable</key><string>Checks</string></dict></plist>' > "$bundle/Info.plist"
+cp Mote/Resources/ResponsivePanel.html Mote/Resources/ResponsivePanel.svg "$bundle/Resources/"
+swiftc -swift-version 6 -emit-library -static -emit-module -module-name MoteCore \
+  Packages/MoteKit/Sources/MoteCore/Responsive.swift \
+  -emit-module-path "$work/MoteCore.swiftmodule" -o "$work/libMoteCore.a"
+swiftc -swift-version 6 -parse-as-library -I "$work" -L "$work" -lMoteCore \
+  Mote/Sources/Core/Unpublished.swift Mote/Sources/Page/ResponsiveInspector.swift \
+  Mote/Sources/Browser/WebStage.swift \
+  Tools/responsive-inspector-checks.swift -o "$bundle/MacOS/Checks"
+"$bundle/MacOS/Checks"
