@@ -35,6 +35,20 @@ struct ChromeTests {
 
     // MARK: - Address
 
+    @Test("The address and page-chat controls only appear on web pages")
+    func pageToolsFollowTheActiveTab() async throws {
+        try await withBrowser { browser in
+            browser.newTab()
+            #expect(!browser.pageToolsShown)
+            let page = try await openPage(in: browser)
+            #expect(browser.pageToolsShown)
+            browser.newTab()
+            #expect(!browser.pageToolsShown)
+            browser.select(page)
+            #expect(browser.pageToolsShown)
+        }
+    }
+
     @Test("⌘L on a page edits the address in the toolbar")
     func editsInToolbar() async throws {
         try await withBrowser { browser in
@@ -172,6 +186,59 @@ struct ChromeTests {
 
     // MARK: - Rendering
 
+    @Test("Empty header and new-tab areas drag the window; controls keep their clicks")
+    func emptyAreasDrag() async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = true
+            browser.newTab()
+            let host = NSHostingView(rootView: Chrome(browser: browser, prefs: browser.prefs).frame(width: 1000, height: 640))
+            host.frame = CGRect(x: 0, y: 0, width: 1000, height: 640)
+            let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = host
+            defer { window.contentView = nil }
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(400))
+            let layout = browser.layout(in: host.bounds.size)
+            func hit(_ x: CGFloat, _ y: CGFloat) -> NSView? {
+                host.hitTest(CGPoint(x: x, y: host.bounds.height - y))
+            }
+            let middle = layout.card.midX
+            let headerY = layout.card.minY + layout.toolbar / 2
+            #expect(hit(middle, headerY) is DragStrip.Strip)
+            #expect(!(hit(layout.card.minX + 22, headerY) is DragStrip.Strip))
+            #expect(hit(layout.card.maxX - 30, layout.page.maxY - 30) is DragStrip.Strip)
+            // The composer sits below the logo in the group centred at 42%.
+            let composerY = layout.page.minY + layout.page.height * 0.42 + (57 + 26) / 2
+            #expect(!(hit(middle, composerY) is DragStrip.Strip))
+            _ = try await openPage(in: browser)
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(400))
+            #expect(!(hit(middle, headerY) is DragStrip.Strip))
+            #expect(hit(layout.card.maxX - 3, headerY) is DragStrip.Strip)
+        }
+    }
+
+    @Test("New-tab marks render the Mote pebble in the muted gray")
+    func rendersNewTabMark() async throws {
+        let host = NSHostingView(
+            rootView: HStack(spacing: 0) {
+                Mark(icon: nil, letter: "", mote: true)
+                Palette.muted.frame(width: 16, height: 16)
+            })
+        host.frame = CGRect(x: 0, y: 0, width: 32, height: 16)
+        let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = host
+        defer { window.contentView = nil }
+        host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(400))
+        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let center = try #require(bitmap.colorAt(x: bitmap.pixelsWide / 4, y: bitmap.pixelsHigh / 2))
+        let muted = try #require(bitmap.colorAt(x: bitmap.pixelsWide * 3 / 4, y: bitmap.pixelsHigh / 2))
+        #expect(center.matches(muted))
+    }
+
     @Test("The sidebar sits on the frame with no line beside it, and the card is inset in its own colour")
     func rendersInsetCard() async throws {
         try await withBrowser { browser in
@@ -195,13 +262,20 @@ struct ChromeTests {
             func colour(_ x: CGFloat, _ y: CGFloat) throws -> NSColor {
                 try #require(bitmap.colorAt(x: Int(x * scale), y: Int(y * scale)))
             }
-            // Dynamic colours resolve against the appearance they're drawn in.
-            var resolved: NSColor?
-            window.effectiveAppearance.performAsCurrentDrawingAppearance {
-                resolved = Palette.NS.frame.usingColorSpace(.sRGB)
-            }
-            let frame = try #require(resolved)
             let low = size.height - 40
+            // The native material depends on what's behind the window; compare
+            // the frame's regions with one another instead of a fixed colour.
+            let frame = try colour(20, low)
+            func materials(in view: NSView) -> [NSVisualEffectView] {
+                if let material = view as? NSVisualEffectView { return [material] }
+                return view.subviews.flatMap { materials(in: $0) }
+            }
+            let effects = materials(in: host)
+            #expect(effects.count == 1)
+            let effect = try #require(effects.first)
+            #expect(effect.material == .sidebar)
+            #expect(effect.blendingMode == .behindWindow)
+            #expect(effect.state == .followsWindowActiveState)
 
             // Low in the sidebar, below any tab: the frame, right up to the card.
             for (x, y) in [(20, low), (Metrics.side - 2, low)] {

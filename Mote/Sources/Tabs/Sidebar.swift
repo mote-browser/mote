@@ -329,7 +329,9 @@ private struct SideRow: View {
             if renaming {
                 InlineField.rename(browser).frame(height: 16)
             } else {
-                if prefs.glyph == .icons, !tab.isBlank { Mark(icon: tab.icon, letter: tab.monogram, size: 16) }
+                if prefs.glyph == .icons, !tab.isBlank || tab.isStart {
+                    Mark(icon: tab.icon, letter: tab.monogram, size: 16, mote: tab.isStart)
+                }
                 TabMarks(tab: tab, colour: colour)
                 Text(tab.label).font(TextStyle.body.font).lineLimit(1).truncationMode(.tail).foregroundStyle(colour)
             }

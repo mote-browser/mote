@@ -18,9 +18,13 @@ struct BookmarksBar: View {
                 }
             }
             .padding(.horizontal, 8)
+            .padding(.top, browser.active?.isStart == true ? 6 : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(Palette.ground)
+        .background {
+            if browser.active?.isStart == true { DragStrip() }
+        }
+        .background(browser.active?.isStart == true ? Color.clear : Palette.ground)
         .overlay(alignment: .bottom) {
             if ruled { Palette.hairline.frame(height: 1) }
         }

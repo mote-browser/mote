@@ -6,6 +6,9 @@ import SwiftUI
 // window's edges, with the toolbar across its top.
 
 extension Browser {
+    /// Address and page chat belong to web pages, not the new-tab composer.
+    var pageToolsShown: Bool { active?.isBlank == false }
+
     /// Whether the bookmarks bar is on the card: on every page when asked for in
     /// Settings, and always on a new tab, which has no page to cover.
     var bookmarksShown: Bool {
@@ -35,7 +38,8 @@ struct Chrome: View {
             let layout = browser.layout(in: geo.size)
             ZStack(alignment: .topLeading) {
                 // Black in full-screen video, so no band shows during the transition.
-                (layout.corner == 0 ? Color.black : Palette.frame)
+                // A light tint softens the native window material without hiding it.
+                (layout.corner == 0 ? Color.black : Palette.frame.opacity(0.35))
                     .opacity(browser.foldNudge ? 0.999 : 1)
 
                 // Kept in the tree while folded, just slid off the window: building the
@@ -97,6 +101,7 @@ struct Chrome: View {
             }
         }
         .ignoresSafeArea()
+        .background { WindowMaterial().ignoresSafeArea() }
         .animation(Motion.glide, value: prefs.sidebar)
         .animation(Motion.fold, value: browser.chatting)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
@@ -104,6 +109,19 @@ struct Chrome: View {
 }
 
 // MARK: - Card
+
+/// One system-managed blur behind the chrome; pages keep their opaque card.
+private struct WindowMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+}
 
 /// The rounded card: the toolbar, the bookmarks bar, and the page.
 private struct PageCard: View {
@@ -147,7 +165,7 @@ private struct PageCard: View {
         .background {
             if layout.corner > 0 {
                 shape
-                    .fill(Palette.ground)
+                    .fill(Palette.ground.opacity(browser.active?.isStart == true ? 0.92 : 1))
                     .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
                     .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
             } else {
