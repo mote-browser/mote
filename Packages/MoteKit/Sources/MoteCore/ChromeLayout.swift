@@ -20,7 +20,7 @@ public struct ChromeLayout: Equatable, Sendable {
     /// `lights`).
     public static let toolbar: CGFloat = 44
     /// Height of the tab strip above the card.
-    public static let strip: CGFloat = 40
+    public static let strip: CGFloat = 43
     /// Height of the bookmarks bar under the toolbar.
     public static let bookmarks: CGFloat = 30
     /// Default width of the chat panel docked on the window's trailing edge.

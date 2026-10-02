@@ -186,6 +186,95 @@ struct ChromeTests {
 
     // MARK: - Rendering
 
+    @Test("The tab's lower curves morph through intermediate geometry")
+    func tabShapeMorphs() {
+        let rect = CGRect(x: 0, y: 0, width: 214, height: 36)
+        var shape = TabShape(attachment: 0)
+        #expect(shape.path(in: rect).boundingRect.maxY == 34)
+        shape.animatableData = 0.5
+        #expect(shape.path(in: rect).boundingRect.maxY == 35)
+        shape.animatableData = 1
+        #expect(shape.path(in: rect).boundingRect.maxY == 36)
+        #expect(shape.path(in: rect).boundingRect.minX == 0)
+    }
+
+    @Test("A dragged top tab stays visible and stops before the window controls", arguments: [-1000.0, -60.0, 500.0], [false, true])
+    func draggedTabHasGround(distance: Double, selected: Bool) async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = false
+            browser.folded = false
+            browser.newTab()
+            let first = try #require(browser.active)
+            browser.closeOthers(but: first)
+            browser.newTab()
+            let dragged = try #require(browser.active)
+            browser.select(selected ? dragged : first)
+            let size = CGSize(width: 1000, height: 640)
+            let host = NSHostingView(rootView: Chrome(browser: browser, prefs: browser.prefs).frame(width: size.width, height: size.height))
+            host.frame = CGRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.contentView = host
+            defer { window.contentView = nil }
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(400))
+            ScriptedDrag.shared.play(dragged.id, by: CGSize(width: distance, height: 0), over: 0.4) {}
+            try await Task.sleep(for: .milliseconds(200))
+            let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            // Let the scripted gesture finish before any assertion can exit the test.
+            try await Task.sleep(for: .milliseconds(400))
+            let scale = CGFloat(bitmap.pixelsWide) / size.width
+            let dot = browser.prefs.usesSpaces ? SpaceDot.width + 4 : 0
+            let start = Metrics.lights + dot + TabShape.foot
+            let travel = max(0, distance / 2)
+            let heldX = distance < -Metrics.tabWidth ? start + 70 : start + Metrics.tabWidth + travel + 70
+            let held = try #require(
+                bitmap.colorAt(x: Int(heldX * scale), y: Int((ChromeLayout.strip - 6) * scale)))
+            let ground = try #require(bitmap.colorAt(x: Int((start + 70) * scale), y: Int((ChromeLayout.strip + 2) * scale)))
+            #expect(held.matches(ground), "The dragged tab must cover the frame and tabs behind it")
+            #expect((distance < -Metrics.tabWidth / 2 ? browser.tabs.first : browser.tabs.last)?.id == dragged.id)
+        }
+    }
+
+    @Test("The active top tab joins the card without a horizontal seam", arguments: [false, true])
+    func topTabJoinsCard(page: Bool) async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = false
+            browser.folded = false
+            browser.newTab()
+            if page { _ = try await openPage(in: browser) }
+            browser.closeOthers(but: try #require(browser.active))
+            let size = CGSize(width: 1000, height: 640)
+            let host = NSHostingView(rootView: Chrome(browser: browser, prefs: browser.prefs).frame(width: size.width, height: size.height))
+            host.frame = CGRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = host
+            defer { window.contentView = nil }
+            for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+                window.appearance = NSAppearance(named: appearance)
+                host.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(400))
+                let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                let scale = CGFloat(bitmap.pixelsWide) / size.width
+                // Inside the first tab, away from the icon, title and toolbar controls.
+                let dot = browser.prefs.usesSpaces ? SpaceDot.width + 4 : 0
+                let x = Int((Metrics.lights + dot + TabShape.foot + 40) * scale)
+                let aboveTab = try #require(bitmap.colorAt(x: x, y: Int(2 * scale)))
+                let frame = try #require(bitmap.colorAt(x: Int(800 * scale), y: Int(2 * scale)))
+                #expect(aboveTab.matches(frame), "The tab must not paint a rectangle above its rounded outline")
+                let ground = try #require(bitmap.colorAt(x: x, y: Int((ChromeLayout.strip - 2) * scale)))
+                let header = try #require(bitmap.colorAt(x: x, y: Int((ChromeLayout.strip + 2) * scale)))
+                #expect(header.matches(ground), "\(appearance): header \(header), tab \(ground)")
+                for y in Int(ChromeLayout.strip * scale)..<Int((ChromeLayout.strip + 1) * scale) {
+                    let seam = try #require(bitmap.colorAt(x: x, y: y))
+                    #expect(seam.matches(ground), "\(appearance): seam \(seam), tab \(ground)")
+                }
+            }
+        }
+    }
+
     @Test("Empty header and new-tab areas drag the window; controls keep their clicks")
     func emptyAreasDrag() async throws {
         try await withBrowser { browser in

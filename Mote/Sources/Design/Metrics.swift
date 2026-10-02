@@ -4,13 +4,13 @@ import SwiftUI
 enum Metrics {
     /// A tab in the strip: its widest, the width below which only its icon
     /// shows, and its narrowest, where the row starts to scroll (see TabWidths).
-    static let tabWidth: CGFloat = 224
+    static let tabWidth: CGFloat = 190
     static let tabTitled: CGFloat = 84
     static let tabMinWidth: CGFloat = 40
     static let tabGap: CGFloat = 0
     static let pinWidth: CGFloat = 40
     /// A strip tab's height; it stands on the card's top edge.
-    static let tabHeight: CGFloat = 32
+    static let tabHeight: CGFloat = 35
     /// Where the strip's first tab starts, clear of the traffic lights.
     static let lights: CGFloat = 84
     /// The address field over a page, and the new tab's composer.

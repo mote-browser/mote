@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// the frame with faint rules between them.
 struct TabBar: View {
     @ObservedObject var browser: Browser
+    var sharedGround = false
 
     /// The active tab's ground, which glides from tab to tab.
     @Namespace private var ground
@@ -37,6 +38,7 @@ struct TabBar: View {
                 HStack(alignment: .top, spacing: 0) {
                     if browser.prefs.usesSpaces { SpaceDot(browser: browser).frame(height: ChromeLayout.strip) }
                     rows(layout)
+                        .zIndex(drag == nil ? 0 : 1)
                     Plus { browser.newTab() }
                         .frame(width: Self.plusWidth, height: Metrics.tabHeight)
                         .padding(.top, ChromeLayout.strip - Metrics.tabHeight)
@@ -45,7 +47,7 @@ struct TabBar: View {
                 .padding(.leading, Metrics.lights)
                 .coordinateSpace(name: "strip")
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
         .frame(height: ChromeLayout.strip)
         .onAppear { SpaceSwipe.shared.start(for: browser) }
@@ -82,7 +84,11 @@ struct TabBar: View {
         .frame(width: layout.tabsWidth(making: making), height: ChromeLayout.strip + 1, alignment: .topLeading)
         // Clipped top and bottom only: a neighbouring row can be wider, and the
         // active tab's feet reach past the row's ends and 1 pt down over the card's edge.
-        .mask(Rectangle().frame(width: 4000, height: ChromeLayout.strip + 1).offset(y: 0.5))
+        .mask(alignment: .leading) {
+            Rectangle()
+                .frame(width: drag == nil ? 4000 : max(0, layout.strip - Metrics.lights - layout.dot), height: ChromeLayout.strip + 1)
+                .offset(x: drag == nil ? (layout.tabsWidth(making: making) - 4000) / 2 : 0, y: 0.5)
+        }
     }
 
     /// The tabs, scrolling sideways once they are down to their narrowest.
@@ -92,7 +98,9 @@ struct TabBar: View {
                 liveRow(layout).frame(height: ChromeLayout.strip + 1, alignment: .bottom)
             }
             .scrollDisabled(!layout.overflowing)
+            .scrollClipDisabled(drag != nil)
             .frame(width: layout.run, height: ChromeLayout.strip + 1)
+            .transformAnchorPreference(key: TabGroundBounds.self, value: .bounds) { value, anchor in value.anchors["viewport"] = anchor }
             .onAppear { showActive(scroller, overflowing: layout.overflowing) }
             .onChange(of: layout.overflowing) { showActive(scroller, overflowing: layout.overflowing) }
             .onChange(of: browser.activeID) { showActive(scroller, overflowing: layout.overflowing, gliding: true) }
@@ -104,7 +112,7 @@ struct TabBar: View {
         let pinned = browser.pinnedCount
         let active = browser.activeID
         /// A rule shows between two tabs that are neither active nor hovered.
-        func quiet(_ id: Tab.ID) -> Bool { id != active && id != hovered }
+        func quiet(_ id: Tab.ID) -> Bool { id != active && id != hovered && id != drag?.id }
         return HStack(spacing: Metrics.tabGap) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 StripTab(
@@ -112,15 +120,26 @@ struct TabBar: View {
                     ruled: index > 0 && quiet(tab.id) && quiet(tabs[index - 1].id), ground: ground,
                     hovering: Binding(
                         get: { hovered == tab.id }, set: { over in hovered = over ? tab.id : hovered == tab.id ? nil : hovered }),
-                    close: { browser.close(tab) }
+                    close: { browser.close(tab) }, sharedGround: sharedGround, dragging: drag?.id == tab.id
                 )
                 .modifier(
                     Reorderable(
                         id: tab.id, index: index, places: tab.pin == nil ? pinned..<tabs.count : 0..<pinned,
                         lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
-                        drag: $drag
+                        drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot
                     ) { browser.move(tab, to: $0) }
                 )
+                .mask {
+                    if drag != nil, layout.overflowing, drag?.id != tab.id {
+                        GeometryReader { proxy in
+                            Rectangle()
+                                .frame(width: layout.run, height: ChromeLayout.strip + 1)
+                                .offset(x: Metrics.lights + layout.dot - proxy.frame(in: .named("strip")).minX)
+                        }
+                    } else {
+                        Rectangle().frame(width: 4000, height: 4000)
+                    }
+                }
                 .id(tab.id)
             }
         }
@@ -212,25 +231,60 @@ private struct Plus: View {
 
 /// The active tab's outline: rounded at the top, with feet that curve out
 /// into the card below so tab and card are one surface.
+struct TabGroundBounds: PreferenceKey {
+    struct Value {
+        var anchors: [String: Anchor<CGRect>] = [:]
+        var attachment: CGFloat = 1
+        var dragging = false
+    }
+    static var defaultValue: Value { Value() }
+
+    static func reduce(value: inout Value, nextValue: () -> Value) {
+        let next = nextValue()
+        if value.anchors["tab"] == nil, next.anchors["tab"] != nil {
+            value.attachment = next.attachment
+            value.dragging = next.dragging
+        }
+        value.anchors.merge(next.anchors) { first, _ in first }
+    }
+}
+
 nonisolated struct TabShape: Shape {
+    var attachment: CGFloat = 1
+    var animatableData: CGFloat {
+        get { attachment }
+        set { attachment = newValue }
+    }
     /// How far each foot reaches past the tab's side; also its radius.
-    static let foot: CGFloat = 8
-    static let corner: CGFloat = 9
+    static let foot: CGFloat = 12
+    static let corner: CGFloat = 12
 
     func path(in rect: CGRect) -> Path {
         let foot = Self.foot
         let corner = Self.corner
         let left = rect.minX + foot
         let right = rect.maxX - foot
+        let attached = min(1, max(0, attachment))
+        let bottom = rect.maxY - 2 * (1 - attached)
+        let top = rect.minY + 2 * (1 - attached)
+        let reach = corner * (1 - attached) - foot * attached
+        let radius = corner * (1 - attached) + foot * attached
+        let k: CGFloat = 0.55228475
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addQuadCurve(to: CGPoint(x: left, y: rect.maxY - foot), control: CGPoint(x: left, y: rect.maxY))
-        path.addLine(to: CGPoint(x: left, y: rect.minY + corner))
-        path.addQuadCurve(to: CGPoint(x: left + corner, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
-        path.addLine(to: CGPoint(x: right - corner, y: rect.minY))
-        path.addQuadCurve(to: CGPoint(x: right, y: rect.minY + corner), control: CGPoint(x: right, y: rect.minY))
-        path.addLine(to: CGPoint(x: right, y: rect.maxY - foot))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: right, y: rect.maxY))
+        path.move(to: CGPoint(x: left + reach, y: bottom))
+        path.addCurve(
+            to: CGPoint(x: left, y: bottom - radius),
+            control1: CGPoint(x: left + reach * (1 - k), y: bottom),
+            control2: CGPoint(x: left, y: bottom - radius * (1 - k)))
+        path.addLine(to: CGPoint(x: left, y: top + corner))
+        path.addQuadCurve(to: CGPoint(x: left + corner, y: top), control: CGPoint(x: left, y: top))
+        path.addLine(to: CGPoint(x: right - corner, y: top))
+        path.addQuadCurve(to: CGPoint(x: right, y: top + corner), control: CGPoint(x: right, y: top))
+        path.addLine(to: CGPoint(x: right, y: bottom - radius))
+        path.addCurve(
+            to: CGPoint(x: right - reach, y: bottom),
+            control1: CGPoint(x: right, y: bottom - radius * (1 - k)),
+            control2: CGPoint(x: right - reach * (1 - k), y: bottom))
         path.closeSubpath()
         return path
     }
@@ -248,6 +302,8 @@ private struct StripTab: View {
     let ground: Namespace.ID
     @Binding var hovering: Bool
     let close: () -> Void
+    var sharedGround = false
+    var dragging = false
 
     @State private var shake: CGFloat = 0
 
@@ -364,9 +420,13 @@ private struct StripTab: View {
 
     @ViewBuilder
     private var backdrop: some View {
-        if live {
+        if dragging, !live {
+            RoundedRectangle(cornerRadius: TabShape.corner, style: .continuous)
+                .fill(Palette.ground)
+                .padding(.vertical, 2)
+        } else if live {
             ZStack(alignment: .leading) {
-                TabShape().fill(Palette.ground)
+                TabShape(attachment: dragging ? 0 : 1).fill(sharedGround && !dragging ? Color.clear : Palette.ground)
                 // How far the page is read, as a thin line along the top. Not on
                 // pinned or icon-only tabs, too narrow to show it.
                 if !pinned, !iconOnly, prefs.showsReading {
@@ -377,12 +437,9 @@ private struct StripTab: View {
                 }
             }
             .padding(.horizontal, -TabShape.foot)
-            // The outline, open at the bottom into the card.
-            .overlay {
-                TabShape().stroke(Palette.edge, lineWidth: 1)
-                    .padding(.horizontal, -TabShape.foot)
-                    .mask(Rectangle().padding(.bottom, 1.5))
-                    .allowsHitTesting(false)
+            .anchorPreference(key: TabGroundBounds.self, value: .bounds) {
+                sharedGround
+                    ? .init(anchors: ["tab": $0], attachment: dragging ? 0 : 1, dragging: dragging) : .init()
             }
             .matchedGeometryEffect(id: "live", in: ground)
         } else {

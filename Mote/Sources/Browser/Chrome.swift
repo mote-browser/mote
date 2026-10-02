@@ -37,11 +37,6 @@ struct Chrome: View {
         GeometryReader { geo in
             let layout = browser.layout(in: geo.size)
             ZStack(alignment: .topLeading) {
-                // Black in full-screen video, so no band shows during the transition.
-                // A light tint softens the native window material without hiding it.
-                (layout.corner == 0 ? Color.black : Palette.frame.opacity(0.35))
-                    .opacity(browser.foldNudge ? 0.999 : 1)
-
                 // Kept in the tree while folded, just slid off the window: building the
                 // whole list again as it comes back would cost the first frames of the
                 // slide. It slides as one solid panel, beside the card.
@@ -78,7 +73,7 @@ struct Chrome: View {
                 // Over the card, so the active tab covers the card's top edge and the
                 // two read as one surface.
                 if layout.strip != nil {
-                    TabBar(browser: browser)
+                    TabBar(browser: browser, sharedGround: true)
                         .frame(width: geo.size.width, height: ChromeLayout.strip)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -99,6 +94,34 @@ struct Chrome: View {
                         .offset(x: panel.minX - ResizeGrip.over)
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .backgroundPreferenceValue(TabGroundBounds.self) { anchor in
+                if layout.strip != nil {
+                    GeometryReader { proxy in
+                        let card = RoundedRectangle(cornerRadius: layout.corner, style: .continuous)
+                        let surface = TabCardShape(
+                            card: layout.card, corner: layout.corner,
+                            tab: anchor.anchors["tab"].map { proxy[$0].insetBy(dx: -TabShape.foot, dy: 0) },
+                            viewport: anchor.dragging ? nil : anchor.anchors["viewport"].map { proxy[$0] },
+                            attachment: anchor.attachment)
+                        surface.fill(Palette.ground.opacity(browser.active?.isStart == true ? 0.92 : 1))
+                            .compositingGroup()
+                            .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
+                            .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+                            .overlay(alignment: .topLeading) {
+                                card.strokeBorder(Palette.edge, lineWidth: 1)
+                                    .frame(width: layout.card.width, height: layout.card.height)
+                                    .offset(x: layout.card.minX, y: layout.card.minY)
+                                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+                                    .mask(surface.borderMask.fill())
+                            }
+                            .animation(Motion.settle, value: anchor.attachment)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+            // One native material under the shared tab/card surface.
+            .background((layout.corner == 0 ? Color.black : Palette.frame.opacity(0.35)).opacity(browser.foldNudge ? 0.999 : 1))
         }
         .ignoresSafeArea()
         .background { WindowMaterial().ignoresSafeArea() }
@@ -109,6 +132,34 @@ struct Chrome: View {
 }
 
 // MARK: - Card
+
+/// One surface throughout the morph from floating tab to attached tab.
+private nonisolated struct TabCardShape: Shape {
+    let card: CGRect
+    let corner: CGFloat
+    let tab: CGRect?
+    let viewport: CGRect?
+    var attachment: CGFloat
+    var masksBorder = false
+
+    var animatableData: CGFloat {
+        get { attachment }
+        set { attachment = newValue }
+    }
+
+    var borderMask: Self {
+        var mask = self
+        mask.masksBorder = true
+        return mask
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var outline = tab.map { TabShape(attachment: attachment).path(in: $0) } ?? Path()
+        if let viewport, !outline.isEmpty { outline = outline.intersection(Path(viewport)) }
+        if masksBorder { return Path(Path(rect).subtracting(outline).cgPath) }
+        return Path(RoundedRectangle(cornerRadius: corner, style: .continuous).path(in: card).union(outline).cgPath)
+    }
+}
 
 /// One system-managed blur behind the chrome; pages keep their opaque card.
 private struct WindowMaterial: NSViewRepresentable {
@@ -163,7 +214,9 @@ private struct PageCard: View {
                 .clipped()
         }
         .background {
-            if layout.corner > 0 {
+            if layout.strip != nil {
+                Color.clear
+            } else if layout.corner > 0 {
                 shape
                     .fill(Palette.ground.opacity(browser.active?.isStart == true ? 0.92 : 1))
                     .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
@@ -174,7 +227,7 @@ private struct PageCard: View {
         }
         .clipShape(shape)
         .overlay {
-            if layout.corner > 0 {
+            if layout.corner > 0, layout.strip == nil {
                 shape.strokeBorder(Palette.edge, lineWidth: 1).allowsHitTesting(false)
             }
         }

@@ -18,7 +18,10 @@ struct Reorderable: ViewModifier {
     let space: String
     /// The list's drag, one for all its tabs.
     @Binding var drag: ReorderDrag<Tab.ID>?
+    /// The leading edge reserved for window controls, when dragging along a strip.
+    var leadingLimit: CGFloat? = nil
     let move: (Int) -> Void
+    @State private var originX: CGFloat?
 
     func body(content: Content) -> some View {
         let held = drag?.id == id
@@ -30,6 +33,12 @@ struct Reorderable: ViewModifier {
             .transaction { if following { $0.animation = nil } }
             .zIndex(held ? 1 : 0)
             .shadow(color: .black.opacity(following ? 0.14 : 0), radius: 12, y: 4)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                let x = proxy.frame(in: .named(space)).minX
+                return drag == nil ? x : originX ?? x
+            } action: {
+                originX = $0
+            }
             .gesture(
                 DragGesture(minimumDistance: 5, coordinateSpace: .named(space))
                     .onChanged { changed($0.translation) }
@@ -47,7 +56,9 @@ struct Reorderable: ViewModifier {
         if let drag, drag.id != id { return }
         var next = drag ?? ReorderDrag(id: id, start: index)
         let before = next.target
-        next.follow(travel, in: lattice, within: places)
+        var bounded = travel
+        if let leadingLimit, let originX { bounded.width = max(leadingLimit - originX, bounded.width) }
+        next.follow(bounded, in: lattice, within: places)
         if next.target == before {
             drag = next
         } else {
@@ -70,7 +81,14 @@ struct Reorderable: ViewModifier {
         let settling = $drag
         DispatchQueue.main.async {
             guard settling.wrappedValue == landing else { return }
-            withAnimation(Motion.settle) { settling.wrappedValue = nil }
+            var home = landing
+            home.settle(in: lattice)
+            withAnimation(Motion.settle, completionCriteria: .removed) {
+                settling.wrappedValue = home
+            } completion: {
+                guard settling.wrappedValue == home else { return }
+                withAnimation(Motion.settle) { settling.wrappedValue = nil }
+            }
         }
     }
 }
