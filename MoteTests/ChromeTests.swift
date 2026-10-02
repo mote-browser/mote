@@ -220,10 +220,11 @@ struct ChromeTests {
 
     @Test("New-tab marks render the Mote pebble in the muted gray")
     func rendersNewTabMark() async throws {
-        let host = NSHostingView(rootView: HStack(spacing: 0) {
-            Mark(icon: nil, letter: "", mote: true)
-            Palette.muted.frame(width: 16, height: 16)
-        })
+        let host = NSHostingView(
+            rootView: HStack(spacing: 0) {
+                Mark(icon: nil, letter: "", mote: true)
+                Palette.muted.frame(width: 16, height: 16)
+            })
         host.frame = CGRect(x: 0, y: 0, width: 32, height: 16)
         let window = NSWindow(contentRect: host.frame, styleMask: .borderless, backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: .aqua)
