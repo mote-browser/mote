@@ -18,10 +18,16 @@ final class Browser: NSObject, ObservableObject {
     @Published private(set) var tabs: [Tab] = []
     @Published var activeID: Tab.ID? {
         didSet {
-            guard oldValue != activeID, let old = oldValue else { return }
-            linkStatus.dismiss()
-            // Tab sleep measures idle time from the moment a tab stops showing.
-            tab(old)?.touch()
+            guard oldValue != activeID else { return }
+            if let old = oldValue {
+                linkStatus.dismiss()
+                // Tab sleep measures idle time from the moment a tab stops showing.
+                tab(old)?.touch()
+            }
+            // A tab whose own panel is open shows the page it is on: coming to
+            // it takes up its new page (see `syncPageChat`). A tab with a
+            // closed panel is left alone.
+            syncPageChat()
         }
     }
 
@@ -50,6 +56,13 @@ final class Browser: NSObject, ObservableObject {
     @Published var bookmarksOpen = false
     @Published var recalling = false
     @Published var showingDownloads = false
+    /// The chat about the active page is docked on the window's trailing edge,
+    /// the mirror of the sidebar (its width lives in `Preferences.chatWidth`).
+    /// Whether it is open belongs to the tab, not the window (`Tab.chatOpen`),
+    /// so each tab keeps its own state; see `chatting`. Kept in memory, like
+    /// the other panel and mode flags (`showingDownloads`, `bookmarking`,
+    /// `recalling`): Mote persists no panel visibility, and the kept page chats
+    /// survive the session through their tabs, not a window flag.
     @Published var historyQuery = ""
 
     /// ⌘S collapses the sidebar; `peeking` slides it out over the page while
@@ -146,11 +159,77 @@ final class Browser: NSObject, ObservableObject {
 
     var active: Tab? { activeID.flatMap(tab) }
     var fieldShowing: Bool { editing || active?.isStart ?? true }
+    /// A page the chat can be opened over: a tab showing a page, not a new
+    /// tab, a chat, or the list of kept chats.
+    var pageChatPossible: Bool { active.map { !$0.isBlank } ?? false }
+    /// The chat about the active page is on screen. Derived from the active
+    /// tab's own open state, so the panel follows the tab and a switch shows
+    /// each tab's state: a tab whose panel is closed shows no panel.
+    var chatting: Bool { active?.chatOpen == true }
+
+    /// Opens or closes the chat about the page showing, on the active tab
+    /// alone. Opening makes the chat, so it outlives the navigation from its
+    /// first ask on, and takes up the page at once, on the fold spring the
+    /// sidebar uses.
+    func togglePageChat() {
+        guard let tab = active, pageChatPossible else { return }
+        if tab.chatOpen {
+            slidingFold { tab.chatOpen = false }
+        } else {
+            tab.ensurePageChat()
+            slidingFold { tab.chatOpen = true }
+            syncPageChat()
+        }
+    }
+
+    /// Takes up the page the active tab shows for the chat about it, as its
+    /// panel opens or the tab with its panel open becomes active, so the chip
+    /// never reads as unshared over a page the model can be told about. A tab
+    /// whose own panel is closed takes up nothing. The page is taken at once
+    /// with its address and title, so it shows on the panel's first frame, and
+    /// its text is read after. A page already held — even one let go on
+    /// purpose — is left as it is, so looking away and back does not share it
+    /// again.
+    func syncPageChat() {
+        guard let tab = active, tab.chatOpen else { return }
+        // The panel always has a chat to show over the visible page, so an
+        // unreadable page still gets its calm note.
+        tab.ensurePageChat()
+        guard let address = tab.address, PageSharing.takesUp(address, chatting: true, holding: tab.pageChat?.page?.url)
+        else { return }
+        tab.attachPage(PageContext(url: address, title: tab.title))
+        Task { [weak self, weak tab] in
+            guard let self, let tab, self.active === tab, tab.chatOpen, let page = await tab.capturePageContext() else { return }
+            // The person may have let the page go, closed the panel, or the
+            // visible tab moved on, while it was read; then the page is left as
+            // it is. A page they asked about by selecting its text is left as
+            // it is too: the read must not drop that selection.
+            guard self.active === tab, tab.chatOpen, tab.pageChat?.page?.isActive == true, PageSharing.isSamePage(page.url, tab.address),
+                PageSharing.replaces(page.url, holding: tab.pageChat?.page?.url, selection: tab.pageChat?.page?.selection != nil)
+            else { return }
+            tab.attachPage(page)
+        }
+    }
+
     var pinnedCount: Int { row.pinnedCount }
     var recentlyVisited: [History.Entry] { history.recent() }
 
     func tab(_ id: Tab.ID) -> Tab? { tabs.first { $0.id == id } }
     func tab(for webView: WKWebView) -> Tab? { tabs.first { $0.built === webView } }
+
+    /// The other tabs a chat may @-mention: this window's open, named tabs,
+    /// except the one given and any already mentioned. Blank tabs, which have
+    /// no page to share, are left out. Read-only: the chat does the mentioning.
+    func mentionCandidates(excluding tab: Tab?, mentioned: Set<URL> = []) -> [MentionMenu.Candidate] {
+        tabs.compactMap { other in
+            guard other.id != tab?.id, !other.isBlank, let url = other.address, !mentioned.contains(url) else { return nil }
+            let title = other.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return MentionMenu.Candidate(
+                id: other.id.uuidString,
+                title: title.isEmpty ? (url.host() ?? url.absoluteString) : title,
+                host: url.host() ?? "")
+        }
+    }
 
     private var row: TabRow<Tab> { TabRow(tabs, isPinned: { $0.pin != nil }) }
 
@@ -654,6 +733,10 @@ final class Browser: NSObject, ObservableObject {
                 Tab(bench: tab.bench, configuration: page)
             }
         prepare(fresh)
+        // The tab continues, so it keeps its panel's open state; the chat
+        // itself is not carried (the replacement tab starts one), which matches
+        // the window-wide flag this state replaced.
+        fresh.chatOpen = tab.chatOpen
         reorder { $0.replace(tab.id, with: fresh) }
         fresh.go(to: url)
         if activeID == tab.id { activeID = fresh.id }
@@ -765,6 +848,10 @@ final class Browser: NSObject, ObservableObject {
         tab.delegate = self
         tab.owner = self
         tab.$address.dropFirst().sink { [weak self] _ in self?.saveSoon() }.store(in: &bag)
+        // The panel's open state lives on the tab, but the chrome, the toolbar
+        // and the menu read it through this object (`chatting`); pass the tab's
+        // changes on so they redraw when the active tab's panel opens or closes.
+        tab.$chatOpen.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &bag)
         tab.$title.dropFirst()
             .sink { [weak self, weak tab] title in
                 guard let tab, !tab.shy, let url = tab.address else { return }

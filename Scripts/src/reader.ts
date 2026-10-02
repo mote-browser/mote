@@ -33,3 +33,21 @@ export function run(): ReaderResult {
   window.scrollTo(0, 0);
   return 'read';
 }
+
+/**
+ * The article's text, read without changing the page: the same scoring as
+ * reading mode finds the article, but it is cleaned on a copy, so the page the
+ * person is looking at stays where it is. Falls back to the page's whole text
+ * when nothing reads like an article.
+ */
+export function text(): string {
+  const article = findArticle(document);
+  if (!article) return (document.body?.innerText ?? '').trim();
+
+  const copy = article.cloneNode(true) as Element;
+  cleanArticle(copy);
+  return (copy.textContent ?? '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/(\n\s*){3,}/g, '\n\n')
+    .trim();
+}

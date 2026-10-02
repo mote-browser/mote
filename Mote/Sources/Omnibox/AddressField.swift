@@ -12,6 +12,10 @@ struct AddressField: NSViewRepresentable {
     /// For a click outside the field and its suggestions (see KeepZone); nil
     /// leaves such clicks alone.
     var outside: (() -> Void)?
+    /// Picker keyboard handlers, supplied only by the initial AI composer.
+    var moveSelection: ((Int) -> Bool)? = nil
+    var choose: (() -> Bool)? = nil
+    var escape: (() -> Bool)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(browser: browser) }
 
@@ -51,6 +55,9 @@ struct AddressField: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         let coordinator = context.coordinator
         coordinator.browser = browser
+        coordinator.moveSelection = moveSelection
+        coordinator.choose = choose
+        coordinator.escape = escape
         if field.placeholderAttributedString?.string != placeholder {
             field.placeholderAttributedString = prompt
             field.needsDisplay = true
@@ -83,6 +90,9 @@ struct AddressField: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var browser: Browser
+        var moveSelection: ((Int) -> Bool)?
+        var choose: (() -> Bool)?
+        var escape: (() -> Bool)?
         var focusAnswered = -1
         /// The text last put in from outside, to tell those changes from typing.
         var shown = ""
@@ -125,9 +135,18 @@ struct AddressField: NSViewRepresentable {
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy command: Selector) -> Bool {
             switch command {
-            case #selector(NSResponder.insertNewline(_:)): browser.submit()
-            case #selector(NSResponder.moveDown(_:)): browser.field.walk(1)
-            case #selector(NSResponder.moveUp(_:)): browser.field.walk(-1)
+            case #selector(NSResponder.insertNewline(_:)):
+                if choose?() != true { browser.submit() }
+            case #selector(NSResponder.insertTab(_:)):
+                return choose?() == true
+            case #selector(NSResponder.moveDown(_:)):
+                if moveSelection?(1) == true { return true }
+                browser.field.walk(1)
+            case #selector(NSResponder.moveUp(_:)):
+                if moveSelection?(-1) == true { return true }
+                browser.field.walk(-1)
+            case #selector(NSResponder.cancelOperation(_:)):
+                return escape?() == true
             case #selector(NSResponder.deleteBackward(_:)), #selector(NSResponder.deleteForward(_:)):
                 deleting = true
                 return false

@@ -49,6 +49,11 @@ struct Toolbar: View {
                     .padding(.horizontal, 6)
                     .layoutPriority(1)
                 ExtensionSlot()
+                Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
+                    browser.togglePageChat()
+                }
+                .disabled(!browser.pageChatPossible)
+                .opacity(browser.pageChatPossible ? 1 : 0.3)
                 // Beside a sidebar, bookmarks live at its foot instead (see Sidebar).
                 if !prefs.sidebar {
                     Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }

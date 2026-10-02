@@ -76,6 +76,18 @@ final class Tab: ObservableObject, Identifiable {
     /// A chat with the assistant, shown in place of a page (see ChatView.swift).
     /// Going to an address replaces it.
     @Published var chat: Conversation?
+    /// The chat about this tab's page, shown beside it in the side panel.
+    /// Separate from `chat`: it is made on first use and kept as the tab
+    /// navigates. Only the page is let go on navigation, never the chat.
+    @Published private(set) var pageChat: Conversation?
+    /// Whether this tab's page chat panel is open. Per tab, so each tab keeps
+    /// its own open or closed state: a new tab — including one a link opened —
+    /// starts closed, and coming back to a tab brings its panel back as it was.
+    @Published var chatOpen = false
+    /// A draft waiting for the page chat's composer, put there by asking about
+    /// a selection on the page. Taken up once, then cleared (see ChatView),
+    /// so reopening the panel does not put it back.
+    @Published var pendingAsk: String?
     /// Shows every kept chat in place of a page (see ChatsPage.swift). Going to
     /// an address or opening a chat replaces it.
     @Published var chats = false
@@ -155,6 +167,7 @@ final class Tab: ObservableObject, Identifiable {
             guard let self else { return }
             owner?.tab(self, searches: text)
         }
+        web.onAsk = { [weak self] text in self?.openPageChat(withSelection: text) }
         web.holdForFirstFrame()
         // Inspectable from Safari's Develop menu and Inspect Element, whoever
         // made the configuration.
@@ -237,6 +250,10 @@ final class Tab: ObservableObject, Identifiable {
         // frame the address field goes away.
         address = url
         leaveChat()
+        // The chat about the page outlives it: navigating stops sharing the
+        // page, and never throws the chat away. A move within the page it
+        // already shares is not another page.
+        if PageSharing.detaches(from: pageChat?.page?.url, movingTo: url) { pageChat?.detachPage() }
         title = ""
         freshPage()
         // Going somewhere wakes a sleeping tab with nothing to restore.
@@ -310,6 +327,74 @@ final class Tab: ObservableObject, Identifiable {
             if worked { self?.reader = true }
             done(worked)
         }
+    }
+
+    // MARK: - Page chat
+
+    /// The chat about this tab's page, made once and kept as the tab moves.
+    /// Whether the page is shared is a separate matter: navigating detaches
+    /// it, and sharing the new page is asked for again.
+    @discardableResult
+    func ensurePageChat() -> Conversation {
+        if let pageChat { return pageChat }
+        let chat = Conversation()
+        pageChat = chat
+        return chat
+    }
+
+    /// Shares `page` with this tab's chat, making the chat if it must.
+    func attachPage(_ page: PageContext) {
+        ensurePageChat().attach(page)
+    }
+
+    /// Asks about the selected words on this tab's page: opens the chat about
+    /// it (even from closed), shares the page with `selection` quoted, and
+    /// leaves the composer a draft to send or edit.
+    ///
+    /// The page is taken up directly, with the menu's own selection: this is an
+    /// explicit act, so it is not the automatic take-up that `PageSharing`
+    /// guards against repeating (`takesUp`), and no read runs after it to
+    /// overwrite the selection (`replaces`).
+    func openPageChat(withSelection selection: String) {
+        guard let address, PageSharing.canShare(address), let draft = SelectionAsk.draft(for: selection) else { return }
+        ensurePageChat().attach(PageContext(url: address, title: title, selection: selection))
+        pendingAsk = draft
+        chatOpen = true
+    }
+
+    /// Shares the page showing now with the chat about it. Returns whether
+    /// there was a page to share.
+    @discardableResult
+    func attachCurrentPage() async -> Bool {
+        guard let page = await capturePageContext() else { return false }
+        attachPage(page)
+        return true
+    }
+
+    /// Stops sharing the page, keeping the chat and what it holds.
+    func detachPage() {
+        pageChat?.detachPage()
+    }
+
+    /// The page the tab shows, as the model should see it: its address and
+    /// title always, its text when the page can be read, and what the person
+    /// has selected when anything is. Nil when there is nothing to share.
+    func capturePageContext() async -> PageContext? {
+        guard let address, PageSharing.canShare(address) else { return nil }
+        return PageContext(url: address, title: title, text: await pageText(), selection: await selectedText())
+    }
+
+    /// The page's text, read without changing the page. A tab whose view is
+    /// asleep or gone has none to read.
+    private func pageText() async -> String? {
+        guard let built else { return nil }
+        return try? await built.callAsyncJavaScript(Reader.text, contentWorld: .page) as? String
+    }
+
+    /// What the person has selected on the page, read as the context menu does.
+    private func selectedText() async -> String? {
+        guard let built else { return nil }
+        return try? await built.callAsyncJavaScript(PageView.selected, contentWorld: .defaultClient) as? String
     }
 
     // MARK: - Zoom and sound
@@ -626,6 +711,9 @@ final class Tab: ObservableObject, Identifiable {
     func close() {
         owner = nil
         leaveChat()
+        // The tab is going away: stop any reply still coming, but keep the
+        // chat itself until the tab is released.
+        pageChat?.stop()
         letPageGo()
     }
 
@@ -652,6 +740,7 @@ final class Tab: ObservableObject, Identifiable {
         web.onTouch = nil
         web.searchName = nil
         web.onSearch = nil
+        web.onAsk = nil
         web.stopLoading()
         web.navigationDelegate = nil
         web.uiDelegate = nil

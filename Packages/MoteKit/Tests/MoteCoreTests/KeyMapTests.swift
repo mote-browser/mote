@@ -59,6 +59,16 @@ struct KeyMapTests {
         #expect(command("{", shift: true) == .previousTab)
     }
 
+    @Test("⌘⇧A asks about the page showing, as a view toggle; plain ⌘A stays the page's")
+    func pageChat() {
+        #expect(command("a", shift: true) == .pageChat)
+        // ⌘A is Select All and belongs to the page.
+        #expect(command("a") == nil)
+        // Option or Control with ⌘ are left alone, as everywhere.
+        #expect(command("a", shift: true, option: true) == nil)
+        #expect(command("a", shift: true, control: true) == nil)
+    }
+
     @Test("Zoom keys, whatever the layout sends")
     func zoom() {
         #expect(command("=") == .zoomIn)

@@ -9,6 +9,21 @@ import Observation
 @MainActor
 @Observable
 public final class Conversation: Identifiable {
+    /// The shared context a provider session has heard. Page URLs alone are
+    /// insufficient: a same-URL read, title, or selection update changes the
+    /// next request's instructions.
+    private struct SharedPage: Equatable {
+        var url: String
+        var title: String
+        var text: String?
+        var selection: String?
+    }
+
+    private struct SharedContext: Equatable {
+        var page: SharedPage?
+        var mentions: [SharedPage]
+    }
+
     /// Where a message goes: the provider, its model, and the service that answers.
     public struct Route: Sendable {
         public var provider: String
@@ -55,6 +70,16 @@ public final class Conversation: Identifiable {
     public private(set) var activities: [Activity] = []
     /// What the last reply cost.
     public private(set) var usage: Usage?
+    /// The page the person has shared with this chat, if any. Kept as the tab
+    /// moves: the page is detached on navigation, not thrown away.
+    public private(set) var page: PageContext?
+    /// The other tabs the person has mentioned with @, shared as further
+    /// context after the page. Ordered as they were named, and kept as the
+    /// tabs move; letting one go removes it from here.
+    public private(set) var mentions: [PageContext] = []
+
+    /// How many tabs a chat may be told about at once.
+    public static let mentionLimit = 5
 
     /// Sessions providers opened, by provider.
     ///
@@ -64,9 +89,11 @@ public final class Conversation: Identifiable {
     /// the provider then starts afresh with the whole conversation.
     /// It was opened searching or not, and its instructions say so; a turn
     /// the other way starts afresh too.
-    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool)] = [:]
+    @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool, shared: SharedContext?)] = [:]
     /// The session opened or carried on by the reply under way.
     @ObservationIgnored private var opened: String?
+    /// Context captured when that request was built, not when its reply ends.
+    @ObservationIgnored private var openedShared: SharedContext?
     /// Whether the reply under way searches.
     @ObservationIgnored private var searched = false
     /// Text and thinking that arrived since the reply was last shown; they
@@ -93,7 +120,7 @@ public final class Conversation: Identifiable {
         updated = saved.updated
         messages = saved.messages
         title = SavedChat.title(of: saved.messages)
-        sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search) }
+        sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
 
     /// The chat as it is now, for keeping. A reply still coming is kept as
@@ -125,6 +152,60 @@ public final class Conversation: Identifiable {
     /// Finds the route for a turn. Asked once the question is on screen, so
     /// it can take a moment (finding a program, listing models) or fail.
     public typealias Routing = @MainActor @Sendable () async throws -> Route
+
+    /// Shares `page` with the chat, so the model answers about it from the
+    /// next turn on. Replaces any page already shared.
+    public func attach(_ page: PageContext) {
+        var page = page
+        page.attach()
+        self.page = page
+    }
+
+    /// Stops sharing the page, keeping the chat. The next turn starts
+    /// providers that keep their own sessions afresh, since what they were
+    /// told has changed.
+    public func detachPage() {
+        page?.detach()
+    }
+
+    /// Shares `page` as an additional tab the chat is told about, for its
+    /// questions to range over. A tab already mentioned is brought up to date
+    /// in place; a new one once the limit is reached is left out. Returns
+    /// whether the chat holds it now.
+    @discardableResult
+    public func mention(_ page: PageContext) -> Bool {
+        var page = page
+        page.attach()
+        if let index = mentions.firstIndex(where: { $0.url == page.url }) {
+            mentions[index] = page
+            return true
+        }
+        guard mentions.count < Self.mentionLimit else { return false }
+        mentions.append(page)
+        return true
+    }
+
+    /// Stops telling the model about a mentioned tab, keeping the chat. A
+    /// change starts providers that keep their own sessions afresh, as
+    /// sharing or detaching the page does.
+    public func unmention(_ url: URL) {
+        mentions.removeAll { $0.url == url }
+    }
+
+    /// What the model is told the chat is about, for providers that keep
+    /// their own sessions: the effective details of the page shared and every
+    /// tab mentioned. A change starts the provider afresh, as turning search
+    /// on or off does.
+    @ObservationIgnored private var shared: SharedContext? {
+        func snapshot(_ page: PageContext) -> SharedPage {
+            SharedPage(url: page.url.absoluteString, title: page.title, text: page.text, selection: page.selection)
+        }
+
+        let page = page.flatMap { $0.isActive ? snapshot($0) : nil }
+        let mentions = mentions.filter(\.isActive).map(snapshot)
+        guard page != nil || !mentions.isEmpty else { return nil }
+        return SharedContext(page: page, mentions: mentions)
+    }
 
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
 
@@ -190,12 +271,32 @@ public final class Conversation: Identifiable {
     private func request(for route: Route) -> ChatRequest {
         let asked = Array(messages.dropLast())
         if let last = messages.indices.last { messages[last].author = route.author }
-        // Up to date if it heard everything but the new question.
-        let session = sessions[route.provider].flatMap { $0.heard == asked.count - 1 && $0.search == route.search ? $0.id : nil }
+        let shared = self.shared
+        // Up to date if it heard everything but the new question, and was
+        // told the same things (search, shared page).
+        let session = sessions[route.provider].flatMap {
+            $0.heard == asked.count - 1 && $0.search == route.search && $0.shared == shared ? $0.id : nil
+        }
         // An agent that carries a session on may not name it again.
         opened = session
+        openedShared = shared
         searched = route.search
-        return ChatRequest(model: route.model, messages: asked, instructions: route.instructions, resume: session, search: route.search)
+        return ChatRequest(
+            model: route.model, messages: asked, instructions: instructions(for: route), resume: session, search: route.search
+        )
+    }
+
+    /// The route's standing instructions with the shared page, and any tabs
+    /// mentioned with @, described after them: exactly the route's
+    /// instructions when there is nothing shared.
+    private func instructions(for route: Route) -> String? {
+        let context =
+            [Instructions.page(self.page), Instructions.mentions(self.mentions)]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        guard !context.isEmpty else { return route.instructions }
+        guard let standing = route.instructions, !standing.isEmpty else { return context }
+        return standing + "\n\n" + context
     }
 
     /// Shows what's held: the first words at once, the rest a pace later.
@@ -255,7 +356,7 @@ public final class Conversation: Identifiable {
         task = nil
         activities = []
         guard let failure, !(failure is CancellationError) else {
-            if let provider, let opened { sessions[provider] = (opened, messages.count, searched) }
+            if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
             phase = .idle
             touch()
             return

@@ -1,4 +1,5 @@
 import AppKit
+import MoteAI
 import MoteCore
 import SwiftUI
 
@@ -54,15 +55,17 @@ struct NewTabPage: View {
                     // An overlay rather than a stack, so the list appearing or growing
                     // never moves the composer.
                     .overlay(alignment: .top) {
-                        if !browser.field.offers.isEmpty {
+                        if browser.assistantLeads && MentionMenu.query(in: browser.field.typed) != nil {
+                            EmptyView()
+                        } else if !browser.field.offers.isEmpty {
                             SuggestionList(browser: browser)
-                                .offset(y: Composer.fullHeight + 8)
+                                .offset(y: Composer.height(for: browser) + 8)
                                 .transition(.opacity.combined(with: .offset(y: -4)))
                         } else if browser.field.typed.isEmpty, browser.active?.shy != true {
                             // Past chats, out of the way once typing starts.
                             RecentChats(browser: browser)
                                 .padding(.horizontal, 6)
-                                .offset(y: Composer.fullHeight + 22)
+                                .offset(y: Composer.height(for: browser) + 22)
                                 .transition(.opacity)
                         }
                     }
@@ -162,12 +165,45 @@ struct Composer: View {
 
     @State private var shake: CGFloat = 0
     @State private var refused = false
+    @State private var mentionSelection = ComposerSelection()
+    @State private var dismissedMentionDraft: String?
+    @State private var escapePick: Int?
 
-    private var hasText: Bool { !browser.field.typed.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var hasText: Bool { !browser.field.typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var engine: String { browser.prefs.engine.name(custom: browser.prefs.customEngine) }
     private var assistant: Assistant { .shared }
     /// Return asks here: one of the assistant's modes is chosen.
     private var leads: Bool { !compact && browser.field.asksAssistant }
+    private var mentionQuery: String? { leads ? MentionMenu.query(in: browser.field.typed) : nil }
+    private var mentionables: [MentionMenu.Candidate] {
+        guard browser.field.stagedMentionIDs.count < Conversation.mentionLimit else { return [] }
+        let mentioned = Set(stagedTabs.map(\.url))
+        return browser.mentionCandidates(excluding: browser.active, mentioned: mentioned).filter { candidate in
+            guard let id = UUID(uuidString: candidate.id) else { return false }
+            return browser.tab(id).map { PageSharing.canShare($0.address) } ?? false
+        }
+    }
+    private var mentionMatches: [MentionMenu.Candidate] {
+        guard let mentionQuery else { return [] }
+        return MentionMenu.matching(mentionQuery, in: mentionables)
+    }
+    private var mentionItems: [ComposerPickerItem] { mentionMatches.map(ComposerPickerItem.mention) }
+    private var mentionPickerVisible: Bool { mentionQuery != nil && !mentionItems.isEmpty && dismissedMentionDraft != browser.field.typed }
+    private var stagedTabs: [AddressEntry.StagedMention] { browser.field.stagedMentions }
+    private var showStagedContexts: Bool {
+        leads && (!stagedTabs.isEmpty || browser.field.capturingMentionContext)
+    }
+
+    static let contextHeight: CGFloat = 40
+
+    static func height(for browser: Browser) -> CGFloat {
+        let showContexts =
+            browser.field.asksAssistant
+            && (!browser.field.stagedMentions.isEmpty || browser.field.capturingMentionContext)
+        return fullHeight + (showContexts ? contextHeight : 0)
+    }
+
+    private var contentHeight: CGFloat { compact ? Self.compactHeight : Self.height(for: browser) }
     /// The field's symbol: what Return will do now, with ⌘ held or not.
     private var symbol: String {
         if browser.field.switching { return "square.on.square" }
@@ -190,7 +226,10 @@ struct Composer: View {
                     .frame(width: 16)
                 AddressField(
                     browser: browser, size: 15,
-                    placeholder: placeholder
+                    placeholder: placeholder,
+                    moveSelection: moveMentionSelection,
+                    choose: confirmMention,
+                    escape: dismissMentionPicker
                 )
                 .frame(height: 22)
             }
@@ -198,6 +237,7 @@ struct Composer: View {
             .frame(height: Composer.compactHeight)
 
             if !compact {
+                if showStagedContexts { stagedContexts.frame(height: Self.contextHeight) }
                 HStack(spacing: 10) {
                     AskToggle(asks: leads, engine: engine) { asks in
                         browser.field.asksAssistant = asks
@@ -213,9 +253,10 @@ struct Composer: View {
                         AIChip(browser: browser).transition(.opacity)
                     }
                     RoundButton(
-                        symbol: "arrow.up", filled: hasText,
+                        symbol: "arrow.up", filled: hasText && !browser.field.capturingMentionContext,
                         help: leads ? "Ask   ↩" : "Search or go   ↩"
                     ) {
+                        guard !browser.field.capturingMentionContext else { return }
                         leads ? browser.ask() : browser.submit(searching: true)
                     }
                 }
@@ -224,10 +265,10 @@ struct Composer: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 11)
                 .padding(.bottom, 10)
-                .frame(height: Composer.fullHeight - Composer.compactHeight, alignment: .bottom)
+                .frame(height: contentHeight - Composer.compactHeight - (showStagedContexts ? Self.contextHeight : 0), alignment: .bottom)
             }
         }
-        .frame(height: compact ? Composer.compactHeight : Composer.fullHeight)
+        .frame(height: contentHeight)
         .background {
             ZStack {
                 if !compact {
@@ -263,8 +304,119 @@ struct Composer: View {
             guard refused else { return }
             withAnimation(Motion.quick) { refused = false }
         }
+        .overlay(alignment: .top) {
+            if mentionPickerVisible {
+                ComposerPicker(items: mentionItems, highlighted: mentionSelection.highlightedIndex, choose: chooseMention)
+                    .offset(y: contentHeight + 8)
+                    .zIndex(2)
+            }
+        }
+        .onChange(of: browser.field.typed) { _, _ in
+            mentionSelection.reset()
+            dismissedMentionDraft = nil
+        }
+        .onChange(of: mentionItems) { _, _ in mentionSelection.reset() }
+        .onChange(of: mentionPickerVisible) { _, visible in
+            if visible { holdEscapePick() } else { releaseEscapePick() }
+        }
+        .onChange(of: browser.field.picked) { oldValue, newValue in
+            guard oldValue == escapePick, newValue == nil, mentionPickerVisible else { return }
+            escapePick = nil
+            dismissedMentionDraft = browser.field.typed
+            mentionSelection.reset()
+        }
+        .onDisappear { releaseEscapePick() }
         .animation(Motion.settle, value: refused)
         .animation(Motion.settle, value: leads)
+        .animation(Motion.quick, value: mentionItems)
+        .animation(Motion.quick, value: showStagedContexts)
+    }
+
+    private var stagedContexts: some View {
+        HStack(spacing: 6) {
+            if !stagedTabs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 6) {
+                        ForEach(stagedTabs) { staged in
+                            ContextChip(title: staged.title.isEmpty ? (staged.url.host() ?? staged.url.absoluteString) : staged.title) {
+                                browser.field.unstageMention(staged.id)
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                if browser.tab(staged.id)?.address != staged.url {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(Palette.muted)
+                                        .offset(x: -4, y: 3)
+                                        .help("This tab changed pages. Remove it and mention the current page again.")
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(height: 28)
+                .accessibilityLabel("Mentioned pages")
+            }
+            Spacer(minLength: 0)
+            if browser.field.capturingMentionContext {
+                ProgressView().controlSize(.small)
+                Text("Reading")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.muted)
+                    .accessibilityLabel("Reading selected pages")
+            } else if browser.field.stagedMentions.count >= Conversation.mentionLimit {
+                Text("5 / 5")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Palette.muted)
+                    .help("Up to five pages can be shared")
+                    .accessibilityLabel("Maximum five pages shared")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func chooseMention(_ item: ComposerPickerItem) {
+        guard case .mention(let candidate) = item, let id = UUID(uuidString: candidate.id),
+            let tab = browser.tab(id), let url = tab.address,
+            browser.field.stageMention(id, url: url, title: candidate.title)
+        else { return }
+        browser.field.typed = MentionMenu.cleared(browser.field.typed)
+        mentionSelection.reset()
+        dismissedMentionDraft = nil
+    }
+
+    private func confirmMention() -> Bool {
+        guard mentionPickerVisible,
+            let index = mentionSelection.confirmedIndex(count: mentionItems.count), mentionItems.indices.contains(index)
+        else { return false }
+        chooseMention(mentionItems[index])
+        return true
+    }
+
+    private func moveMentionSelection(_ step: Int) -> Bool {
+        guard mentionPickerVisible else { return false }
+        mentionSelection.move(step, count: mentionItems.count)
+        return true
+    }
+
+    private func dismissMentionPicker() -> Bool {
+        guard mentionPickerVisible else { return false }
+        dismissedMentionDraft = browser.field.typed
+        mentionSelection.reset()
+        releaseEscapePick()
+        return true
+    }
+
+    private func holdEscapePick() {
+        guard mentionPickerVisible, escapePick == nil, browser.field.picked == nil else { return }
+        escapePick = -1
+        browser.field.picked = -1
+    }
+
+    private func releaseEscapePick() {
+        guard escapePick != nil else { return }
+        escapePick = nil
+        if browser.field.picked == -1 { browser.field.picked = nil }
     }
 }
 

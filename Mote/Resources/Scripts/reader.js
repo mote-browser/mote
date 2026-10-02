@@ -137,8 +137,22 @@ html, body { background: #fff !important; margin: 0 !important; padding: 0 !impo
 		window.scrollTo(0, 0);
 		return "read";
 	}
+	/**
+	* The article's text, read without changing the page: the same scoring as
+	* reading mode finds the article, but it is cleaned on a copy, so the page the
+	* person is looking at stays where it is. Falls back to the page's whole text
+	* when nothing reads like an article.
+	*/
+	function text() {
+		const article = findArticle(document);
+		if (!article) return (document.body?.innerText ?? "").trim();
+		const copy = article.cloneNode(true);
+		cleanArticle(copy);
+		return (copy.textContent ?? "").replace(/[ \t]+/g, " ").replace(/(\n\s*){3,}/g, "\n\n").trim();
+	}
 
 //#endregion
 exports.run = run;
+exports.text = text;
 return exports;
 })({});

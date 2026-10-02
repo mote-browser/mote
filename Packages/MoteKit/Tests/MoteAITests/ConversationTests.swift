@@ -12,6 +12,12 @@ final class ScriptedService: ChatService, @unchecked Sendable {
     var hold = false
     private(set) var requests: [ChatRequest] = []
     private(set) var stopped = false
+    private var continuation: AsyncThrowingStream<ChatEvent, Error>.Continuation?
+
+    func finish() {
+        continuation?.finish()
+        continuation = nil
+    }
 
     func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
         requests.append(request)
@@ -21,7 +27,11 @@ final class ScriptedService: ChatService, @unchecked Sendable {
         continuation.onTermination = { [weak self] reason in
             if case .cancelled = reason { self?.stopped = true }
         }
-        if !hold { continuation.finish(throwing: failure) }
+        if hold {
+            self.continuation = continuation
+        } else {
+            continuation.finish(throwing: failure)
+        }
         return stream
     }
 }
@@ -36,6 +46,10 @@ struct ConversationTests {
     /// Waits for the reply to settle.
     private func settle(_ conversation: Conversation) async {
         for _ in 0..<200 where conversation.busy { try? await Task.sleep(for: .milliseconds(5)) }
+    }
+
+    private func waitForRequest(_ service: ScriptedService, count: Int) async {
+        for _ in 0..<200 where service.requests.count < count { try? await Task.sleep(for: .milliseconds(5)) }
     }
 
     @Test("Sending adds the question and a reply that fills in as it streams")
@@ -275,6 +289,343 @@ struct ConversationTests {
         #expect(conversation.messages.last?.text.hasPrefix("w0 w1 ") == true)
         #expect(conversation.messages.last?.text.hasSuffix("w299 ") == true)
         #expect(count.changes < 30)
+    }
+
+    @Test("A chat carrying a shared page tells the model about it, after the standing instructions")
+    func sharedPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.send("What is this?", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("An article"))
+        #expect(instructions.contains("https://example.com/a"))
+        #expect(instructions.contains("untrusted page evidence"))
+        #expect(!service.requests[0].search)
+    }
+
+    @Test("A chat with no page is asked exactly as before")
+    func noPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[0].instructions == "Be brief")
+    }
+
+    @Test("Detaching the page stops sharing it, and the chat carries on")
+    func detachPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.detachPage()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[0].instructions == "Be brief")
+    }
+
+    @Test("A page attached in place of another replaces what the model is shown")
+    func reattach() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "First"))
+        conversation.detachPage()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/b")!, title: "Second"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.contains("Second"))
+        #expect(!instructions.contains("First"))
+    }
+
+    @Test("Sharing a page with a provider that already heard the chat starts it afresh")
+    func pageChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        service.events = [.text("About that page")]
+        conversation.send("And now?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].instructions?.contains("An article") == true)
+    }
+
+    @Test("The same page kept across turns carries the provider's session on")
+    func samePageResumes() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        service.events = [.text("Sure")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == "s-1")
+    }
+
+    @Test("Replacing a shared page with identical effective context keeps the provider session")
+    func identicalPageContextResumes() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(
+            PageContext(url: URL(string: "https://example.com/")!, title: "Article", text: "Same body", selection: "Same quote"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.attach(
+            PageContext(url: URL(string: "https://example.com/")!, title: "Article", text: "Same body", selection: "Same quote"))
+        service.events = [.text("Sure")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == "s-1")
+    }
+
+    @Test("A page changed during a reply is not recorded as the context that session heard")
+    func pageChangesDuringReply() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        service.hold = true
+        let conversation = Conversation()
+        conversation.attach(page("example.com", title: "First", text: "First body"))
+        conversation.send("Hello", via: route(service))
+        await waitForRequest(service, count: 1)
+        #expect(service.requests.count == 1)
+
+        conversation.attach(page("example.com", title: "Second", text: "Second body"))
+        service.finish()
+        await settle(conversation)
+
+        service.hold = false
+        service.events = [.text("Fresh context")]
+        conversation.send("What changed?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+    }
+
+    @Test("A mention added during a reply is not recorded as context that session heard")
+    func mentionChangesDuringReply() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await waitForRequest(service, count: 1)
+        #expect(service.requests.count == 1)
+
+        conversation.mention(page("example.com", title: "Mentioned", text: "Mentioned body"))
+        service.finish()
+        await settle(conversation)
+
+        service.hold = false
+        service.events = [.text("Fresh context")]
+        conversation.send("What does it say?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+    }
+
+    @Test("Updating shared page text at the same URL starts a fresh provider session")
+    func sameURLPageTextChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(page("example.com", title: "Article", text: "First version"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.attach(page("example.com", title: "Article", text: "Updated version"))
+        service.events = [.text("Updated")]
+        conversation.send("What changed?", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == nil)
+    }
+
+    @Test("Updating shared page title at the same URL starts a fresh provider session")
+    func sameURLPageTitleChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(page("example.com", title: "Old title", text: "Article"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.attach(page("example.com", title: "New title", text: "Article"))
+        service.events = [.text("Updated")]
+        conversation.send("What changed?", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == nil)
+    }
+
+    @Test("Updating shared page selection at the same URL starts a fresh provider session")
+    func sameURLPageSelectionChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(PageContext(url: URL(string: "https://example.com/")!, title: "Article", selection: "First quote"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.attach(PageContext(url: URL(string: "https://example.com/")!, title: "Article", selection: "New quote"))
+        service.events = [.text("Updated")]
+        conversation.send("What changed?", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == nil)
+    }
+
+    @Test("A shared page's delayed text enrichment starts a fresh provider session")
+    func sharedPageEnrichmentChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(page("example.com", title: "Article"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.attach(page("example.com", title: "Article", text: "Read after attach"))
+        service.events = [.text("Updated")]
+        conversation.send("What does it say?", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].instructions?.contains("Read after attach") == true)
+    }
+
+    @Test("Updating a mentioned page's same-URL content starts a fresh provider session")
+    func sameURLMentionChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.mention(page("example.com", title: "Article", text: "First version"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+
+        conversation.mention(page("example.com", title: "Article", text: "Updated version"))
+        service.events = [.text("Updated")]
+        conversation.send("What changed?", via: route(service))
+        await settle(conversation)
+
+        #expect(service.requests[1].resume == nil)
+    }
+
+    // MARK: - Mentioned tabs
+
+    private func page(_ host: String, title: String, text: String? = nil) -> PageContext {
+        PageContext(url: URL(string: "https://\(host)/")!, title: title, text: text)
+    }
+
+    @Test("Mentioned tabs are held, in the order they were named")
+    func mentions() {
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.mention(page("b.com", title: "B"))
+        #expect(conversation.mentions.map { $0.url.host() } == ["a.com", "b.com"])
+    }
+
+    @Test("Naming the same tab again updates it in place rather than adding it twice")
+    func mentionUpdatesInPlace() {
+        let conversation = Conversation()
+        conversation.mention(PageContext(url: URL(string: "https://a.com/")!, title: "A"))
+        conversation.mention(PageContext(url: URL(string: "https://a.com/")!, title: "A", text: "Read now"))
+        #expect(conversation.mentions.count == 1)
+        #expect(conversation.mentions[0].text == "Read now")
+    }
+
+    @Test("A chat is told about at most the limit of tabs at once, and refuses the rest")
+    func mentionCap() {
+        let conversation = Conversation()
+        for n in 0..<Conversation.mentionLimit {
+            #expect(conversation.mention(page("s\(n).com", title: "S\(n)")))
+        }
+        #expect(conversation.mentions.count == Conversation.mentionLimit)
+        #expect(!conversation.mention(page("over.com", title: "Over")))
+        #expect(conversation.mentions.count == Conversation.mentionLimit)
+    }
+
+    @Test("A tab let go stops being told to the model, the others kept")
+    func unmention() {
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.mention(page("b.com", title: "B"))
+        conversation.unmention(URL(string: "https://a.com/")!)
+        #expect(conversation.mentions.map { $0.url.host() } == ["b.com"])
+    }
+
+    @Test("A mentioned tab is rendered after the page, and the model is asked about all of them")
+    func mentionedInstructions() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.attach(page("main.com", title: "Main"))
+        conversation.mention(page("extra.com", title: "Extra", text: "More words"))
+        conversation.send("Compare them", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("Main"))
+        #expect(instructions.contains("Extra"))
+        #expect(instructions.contains("More words"))
+        #expect(instructions.contains("untrusted page evidence"))
+    }
+
+    @Test("A blank tab's chat has no page, but its mentioned tabs carry the context")
+    func mentionedWithoutPage() async {
+        let service = ScriptedService()
+        service.events = [.text("Hi")]
+        let conversation = Conversation()
+        conversation.mention(page("only.com", title: "Only"))
+        conversation.send("What's this?", via: route(service))
+        await settle(conversation)
+        let instructions = service.requests[0].instructions ?? ""
+        #expect(instructions.hasPrefix("Be brief"))
+        #expect(instructions.contains("Only"))
+        #expect(!instructions.contains("looking at a web page"))
+    }
+
+    @Test("Naming or letting go of a tab starts the provider afresh, so it gets the new context")
+    func mentionChangesSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        conversation.mention(page("a.com", title: "A"))
+        service.events = [.text("On it")]
+        conversation.send("And this?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == nil)
+        conversation.unmention(URL(string: "https://a.com/")!)
+        service.events = [.text("Back")]
+        conversation.send("And now?", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[2].resume == nil)
+    }
+
+    @Test("The same mentioned tabs kept across turns carry the provider's session on")
+    func sameMentionsResume() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.mention(page("a.com", title: "A"))
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        service.events = [.text("Sure")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == "s-1")
     }
 }
 

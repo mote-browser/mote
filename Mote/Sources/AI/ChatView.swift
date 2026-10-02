@@ -4,9 +4,26 @@ import SwiftUI
 /// A chat in a tab: the conversation in a readable column, and a composer
 /// along the bottom for the next message. Questions sit in bubbles on the
 /// right; answers read as plain text, signed with who wrote them.
-struct ChatView: View {
-    let browser: Browser
+///
+/// Its two slots are for the page chat: `start` stands in for the empty
+/// conversation (its quick actions), and `accessory` sits above the composer
+/// (its context chip). A blank tab's chat leaves both empty.
+struct ChatView<Accessory: View, Start: View>: View {
+    @ObservedObject var browser: Browser
     let conversation: Conversation
+    @ViewBuilder let accessory: () -> Accessory
+    @ViewBuilder let start: () -> Start
+    /// Run before a question goes, so the page chat can share the page on its
+    /// first turn; the question waits for it.
+    var beforeSend: (() async -> Void)? = nil
+    /// The surface the conversation reads on: the card for a chat in a tab, the
+    /// window frame for the page chat docked on it, the mirror of the sidebar.
+    var ground: Color = Palette.ground
+    /// A draft the composer opens with, seeded from outside — the page chat
+    /// puts the selection asked about here. Taken up once, then reported
+    /// through `took`, so it is not put back on the next draw.
+    var seed: String? = nil
+    var took: () -> Void = {}
 
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
@@ -18,14 +35,15 @@ struct ChatView: View {
     /// and coming back down takes it up again.
     @State private var pinned = true
 
-    static let column: CGFloat = 720
-    private static let end = "end"
+    static var column: CGFloat { 720 }
+    private static var end: String { "end" }
 
     var body: some View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) {
+                        if conversation.messages.isEmpty { start() }
                         ForEach(conversation.messages) { message in
                             let last = message.id == conversation.messages.last?.id
                             MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
@@ -68,9 +86,11 @@ struct ChatView: View {
                         }
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
+                    accessory()
+                    if !conversation.mentions.isEmpty { mentioned(conversation) }
                     ChatComposer(
                         browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
-                        send: send
+                        mentionables: mentionables, choseMention: chose, send: send
                     )
                     .frame(maxWidth: Self.column)
                 }
@@ -79,15 +99,19 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
                     // The conversation fades out under the composer.
-                    LinearGradient(colors: [Palette.ground.opacity(0), Palette.ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
+                    LinearGradient(colors: [ground.opacity(0), ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
                         .frame(height: inputHeight + 110)
                         .allowsHitTesting(false)
                 }
                 .animation(Motion.quick, value: distance == .far)
             }
         }
-        .background(Palette.ground)
-        .onAppear { focus += 1 }
+        .background(ground)
+        .onAppear {
+            focus += 1
+            take()
+        }
+        .onChange(of: seed) { _, _ in take() }
         .environment(
             \.openURL,
             OpenURLAction { url in
@@ -103,11 +127,70 @@ struct ChatView: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
-        Assistant.shared.ask(text, in: conversation)
+        guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
+        Task {
+            await beforeSend()
+            Assistant.shared.ask(text, in: conversation)
+        }
     }
 
     private func retry() { Assistant.shared.retry(in: conversation) }
 
+    /// Takes up a seeded draft: the selection asked about, quoted, ready to
+    /// send or edit. Reported taken so the panel does not put it back.
+    private func take() {
+        guard let seed, !seed.isEmpty else { return }
+        draft = seed
+        Task { @MainActor in took() }
+    }
+
+    // MARK: - Mentioned tabs
+
+    /// The other open tabs the @-picker may offer: this window's named tabs
+    /// but the one this chat is about, and none already mentioned. Empty once
+    /// the chat holds as many as it may.
+    private var mentionables: [MentionMenu.Candidate] {
+        guard conversation.mentions.count < Conversation.mentionLimit else { return [] }
+        return browser.mentionCandidates(excluding: browser.active, mentioned: Set(conversation.mentions.map(\.url)))
+    }
+
+    /// Shares a chosen tab with the chat as further context. Taken up at once
+    /// with its name and address, so its chip shows on the first frame, and
+    /// its text read after; a late read attaches only while the tab is still
+    /// open and still mentioned.
+    private func chose(_ candidate: MentionMenu.Candidate) {
+        guard let tab = browser.tabs.first(where: { $0.id.uuidString == candidate.id }), let url = tab.address else { return }
+        conversation.mention(PageContext(url: url, title: tab.title))
+        Task { [weak conversation] in
+            guard browser.tab(tab.id) != nil, conversation?.mentions.contains(where: { $0.url == url }) == true,
+                let page = await tab.capturePageContext()
+            else { return }
+            conversation?.mention(page)
+        }
+    }
+
+    /// The tabs mentioned with @, each a small chip that lets it go.
+    private func mentioned(_ conversation: Conversation) -> some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(spacing: 6) {
+                ForEach(conversation.mentions, id: \.url) { page in
+                    ContextChip(title: page.title.isEmpty ? (page.url.host() ?? page.url.absoluteString) : page.title) {
+                        conversation.unmention(page.url)
+                    }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+        .frame(maxWidth: Self.column, alignment: .leading)
+    }
+
+}
+
+extension ChatView where Accessory == EmptyView, Start == EmptyView {
+    /// A chat with no page slots: the blank tab's, as before.
+    init(browser: Browser, conversation: Conversation) {
+        self.init(browser: browser, conversation: conversation, accessory: { EmptyView() }, start: { EmptyView() })
+    }
 }
 
 /// How far below the view the end of the conversation is.
@@ -459,23 +542,128 @@ private struct JumpDown: View {
 // MARK: - Composer
 
 /// The next message, and who it goes to, in the same rounded box as the new
-/// tab's composer. While a reply comes, the send button stops it.
+/// tab's composer. While a reply comes, the send button stops it. A mention
+/// being typed with @ opens a quiet picker of the window's other tabs above
+/// the field; choosing one shares that tab with the chat. A `/` typed first
+/// opens the same kind of picker for the built-in skills, whose prompt fills
+/// the field.
 private struct ChatComposer: View {
     let browser: Browser
     let conversation: Conversation
     @Binding var draft: String
     @Binding var height: CGFloat
     let focus: Int
+    /// The other tabs the @-picker offers, and what to do when one is chosen.
+    let mentionables: [MentionMenu.Candidate]
+    let choseMention: (MentionMenu.Candidate) -> Void
     let send: () -> Void
+    @State private var selection = ComposerSelection()
+    @State private var dismissedMenu: ComposerMenu?
+    @State private var escapePick: Int?
 
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
+    /// Which picker the draft calls for: the `/` skills, the `@` mentions, or
+    /// none. The two never argue, so a leading slash is a skill and a slash
+    /// anywhere else is literal.
+    private var menu: ComposerMenu { ComposerMenu.of(draft) }
+
+    /// The skills the command being typed offers, if one is.
+    private var skills: [Skill.Item] {
+        guard let query = Skill.query(in: draft) else { return [] }
+        return Skill.matching(query)
+    }
+
+    /// The tabs the mention being typed offers, if one is.
+    private var matches: [MentionMenu.Candidate] {
+        guard menu == .mentions, let query = MentionMenu.query(in: draft) else { return [] }
+        return MentionMenu.matching(query, in: mentionables)
+    }
+
+    private var pickerItems: [ComposerPickerItem] {
+        switch menu {
+        case .skills: skills.map(ComposerPickerItem.skill)
+        case .mentions: matches.map(ComposerPickerItem.mention)
+        case .none: []
+        }
+    }
+
+    private var pickerVisible: Bool { !pickerItems.isEmpty && dismissedMenu != menu }
+
+    /// Return picks the first offered row while a picker is up, and sends the
+    /// message otherwise. A finished `/command` with text after it is expanded
+    /// into its prompt and sent.
+    private func submit() {
+        if pickerVisible, confirmSelection() { return }
+        if let expanded = Skill.expand(draft) {
+            draft = expanded
+            send()
+        } else if !conversation.busy || hasText {
+            send()
+        }
+    }
+
+    @discardableResult
+    private func confirmSelection() -> Bool {
+        guard pickerVisible, let index = selection.confirmedIndex(count: pickerItems.count), pickerItems.indices.contains(index)
+        else { return false }
+        choose(pickerItems[index])
+        return true
+    }
+
+    private func choose(_ item: ComposerPickerItem) {
+        switch item {
+        case .mention(let candidate):
+            choseMention(candidate)
+            draft = MentionMenu.cleared(draft)
+        case .skill(let skill):
+            draft = skill.prompt
+        }
+        dismissedMenu = nil
+        selection.reset()
+        releaseEscapePick()
+    }
+
+    private func moveSelection(_ step: Int) -> Bool {
+        guard pickerVisible else { return false }
+        selection.move(step, count: pickerItems.count)
+        return true
+    }
+
+    private func dismissPicker() {
+        guard pickerVisible else { return }
+        dismissedMenu = menu
+        selection.reset()
+        releaseEscapePick()
+    }
+
+    private func holdEscapePick() {
+        guard pickerVisible, escapePick == nil, browser.field.picked == nil else { return }
+        escapePick = -1
+        browser.field.picked = -1
+    }
+
+    private func releaseEscapePick() {
+        guard escapePick != nil else { return }
+        escapePick = nil
+        if browser.field.picked == -1 { browser.field.picked = nil }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if pickerVisible {
+                ComposerPicker(items: pickerItems, highlighted: selection.highlightedIndex, choose: choose)
+            }
             ChatInput(
                 text: $draft, height: $height, placeholder: "Ask a follow-up", focus: focus,
-                submit: { if !conversation.busy || hasText { send() } },
+                submit: submit,
+                moveSelection: moveSelection,
+                choose: { pickerVisible && confirmSelection() },
                 escape: {
+                    if pickerVisible {
+                        dismissPicker()
+                        return true
+                    }
                     guard conversation.busy else { return false }
                     conversation.stop()
                     return true
@@ -514,6 +702,22 @@ private struct ChatComposer: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1).allowsHitTesting(false)
         }
         .animation(Motion.quick, value: conversation.busy)
+        .animation(Motion.quick, value: pickerItems)
+        .onChange(of: draft) { _, _ in
+            selection.reset()
+            dismissedMenu = nil
+        }
+        .onChange(of: pickerItems) { _, _ in selection.reset() }
+        .onChange(of: pickerVisible) { _, visible in
+            if visible { holdEscapePick() } else { releaseEscapePick() }
+        }
+        .onChange(of: browser.field.picked) { oldValue, newValue in
+            guard oldValue == escapePick, newValue == nil, pickerVisible else { return }
+            escapePick = nil
+            dismissedMenu = menu
+            selection.reset()
+        }
+        .onDisappear { releaseEscapePick() }
     }
 }
 

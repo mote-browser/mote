@@ -192,4 +192,90 @@ final class MoteUITests: XCTestCase {
         app.typeKey("m", modifierFlags: [])
         XCTAssertTrue(go.isEnabled, "Go stays disabled with something typed")
     }
+
+    @MainActor
+    func testInitialAssistantComposerCanStageAndRemoveLocalMention() throws {
+        let app = launch()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+
+        let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("MoteMention-\(UUID().uuidString).html")
+        try "<html><head><title>LocalMentionFixture</title></head><body>Local mention page</body></html>".write(
+            to: fixture, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(fixture.absoluteURL.absoluteString, forType: .string)
+        app.typeKey("v", modifierFlags: .command)
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(app.webViews.staticTexts["Local mention page"].waitForExistence(timeout: 10))
+
+        app.typeKey("t", modifierFlags: .command)
+        app.typeKey("j", modifierFlags: .command)
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.typeText("@")
+
+        let candidate = app.buttons["Mention LocalMentionFixture"].firstMatch
+        XCTAssertTrue(candidate.waitForExistence(timeout: 5), "The initial AI composer has no @ picker")
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(field.exists, "Escape closed the initial composer instead of only dismissing its picker")
+        XCTAssertTrue(waitUntilGone(candidate), "Escape left the mention picker open")
+
+        app.typeKey(.delete, modifierFlags: [])
+        app.typeText("@")
+        XCTAssertTrue(candidate.waitForExistence(timeout: 5))
+        app.typeKey(.downArrow, modifierFlags: [])
+        app.typeKey(.tab, modifierFlags: [])
+        let remove = app.buttons["Stop mentioning LocalMentionFixture"].firstMatch
+        XCTAssertTrue(remove.waitForExistence(timeout: 5), "Tab did not stage the highlighted page")
+        remove.click()
+        XCTAssertTrue(waitUntilGone(remove), "The staged page chip did not remove its context")
+
+        app.typeText("@")
+        XCTAssertTrue(candidate.waitForExistence(timeout: 5))
+        app.typeKey("j", modifierFlags: .command)
+        XCTAssertTrue(waitUntilGone(candidate), "Switching back to search left the AI mention popup open")
+        app.typeKey("j", modifierFlags: .command)
+        XCTAssertFalse(app.buttons["Stop mentioning LocalMentionFixture"].exists, "Mode switching retained a stale staged page")
+    }
+
+    @MainActor
+    func testPretypedMentionRefreshesOnAssistantModeSwitchAndCanReachSeventhResult() throws {
+        let app = launch()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+
+        var fixtures: [URL] = []
+        defer { fixtures.forEach { try? FileManager.default.removeItem(at: $0) } }
+        for index in 1...7 {
+            let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("MoteMention-\(UUID().uuidString).html")
+            try "<html><head><title>LocalMentionFixture\(index)</title></head><body>Local mention page \(index)</body></html>".write(
+                to: fixture, atomically: true, encoding: .utf8)
+            fixtures.append(fixture)
+
+            if index > 1 { app.typeKey("t", modifierFlags: .command) }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(fixture.absoluteURL.absoluteString, forType: .string)
+            app.typeKey("l", modifierFlags: .command)
+            app.typeKey("v", modifierFlags: .command)
+            app.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(app.webViews.staticTexts["Local mention page \(index)"].waitForExistence(timeout: 10))
+        }
+
+        app.typeKey("t", modifierFlags: .command)
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.typeText("@")
+        app.typeKey("j", modifierFlags: .command)
+
+        let seventh = app.buttons["Mention LocalMentionFixture7"].firstMatch
+        XCTAssertTrue(seventh.waitForExistence(timeout: 5), "Changing to AI mode did not refresh the pretyped @ query")
+        for _ in 0..<7 { app.typeKey(.downArrow, modifierFlags: []) }
+        XCTAssertTrue(seventh.isHittable, "Keyboard highlight moved past the visible rows without scrolling the selected result into view")
+
+        app.typeKey(.tab, modifierFlags: [])
+        XCTAssertTrue(
+            app.buttons["Stop mentioning LocalMentionFixture7"].waitForExistence(timeout: 5),
+            "The shared picker could not confirm its seventh result"
+        )
+    }
 }

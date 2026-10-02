@@ -27,6 +27,9 @@ final class Preferences: ObservableObject {
     @Published var sideHides: Bool
     /// Set by dragging the sidebar's edge.
     @Published var sideWidth: CGFloat
+    /// Set by dragging the page chat panel's edge; it docks on the window's
+    /// trailing edge, the mirror of the sidebar.
+    @Published var chatWidth: CGFloat
     @Published var glyph: Glyph
     @Published var bookmarksBar: Bool
     /// The tab's reading bar.
@@ -101,6 +104,7 @@ final class Preferences: ObservableObject {
         sidebar = store.object(forKey: "sidebar") as? Bool ?? (store.string(forKey: "manner") == "side")
         sideHides = store.value("sidebar.hides", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
+        chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
         glyph = store.value("glyph", or: .letters)
@@ -162,6 +166,7 @@ final class Preferences: ObservableObject {
         keep($sidebar, "sidebar")
         keep($sideHides, "sidebar.hides")
         keep($sideWidth, "sidebar.width")
+        keep($chatWidth, "chat.width")
         keep($glyph, "glyph")
         keep($bookmarksBar, "bookmarks.bar")
         keep($showsReading, "tabs.reading")
