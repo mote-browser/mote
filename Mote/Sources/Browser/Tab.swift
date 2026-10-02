@@ -37,6 +37,7 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var address: URL?
     @Published private(set) var progress: Double = 0
     @Published private(set) var loading = false
+    @Published private(set) var pageColor: NSColor?
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     /// Why the page didn't load, shown in its place.
@@ -155,6 +156,10 @@ final class Tab: ObservableObject, Identifiable {
         // opener or an extension, or be made long before its page.
         FrameRate.apply(to: configuration.preferences)
         let web = PageView(frame: .zero, configuration: configuration)
+        web.onPageColor = { [weak self] color in
+            if self?.pageColor != color { self?.pageColor = color }
+        }
+        web.watchColors()
         // Pinch to magnify; ⌘+ and ⌘- change page zoom instead.
         web.allowsMagnification = true
         // PageView does its own swipes.
@@ -733,6 +738,7 @@ final class Tab: ObservableObject, Identifiable {
         sound.stop()
         guard let web = built else { return }
         built = nil
+        web.stopColors()
         let controller = web.configuration.userContentController
         Web.release(controller)
         controller.removeAllUserScripts()

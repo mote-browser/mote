@@ -19,6 +19,57 @@ final class PageView: WKWebView {
     /// Any click or scroll, so a wake snapshot never gets in the way.
     var onTouch: (() -> Void)?
 
+    /// WebKit does the sampling in its renderer, including fixed/sticky headers.
+    /// These optional SPI are guarded so older engines keep the page background.
+    // ponytail: native heuristics can reject complex imagery; add custom sampling only if needed.
+    var onPageColor: ((NSColor) -> Void)?
+    private var colorKeys: [String] = []
+
+    func watchColors() {
+        guard colorKeys.isEmpty else { return }
+        // A separate toolbar has no obscured inset. Request a top edge sample
+        // without changing the page's viewport or its scroll position.
+        let overflow = NSSelectorFromString("_setOverflowHeightForTopScrollEdgeEffect:")
+        if responds(to: overflow) {
+            typealias Setter = @convention(c) (AnyObject, Selector, CGFloat) -> Void
+            unsafeBitCast(method(for: overflow), to: Setter.self)(self, overflow, 1)
+        }
+        colorKeys = ["_sampledTopFixedPositionContentColor", "underPageBackgroundColor"]
+            .filter { responds(to: NSSelectorFromString($0)) }
+        for key in colorKeys { addObserver(self, forKeyPath: key, options: [], context: nil) }
+        reportColor()
+    }
+
+    func stopColors() {
+        for key in colorKeys { removeObserver(self, forKeyPath: key) }
+        colorKeys = []
+        onPageColor = nil
+    }
+
+    override nonisolated func observeValue(
+        forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?
+    ) {
+        let own = object as? PageView === self
+        let handled = MainActor.assumeIsolated {
+            if let keyPath, own, colorKeys.contains(keyPath) {
+                reportColor()
+                return true
+            }
+            return false
+        }
+        if !handled { super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context) }
+    }
+
+    private func reportColor() {
+        let color = colorKeys.lazy.compactMap { self.value(forKey: $0) as? NSColor }
+            .first { $0.alphaComponent == 1 }
+        if let color { onPageColor?(color) }
+    }
+
+    deinit {
+        for key in colorKeys { removeObserver(self, forKeyPath: key) }
+    }
+
     // MARK: - Context menu
 
     private var selection: String?

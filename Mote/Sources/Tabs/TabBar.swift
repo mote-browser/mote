@@ -292,6 +292,7 @@ nonisolated struct TabShape: Shape {
 
 /// One tab in the strip.
 private struct StripTab: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
     @ObservedObject var tab: Tab
@@ -343,6 +344,7 @@ private struct StripTab: View {
             .onHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
             .help(pinned || iconOnly ? tab.label : "")
+            .environment(\.colorScheme, live ? browser.chromeScheme ?? colorScheme : colorScheme)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(tab.label)
             .accessibilityAddTraits(live ? .isSelected : [])
@@ -426,7 +428,7 @@ private struct StripTab: View {
                 .padding(.vertical, 2)
         } else if live {
             ZStack(alignment: .leading) {
-                TabShape(attachment: dragging ? 0 : 1).fill(sharedGround && !dragging ? Color.clear : Palette.ground)
+                TabShape(attachment: dragging ? 0 : 1).fill(sharedGround && !dragging ? Color.clear : browser.chromeGround)
                 // How far the page is read, as a thin line along the top. Not on
                 // pinned or icon-only tabs, too narrow to show it.
                 if !pinned, !iconOnly, prefs.showsReading {

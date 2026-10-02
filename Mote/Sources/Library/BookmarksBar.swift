@@ -24,7 +24,7 @@ struct BookmarksBar: View {
         .background {
             if browser.active?.isStart == true { DragStrip() }
         }
-        .background(browser.active?.isStart == true ? Color.clear : Palette.ground)
+        .background(browser.active?.isStart == true ? Color.clear : browser.chromeGround)
         .overlay(alignment: .bottom) {
             if ruled { Palette.hairline.frame(height: 1) }
         }
