@@ -11,7 +11,8 @@ struct Toolbar: View {
 
     var body: some View {
         Row(browser: browser, prefs: prefs)
-            .background(Palette.ground)
+            .background { DragStrip() }
+            .background(browser.active?.isStart == true ? Color.clear : Palette.ground)
             .overlay(alignment: .bottom) {
                 if let tab = browser.active { Seam(tab: tab).allowsHitTesting(false) }
             }
@@ -26,7 +27,6 @@ struct Toolbar: View {
                 Rectangle()
                     .fill(Palette.hairline)
                     .frame(height: 1)
-                    .opacity(tab.isBlank ? 0 : 1)
                 LoadLine(tab: tab)
             }
         }
@@ -45,15 +45,21 @@ struct Toolbar: View {
                     .padding(.trailing, 4)
                 }
                 Helm(browser: browser)
-                AddressBar(browser: browser, prefs: prefs)
-                    .padding(.horizontal, 6)
-                    .layoutPriority(1)
-                ExtensionSlot()
-                Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
-                    browser.togglePageChat()
+                if browser.pageToolsShown {
+                    AddressBar(browser: browser, prefs: prefs)
+                        .padding(.horizontal, 6)
+                        .layoutPriority(1)
+                } else {
+                    Spacer(minLength: 0)
                 }
-                .disabled(!browser.pageChatPossible)
-                .opacity(browser.pageChatPossible ? 1 : 0.3)
+                ExtensionSlot()
+                if browser.pageToolsShown {
+                    Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
+                        browser.togglePageChat()
+                    }
+                    .disabled(!browser.pageChatPossible)
+                    .opacity(browser.pageChatPossible ? 1 : 0.3)
+                }
                 // Beside a sidebar, bookmarks live at its foot instead (see Sidebar).
                 if !prefs.sidebar {
                     Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }
@@ -63,7 +69,9 @@ struct Toolbar: View {
                 }
             }
             .padding(.horizontal, 6)
+            .padding(.vertical, 6)
             .frame(maxHeight: .infinity)
+            .controlSize(.large)
         }
     }
 }
@@ -141,14 +149,14 @@ struct AddressBar: View {
             if let tab = browser.active, !editing {
                 SiteButton(browser: browser, tab: tab)
             } else {
-                Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.muted).frame(
+                Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).frame(
                     width: 16)
             }
             if editing {
-                AddressField(browser: browser, size: 13, placeholder: "Search or enter address") {
+                AddressField(browser: browser, size: 14, placeholder: "Search or enter address") {
                     browser.dismiss()
                 }
-                .frame(height: 18)
+                .frame(height: 20)
                 .transition(.opacity)
             } else if let tab = browser.active {
                 Shown(tab: tab, whole: prefs.showsFullAddress)
@@ -157,7 +165,7 @@ struct AddressBar: View {
         }
         .padding(.leading, 6)
         .padding(.trailing, 10)
-        .frame(height: Metrics.button)
+        .frame(height: 32)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             Rounded.row.fill(Palette.veil.opacity(editing ? 1.6 : hovering ? 1 : 0))
@@ -203,7 +211,7 @@ struct AddressBar: View {
                         .foregroundStyle(Palette.muted)
                 }
             }
-            .font(.system(size: 13))
+            .font(.system(size: 14))
             .lineLimit(1)
             .truncationMode(.middle)
         }
@@ -236,9 +244,9 @@ private struct SiteButton: View {
             SiteCardPanel.toggle(for: tab, in: browser)
         } label: {
             Image(systemName: symbol.name)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(symbol.tint)
-                .frame(width: 20, height: 20)
+                .frame(width: 22, height: 22)
                 .background(Circle().fill(Palette.veil.opacity(hovering ? 1.4 : 0)))
                 .contentShape(Circle())
         }

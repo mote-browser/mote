@@ -6,12 +6,15 @@ struct Mark: View {
     let letter: String
     var size: CGFloat = 16
     var dim = false
+    var mote = false
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: size * 0.22, style: .continuous) }
 
     var body: some View {
         Group {
-            if let icon {
+            if mote {
+                Logomark().fill(Palette.muted).frame(width: size, height: size)
+            } else if let icon {
                 Image(nsImage: icon).resizable().interpolation(.high).frame(width: size, height: size).clipShape(shape)
             } else {
                 Text(letter)

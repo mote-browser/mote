@@ -10,7 +10,8 @@ enum WindowDressing {
         // The appearance is set for the whole app (see Look.apply).
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = Palette.NS.frame
+        window.isOpaque = false
+        window.backgroundColor = .clear
         // DragStrip moves the window, so selecting text can't.
         window.isMovableByWindowBackground = false
         // Or AppKit would move the window when a tab is dragged along the strip.

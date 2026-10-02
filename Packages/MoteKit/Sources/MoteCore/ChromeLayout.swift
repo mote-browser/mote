@@ -12,13 +12,13 @@ public struct ChromeLayout: Equatable, Sendable {
     }
 
     /// Space between the card and the window's edges.
-    public static let gap: CGFloat = 8
+    public static let gap: CGFloat = 5
     /// Corner radius of the card.
     public static let corner: CGFloat = 10
     /// Height of the toolbar at the top of the card. With the card `gap` below
     /// the window's top, its middle lines up with the traffic lights (see
     /// `lights`).
-    public static let toolbar: CGFloat = 36
+    public static let toolbar: CGFloat = 44
     /// Height of the tab strip above the card.
     public static let strip: CGFloat = 40
     /// Height of the bookmarks bar under the toolbar.

@@ -44,6 +44,8 @@ struct DragStrip: NSViewRepresentable {
     var below: CGFloat = 0
     /// From the trailing edge, left to a button.
     var trailing: CGFloat = 0
+    /// A single click on the empty new-tab background focuses its composer.
+    var click: () -> Void = {}
 
     func makeNSView(context: Context) -> NSView { Strip() }
 
@@ -52,12 +54,14 @@ struct DragStrip: NSViewRepresentable {
         strip.reserved = reserved
         strip.below = below
         strip.trailing = trailing
+        strip.click = click
     }
 
-    private final class Strip: NSView {
+    final class Strip: NSView {
         var reserved: CGFloat = 0
         var below: CGFloat = 0
         var trailing: CGFloat = 0
+        var click: () -> Void = {}
         private var pressed: NSEvent?
         private var dragged = false
 
@@ -92,7 +96,9 @@ struct DragStrip: NSViewRepresentable {
 
         /// A double click, on the way up, does what System Settings says.
         override func mouseUp(with event: NSEvent) {
-            guard let window, !dragged, event.clickCount == 2 else { return }
+            guard !dragged else { return }
+            if event.clickCount == 1 { click() }
+            guard let window, event.clickCount == 2 else { return }
             switch TitleBarClick(setting: UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick")) {
             case .zoom: window.zoom(nil)
             case .minimize: window.miniaturize(nil)

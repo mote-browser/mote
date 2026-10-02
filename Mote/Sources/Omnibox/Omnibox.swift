@@ -82,10 +82,7 @@ struct NewTabPage: View {
             // Above centre: exact centre looks low under the toolbar.
             .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
         }
-        .background(Palette.ground)
-        .contentShape(Rectangle())
-        // A click on the empty page puts the caret back in the composer.
-        .onTapGesture { browser.field.askFocus() }
+        .background { DragStrip(click: { browser.field.askFocus() }) }
     }
 }
 

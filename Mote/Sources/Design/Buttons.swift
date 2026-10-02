@@ -10,13 +10,14 @@ struct Door: View {
 
     @State private var hovering = false
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.controlSize) private var controlSize
 
     var body: some View {
         Button(action: act) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: controlSize == .large ? 14 : 12, weight: .medium))
                 .foregroundStyle(Palette.ink.opacity(on || hovering ? 0.85 : 0.6))
-                .frame(width: Metrics.button, height: Metrics.button)
+                .frame(width: controlSize == .large ? 32 : Metrics.button, height: controlSize == .large ? 32 : Metrics.button)
                 .background(Palette.veil.opacity(on ? 1.8 : hovering && enabled ? 1.2 : 0), in: Rounded.row)
                 .contentShape(Rounded.row)
         }

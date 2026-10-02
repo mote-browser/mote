@@ -32,8 +32,8 @@ enum Palette {
     /// The same colours for AppKit.
     enum NS {
         static let ground = gray(light: 1, dark: 0.11)
-        static let frame = gray(light: 0.925, dark: 0.07)
-        static let lift = gray(light: 1, dark: 0.155)
+        static let frame = gray(light: 0.91, dark: 0.14)
+        static let lift = gray(light: 1, dark: 0.26)
         static let veil = inkWash(light: 0.055, dark: 0.075)
         static let edge = inkWash(light: 0.085, dark: 0.07)
         static let ink = gray(light: 0.09, dark: 0.93)

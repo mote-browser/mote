@@ -335,7 +335,8 @@ private struct StripTab: View {
             if tab.loading {
                 Ring(size: 11).transition(.opacity)
             } else if prefs.glyph == .icons || iconOnly {
-                Mark(icon: tab.isBlank ? nil : tab.icon, letter: tab.monogram, size: 16, dim: tab.asleep).transition(.opacity)
+                Mark(icon: tab.isBlank ? nil : tab.icon, letter: tab.monogram, size: 16, dim: tab.asleep, mote: tab.isStart)
+                    .transition(.opacity)
             }
         }
         .frame(width: 16, height: 16)

@@ -42,12 +42,13 @@ private struct PinnedButton: View {
     let button: Extensions.Button
     let press: () -> Void
     @State private var hovering = false
+    @Environment(\.controlSize) private var controlSize
     private let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
     var body: some View {
         Button(action: press) {
-            ExtensionIcon(button: button, size: 15)
-                .frame(width: 26, height: 26)
+            ExtensionIcon(button: button, size: controlSize == .large ? 17 : 15)
+                .frame(width: controlSize == .large ? 32 : 26, height: controlSize == .large ? 32 : 26)
                 .background(hovering ? Palette.hover : .clear, in: shape)
                 .contentShape(shape)
         }
