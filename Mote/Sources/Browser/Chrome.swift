@@ -6,6 +6,22 @@ import SwiftUI
 // window's edges, with the toolbar across its top.
 
 extension Browser {
+    var chromeColor: NSColor? {
+        guard let active, !active.isBlank, active.failure == nil else { return nil }
+        return active.pageColor
+    }
+
+    var chromeGround: Color { chromeColor.map { Color(nsColor: $0) } ?? Palette.ground }
+
+    var chromeScheme: ColorScheme? {
+        guard let rgb = chromeColor?.usingColorSpace(.sRGB) else { return nil }
+        func linear(_ value: CGFloat) -> CGFloat {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+        return luminance < 0.179 ? .dark : .light
+    }
+
     /// Address and page chat belong to web pages, not the new-tab composer.
     var pageToolsShown: Bool { active?.isBlank == false }
 
@@ -104,7 +120,7 @@ struct Chrome: View {
                             tab: anchor.anchors["tab"].map { proxy[$0].insetBy(dx: -TabShape.foot, dy: 0) },
                             viewport: anchor.dragging ? nil : anchor.anchors["viewport"].map { proxy[$0] },
                             attachment: anchor.attachment)
-                        surface.fill(Palette.ground.opacity(browser.active?.isStart == true ? 0.92 : 1))
+                        surface.fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1))
                             .compositingGroup()
                             .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
                             .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
@@ -179,6 +195,7 @@ private struct PageCard: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
     let layout: ChromeLayout
+    @Environment(\.colorScheme) private var colorScheme
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: layout.corner, style: .continuous)
@@ -188,11 +205,13 @@ private struct PageCard: View {
         VStack(spacing: 0) {
             if layout.toolbar > 0 {
                 Toolbar(browser: browser, prefs: prefs)
+                    .environment(\.colorScheme, browser.chromeScheme ?? colorScheme)
                     .frame(height: layout.toolbar)
                     .zIndex(1)
             }
             if layout.bookmarks > 0 {
                 BookmarksBar(browser: browser, bookmarks: browser.bookmarks, ruled: browser.active?.isStart == false)
+                    .environment(\.colorScheme, browser.chromeScheme ?? colorScheme)
                     .frame(height: layout.bookmarks)
                     .transition(.opacity)
             }
@@ -218,11 +237,11 @@ private struct PageCard: View {
                 Color.clear
             } else if layout.corner > 0 {
                 shape
-                    .fill(Palette.ground.opacity(browser.active?.isStart == true ? 0.92 : 1))
+                    .fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1))
                     .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
                     .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
             } else {
-                Palette.ground
+                browser.chromeGround
             }
         }
         .clipShape(shape)

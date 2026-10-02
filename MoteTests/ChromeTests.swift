@@ -35,6 +35,79 @@ struct ChromeTests {
 
     // MARK: - Address
 
+    @Test("Chrome follows the rendered background, live header changes and the active tab")
+    func pageColors() async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = false
+            let html = """
+                <style>html,body{margin:0;background:rgb(20,40,60)}
+                header{position:fixed;top:0;width:100%;height:80px;background:rgb(30,60,90)}
+                main{height:3000px}</style><header></header><main></main>
+                """
+            let url = try #require(URL(string: "data:text/html," + html.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!))
+            let tab = browser.open(url, foreground: true)
+            browser.closeOthers(but: tab)
+            let body = NSColor(srgbRed: 20 / 255, green: 40 / 255, blue: 60 / 255, alpha: 1)
+            let header = NSColor(srgbRed: 30 / 255, green: 60 / 255, blue: 90 / 255, alpha: 1)
+            let host = NSHostingView(
+                rootView: Chrome(browser: browser, prefs: browser.prefs).frame(width: 1000, height: 640)
+                    .overlay(alignment: .bottomTrailing) { Color(nsColor: header).frame(width: 16, height: 16) })
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1000, height: 640), styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = host
+            window.orderFront(nil)
+            defer { window.orderOut(nil); window.contentView = nil }
+            _ = try await eventually { tab.pageColor?.matches(body) == true || tab.pageColor?.matches(header) == true ? true : nil }
+            #expect(browser.chromeScheme == .dark)
+            if tab.web.responds(to: NSSelectorFromString("_sampledTopFixedPositionContentColor")) {
+                _ = try await eventually { tab.pageColor?.matches(header) == true ? true : nil }
+                try await Task.sleep(for: .milliseconds(200))
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+                let x = Int((Metrics.lights + (browser.prefs.usesSpaces ? SpaceDot.width + 4 : 0) + TabShape.foot + 40) * scale)
+                let tabGround = try #require(bitmap.colorAt(x: x, y: Int((ChromeLayout.strip - 2) * scale)))
+                let toolbarGround = try #require(bitmap.colorAt(x: x, y: Int((ChromeLayout.strip + 2) * scale)))
+                // Compare in the same captured color space, including display conversion.
+                let reference = try #require(bitmap.colorAt(x: bitmap.pixelsWide - Int(8 * scale), y: bitmap.pixelsHigh - Int(8 * scale)))
+                #expect(tabGround.matches(reference), "Tab: \(tabGround), expected: \(reference)")
+                #expect(toolbarGround.matches(reference), "Toolbar: \(toolbarGround), expected: \(reference)")
+                _ = try await tab.web.evaluateJavaScript("document.querySelector('header').style.background = 'rgb(240,230,220)'")
+                let changed = NSColor(srgbRed: 240 / 255, green: 230 / 255, blue: 220 / 255, alpha: 1)
+                _ = try await eventually { tab.pageColor?.matches(changed) == true ? true : nil }
+                #expect(browser.chromeScheme == .light)
+                _ = try await tab.web.evaluateJavaScript(
+                    """
+                    document.querySelector('header').remove();
+                    document.documentElement.style.background = 'rgb(20,40,60)';
+                    document.body.style.background = 'rgb(20,40,60)'
+                    """)
+                _ = try await eventually { tab.pageColor?.matches(body) == true ? true : nil }
+                _ = try await tab.web.evaluateJavaScript(
+                    """
+                    document.documentElement.style.background = 'rgb(240,230,220)';
+                    document.body.style.background = 'rgb(240,230,220)'
+                    """)
+                _ = try await eventually { tab.pageColor?.matches(changed) == true ? true : nil }
+                _ = try await tab.web.evaluateJavaScript(
+                    """
+                    document.body.innerHTML = '<div style="height:160px"></div><header style="position:sticky"></header><main></main>';
+                    window.scrollTo(0, 250)
+                    """)
+                _ = try await eventually { tab.pageColor?.matches(header) == true ? true : nil }
+                _ = try await tab.web.evaluateJavaScript("document.querySelector('header').style.background = 'rgb(240,230,220)'")
+                _ = try await eventually { tab.pageColor?.matches(changed) == true ? true : nil }
+            }
+            browser.newTab()
+            #expect(browser.chromeColor == nil)
+            browser.select(tab)
+            #expect(browser.chromeColor == tab.pageColor)
+            tab.close()
+            #expect(tab.built == nil)
+        }
+    }
+
     @Test("The address and page-chat controls only appear on web pages")
     func pageToolsFollowTheActiveTab() async throws {
         try await withBrowser { browser in

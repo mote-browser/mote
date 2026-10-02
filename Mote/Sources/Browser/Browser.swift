@@ -847,6 +847,12 @@ final class Browser: NSObject, ObservableObject {
     func prepare(_ tab: Tab) {
         tab.delegate = self
         tab.owner = self
+        tab.$pageColor.dropFirst().sink { [weak self, weak tab] _ in
+            if self?.activeID == tab?.id { self?.objectWillChange.send() }
+        }.store(in: &bag)
+        tab.$failure.dropFirst().sink { [weak self, weak tab] _ in
+            if self?.activeID == tab?.id { self?.objectWillChange.send() }
+        }.store(in: &bag)
         tab.$address.dropFirst().sink { [weak self] _ in self?.saveSoon() }.store(in: &bag)
         // The panel's open state lives on the tab, but the chrome, the toolbar
         // and the menu read it through this object (`chatting`); pass the tab's

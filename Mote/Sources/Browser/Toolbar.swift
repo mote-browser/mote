@@ -12,7 +12,7 @@ struct Toolbar: View {
     var body: some View {
         Row(browser: browser, prefs: prefs)
             .background { DragStrip() }
-            .background(browser.active?.isStart == true ? Color.clear : Palette.ground)
+            .background(browser.active?.isStart == true ? Color.clear : browser.chromeGround)
             .overlay(alignment: .bottom) {
                 if let tab = browser.active { Seam(tab: tab).allowsHitTesting(false) }
             }
