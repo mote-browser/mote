@@ -187,7 +187,7 @@ struct AddressBar: View {
 
         var body: some View {
             Group {
-                if let url = tab.address {
+                if let url = tab.shownAddress {
                     Text(AddressBar.display(url, whole: whole))
                         .foregroundStyle(Palette.ink.opacity(0.88))
                 } else if let chat = tab.chat {
@@ -217,7 +217,8 @@ private struct SiteButton: View {
     @State private var hovering = false
 
     private var symbol: (name: String, tint: Color) {
-        switch tab.address?.scheme?.lowercased() {
+        if tab.failure?.kind == .certificate { return ("lock.slash.fill", Palette.unsafe) }
+        return switch tab.shownAddress?.scheme?.lowercased() {
         case "https": ("lock.fill", Palette.muted)
         case "http": ("exclamationmark.triangle.fill", Palette.unsafe)
         case nil: ("magnifyingglass", Palette.muted)

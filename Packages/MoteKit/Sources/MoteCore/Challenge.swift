@@ -9,18 +9,15 @@ public enum Challenge {
         case usual
         /// Accepted without asking.
         case accept
-        /// Ask the person first.
-        case ask
     }
 
     /// A good certificate goes ahead. A bad one is accepted on this Mac's own
-    /// addresses and on hosts the person already let through; otherwise they
-    /// are asked, but only for the page itself (`pageHost`), never its parts.
-    public static func trust(valid: Bool, host: String, excused: Set<String>, pageHost: String?) -> Trust {
+    /// addresses and on hosts the person already let through; otherwise the
+    /// load fails, and the failure page offers a way past it.
+    public static func trust(valid: Bool, host: String, excused: Set<String>) -> Trust {
         if valid { return .usual }
         let host = host.lowercased()
-        if isLoopback(host) || excused.contains(host) { return .accept }
-        return pageHost?.lowercased() == host ? .ask : .usual
+        return isLoopback(host) || excused.contains(host) ? .accept : .usual
     }
 
     /// Whether `host` can only be this Mac: `localhost`, `::1`, or a written

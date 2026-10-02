@@ -6,21 +6,20 @@ import Testing
 struct ChallengeTests {
     @Test("Good certificates go ahead whoever asks")
     func valid() {
-        #expect(Challenge.trust(valid: true, host: "example.com", excused: [], pageHost: nil) == .usual)
+        #expect(Challenge.trust(valid: true, host: "example.com", excused: []) == .usual)
     }
 
     @Test("Bad certificates on this Mac or already let through are accepted")
     func accepted() {
-        #expect(Challenge.trust(valid: false, host: "localhost", excused: [], pageHost: nil) == .accept)
-        #expect(Challenge.trust(valid: false, host: "127.0.0.1", excused: [], pageHost: nil) == .accept)
-        #expect(Challenge.trust(valid: false, host: "Self.Signed", excused: ["self.signed"], pageHost: nil) == .accept)
+        #expect(Challenge.trust(valid: false, host: "localhost", excused: []) == .accept)
+        #expect(Challenge.trust(valid: false, host: "127.0.0.1", excused: []) == .accept)
+        #expect(Challenge.trust(valid: false, host: "Self.Signed", excused: ["self.signed"]) == .accept)
     }
 
-    @Test("Only the page itself asks; its parts fail quietly")
-    func asks() {
-        #expect(Challenge.trust(valid: false, host: "bad.example", excused: [], pageHost: "BAD.example") == .ask)
-        #expect(Challenge.trust(valid: false, host: "cdn.example", excused: [], pageHost: "bad.example") == .usual)
-        #expect(Challenge.trust(valid: false, host: "bad.example", excused: [], pageHost: nil) == .usual)
+    @Test("Other bad certificates are left to fail, for the failure page to offer a way past")
+    func fails() {
+        #expect(Challenge.trust(valid: false, host: "bad.example", excused: []) == .usual)
+        #expect(Challenge.trust(valid: false, host: "cdn.example", excused: ["bad.example"]) == .usual)
     }
 
     @Test("Loopback means only written loopback addresses")

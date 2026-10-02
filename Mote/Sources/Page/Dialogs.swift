@@ -12,21 +12,21 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping () -> Void
+        completionHandler: @escaping @MainActor @Sendable () -> Void
     ) {
         Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK"]), over: webView) { _ in completionHandler() }
     }
 
     func webView(
         _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping (Bool) -> Void
+        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK", "Cancel"]), over: webView, then: completionHandler)
     }
 
     func webView(
         _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
-        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
     ) {
         let alert = Dialogs.fromPage(frame, prompt, buttons: ["OK", "Cancel"])
         let field = Dialogs.field(NSTextField.self, text: defaultText ?? "")
@@ -39,7 +39,7 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping ([URL]?) -> Void
+        completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void
     ) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -58,7 +58,7 @@ extension Browser {
 
     func webView(
         _ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         switch challenge.protectionSpace.authenticationMethod {
         case NSURLAuthenticationMethodServerTrust:
@@ -71,37 +71,26 @@ extension Browser {
     }
 
     /// Every HTTPS connection comes here. A certificate the Mac doesn't trust
-    /// is let through once the person says so, for the rest of the launch.
+    /// fails the load, and the failure page offers a way past it; once taken,
+    /// the host is let through for the rest of the launch.
     private func trust(
         _ challenge: URLAuthenticationChallenge, from webView: WKWebView,
-        _ done: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        _ done: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         guard let trust = challenge.protectionSpace.serverTrust else { return done(.performDefaultHandling, nil) }
-        let host = challenge.protectionSpace.host.lowercased()
-        let page = tab(for: webView).flatMap { $0.address?.host() ?? $0.pending?.host() }
-        let accept = { done(.useCredential, URLCredential(trust: trust)) }
-        switch Challenge.trust(valid: SecTrustEvaluateWithError(trust, nil), host: host, excused: Dialogs.excused, pageHost: page) {
+        let host = challenge.protectionSpace.host
+        switch Challenge.trust(valid: SecTrustEvaluateWithError(trust, nil), host: host, excused: Dialogs.excused) {
         case .usual:
             done(.performDefaultHandling, nil)
         case .accept:
-            accept()
-        case .ask:
-            let alert = Dialogs.alert(
-                "\(host) can't prove who it is",
-                "Its certificate isn't trusted by this Mac. Someone could be reading what you send. Continue only if you know why it looks like this.",
-                buttons: ["Go Back", "Continue Anyway"], style: .warning)
-            Dialogs.ask(alert, over: webView) { goBack in
-                if goBack { return done(.cancelAuthenticationChallenge, nil) }
-                Dialogs.excused.insert(host)
-                accept()
-            }
+            done(.useCredential, URLCredential(trust: trust))
         }
     }
 
     /// HTTP Basic, Digest and NTLM: a name and a password, asked twice at most.
     private func signIn(
         _ challenge: URLAuthenticationChallenge, from webView: WKWebView,
-        _ done: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        _ done: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         let failures = challenge.previousFailureCount
         guard Challenge.mayAskToSignIn(failures: failures) else { return done(.cancelAuthenticationChallenge, nil) }

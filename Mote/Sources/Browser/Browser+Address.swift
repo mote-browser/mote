@@ -57,7 +57,7 @@ extension Browser {
     /// ⌘L: the field with the current address in it.
     func edit() {
         field.switching = false
-        field.typed = active?.address?.absoluteString ?? ""
+        field.typed = active?.shownAddress?.absoluteString ?? ""
         editing = true
         field.askFocus()
     }
