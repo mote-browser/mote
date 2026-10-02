@@ -10,6 +10,35 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.0 — 2026-10-02
+
+A softer glass frame, colors that follow the page, and smoother tabs across the top.
+
+### Added
+
+- The toolbar and active tab take their color from the page, including fixed
+  headers when WebKit can sample them. Their controls switch between light
+  and dark to stay readable, and blank or failed pages use Mote's own colors.
+
+### Changed
+
+- A subtle native glass effect behind the browser frame, sidebar and bookmarks
+  bar, with softer borders and shadows around the page.
+- More compact top tabs with taller, rounder shapes; the active tab and page
+  share one continuous surface.
+- Larger toolbar controls and address text, with a search icon in the address
+  field and a quieter new-tab page that hides the address and page-chat controls.
+- New tabs show Mote's mark instead of a placeholder letter. Clicking their
+  empty background focuses the composer.
+
+### Fixed
+
+- The active top tab joins the page without a doubled border or shadow,
+  including when the tab strip scrolls.
+- Dragged tabs stay clear of the window controls, detach from the page while
+  moving, and settle into place before reattaching.
+- The logo-rendering test follows Xcode 26's formatting rules so CI can pass.
+
 ## 0.3.0 — 2026-10-02
 
 Chat about the page you're on, bring your other tabs into it, and get past a page that won't load.
