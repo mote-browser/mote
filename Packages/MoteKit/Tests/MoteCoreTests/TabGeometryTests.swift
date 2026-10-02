@@ -85,6 +85,10 @@ struct TabGeometryTests {
         #expect(drag.offset(of: "a", at: 2, in: column) == CGSize(width: 0, height: 12))
         #expect(drag.offset(of: "b", at: 0, in: column) == .zero)
         #expect(drag.offset(of: "c", at: 1, in: column) == .zero)
+        drag.settle(in: column)
+        #expect(drag.landed)
+        #expect(drag.id == "a")
+        #expect(drag.offset(of: "a", at: 2, in: column) == .zero)
     }
 
     @Test("Pins sit in at least three columns, and more past six to keep two rows")

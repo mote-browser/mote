@@ -72,6 +72,12 @@ public struct ReorderDrag<ID: Hashable>: Equatable {
         landed = true
     }
 
+    /// Animate home while keeping the held tab above its neighbours until arrival.
+    public mutating func settle(in lattice: Lattice) {
+        guard landed else { return }
+        travel = lattice.origin(target) - lattice.origin(start)
+    }
+
     /// How far the tab `other`, at `index` in the current order, sits from its place.
     public func offset(of other: ID, at index: Int, in lattice: Lattice) -> CGSize {
         if other == id {
