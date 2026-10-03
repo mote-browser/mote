@@ -10,6 +10,17 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.2 — 2026-10-03
+
+Reliable sidebar folding, with each tab layout remembering whether its tabs are hidden.
+
+### Fixed
+
+- The sidebar folds away and opens again with a native macOS animation,
+  keeping the window controls in place and responding to rapid clicks.
+- The sidebar and top tab strip each remember their folded state when
+  switching layouts and reopening Mote.
+
 ## 0.4.1 — 2026-10-03
 
 A calmer new tab, smoother Ask animations, and clearer bookmarks and chat access.
