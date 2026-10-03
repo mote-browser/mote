@@ -5,38 +5,74 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Responsive</title>
 <style>
-  :root { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color-scheme: light dark; }
-  body { margin: 0; padding: 24px; line-height: 1.6; }
-  main { max-width: 660px; }
-  h1 { font-size: 17px; margin: 0 0 12px; }
+  :root { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color-scheme: light dark; --ground: #fff; --ink: #171717; --muted: #8c8c8c; --edge: #00000016; --well: #f6f6f6; }
+  @media (prefers-color-scheme: dark) { :root { --ground: #1c1c1c; --ink: #ededed; --muted: #949494; --edge: #ffffff12; --well: #262626; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: clamp(12px, 4vw, 24px); line-height: 1.5; background: var(--ground); color: var(--ink); }
+  main { max-width: 680px; margin-inline: auto; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.3px; }
+  h2 { font-size: 11.5px; font-weight: 500; color: var(--muted); margin: 0 0 12px; }
   p { margin: 8px 0; }
-  .hint { opacity: .7; }
-  fieldset { border: 0; padding: 0; margin: 16px 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  label { display: flex; gap: 6px; align-items: center; }
-  input, button, select { font: inherit; }
-  button, select, input[type="text"] { border: 1px solid #8886; border-radius: 5px; padding: 5px 8px; }
-  input[type="text"] { width: 160px; }
+  #status, .hint { color: var(--muted); font-size: 11.5px; }
+  fieldset { min-width: 0; border: 0; padding: 0; margin: 20px 0; display: grid; gap: 12px; }
+  section { min-width: 0; padding: 16px; border: 1px solid var(--edge); border-radius: 11px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  label { min-width: 0; display: grid; gap: 6px; font-size: 12px; }
+  label.toggle { display: flex; gap: 8px; align-items: center; }
+  input, button, select { font: inherit; accent-color: var(--ink); }
+  button, select, input[type="text"] { min-height: 34px; min-width: 0; border: 1px solid var(--edge); border-radius: 8px; padding: 7px 10px; background: var(--well); color: var(--ink); }
+  select, input[type="text"] { width: 100%; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--ground); }
+  button:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  details { color: var(--muted); font-size: 11.5px; }
+  summary { cursor: pointer; }
 </style>
 <main>
-  <h1>Responsive preview</h1>
+  <h1>Responsive</h1>
   <p id="status" role="status">Your viewports appear in the main browser area.</p>
   <fieldset id="controls" aria-label="Preview settings">
-    <button id="reload" type="button">Reload all views</button>
-    <label><input id="sync" type="checkbox" checked>Sync interactions</label>
-    <label>Max scale <select id="scale"><option value="0.25">25%</option><option value="0.5" selected>50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+    <section aria-labelledby="preview-heading">
+    <h2 id="preview-heading">Preview</h2>
+    <div class="fields">
+    <label class="toggle"><input id="sync" type="checkbox" checked>Sync interactions</label>
+    <label>Maximum scale <select id="scale"><option value="0.25">25%</option><option value="0.5" selected>50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+    </div>
+    <div class="actions"><button id="reload" type="button">Reload all</button></div>
+    </section>
+    <section aria-labelledby="viewports-heading">
+    <h2 id="viewports-heading">Viewports</h2>
     <label>Add view <select id="preset"><option value="0">Phone · 390 × 844</option><option value="1">Tablet · 768 × 1024</option><option value="2">Desktop · 1440 × 900</option></select></label>
+    <div class="actions">
     <button id="add" type="button">Add View</button>
-    <button id="defaults" type="button">Default Views</button>
+    <button id="defaults" type="button">Reset to defaults</button>
+    </div>
+    <p class="hint">Resize, rotate or remove each viewport from its preview menu.</p>
+    </section>
+    <section aria-labelledby="layouts-heading">
+    <h2 id="layouts-heading">Saved layouts</h2>
+    <div class="fields">
     <label>Name <input id="name" type="text" maxlength="80" placeholder="My views"></label>
+    </div>
+    <div class="actions">
     <button id="save" type="button">Save Views</button>
+    </div>
+    <div class="fields" style="margin-top:16px">
     <label>Saved views <select id="saved"><option value="">Choose a layout</option></select></label>
+    </div>
+    <div class="actions">
     <button id="load" type="button" disabled>Load</button>
     <button id="delete" type="button" disabled>Delete</button>
+    </div>
+    </section>
   </fieldset>
-  <p>Edit, rotate or remove a viewport using its menu above the preview.</p>
-  <p>Previews fit the available browser area up to the selected scale. Device dimensions stay unchanged.</p>
-  <p>Select another inspector tab or close the inspector to return to your original page.</p>
-  <p class="hint">These previews use WebKit on macOS. Viewport dimensions and custom user agents do not emulate a different browser engine, touch gestures, locale or safe areas.</p>
+  <details><summary>About these previews</summary>
+    <p>Previews fit the available browser area up to the selected scale. Device dimensions stay unchanged.</p>
+    <p>Select another inspector tab or close the inspector to return to your original page.</p>
+    <p>These previews use WebKit on macOS. Viewport dimensions and custom user agents do not emulate a different browser engine, touch gestures, locale or safe areas.</p>
+  </details>
 </main>
 <script>
   const control = (id) => document.getElementById(id);

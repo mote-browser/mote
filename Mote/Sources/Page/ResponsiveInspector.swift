@@ -17,6 +17,9 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
     private var generation = 0
     private var visibility: Task<Void, Never>?
     private weak var host: WKWebView?
+    private weak var frontend: WKWebView?
+    private var collapsed = false
+    private var responsiveState: (viewports: [ResponsiveViewport], scale: Double, syncing: Bool)?
     private var panelURL: URL?
     private(set) var panelReady = false
     private var changes: AnyCancellable?
@@ -42,11 +45,104 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
 
     /// All browser entry points invalidate a closed frontend before opening it.
     func prepareToOpen() {
-        if inspector.unpublishedFlag("isVisible") != true { resetFrontend() }
+        if !collapsed, inspector.unpublishedFlag("isVisible") != true { resetFrontend() }
+        expandInspector()
         installIfReady()
     }
 
+    private func expandInspector() {
+        guard collapsed else { return }
+        collapsed = false
+        let stage = tab?.built?.superview as? StageView
+        stage?.animateInspectorTransition()
+        stage?.setInspectorRail(nil)
+        inspector.unpublished("show")
+        frontend?.evaluateJavaScript("window.moteInspector?.expand()", completionHandler: nil)
+    }
+
+    private func collapseInspector(_ items: [[String: Any]]) {
+        guard !collapsed, let stage = tab?.built?.superview as? StageView,
+            frontend?.superview === stage, inspector.responds(to: NSSelectorFromString("hide"))
+        else { return }
+        let scroll = NSScrollView()
+        scroll.setAccessibilityIdentifier("devtools-collapsed-rail")
+        scroll.drawsBackground = true
+        scroll.backgroundColor = Palette.NS.frame
+        scroll.hasVerticalScroller = false
+        let stack = InspectorRailView()
+        func add(_ title: String, _ text: String, _ tag: Int, icon: String = "", selected: Bool = false) {
+            let button = InspectorRailButton(title: text, target: self, action: #selector(railAction(_:)))
+            if icon.hasPrefix("data:image/png;base64,"), icon.count <= 32768,
+                let data = Data(base64Encoded: String(icon.dropFirst(22))), let image = NSImage(data: data) {
+                image.size = NSSize(width: 18, height: 18)
+                image.isTemplate = true
+                button.image = image
+                button.imagePosition = .imageOnly
+            }
+            button.font = .systemFont(ofSize: 18)
+            button.selectedTool = selected
+            button.bezelStyle = .recessed
+            button.isBordered = false
+            button.toolTip = title
+            button.setAccessibilityLabel(title)
+            button.tag = tag
+            button.contentTintColor = Palette.NS.muted
+            stack.addSubview(button)
+        }
+        add("Expand developer tools", "‹", -1)
+        for item in items.prefix(24) {
+            guard let title = item["title"] as? String, title.count <= 100,
+                let index = item["index"] as? Int, (0..<32).contains(index)
+            else { continue }
+            add(title, String(title.prefix(2)), index, icon: item["icon"] as? String ?? "", selected: item["selected"] as? Bool == true)
+        }
+        add("Open in separate window", "↗", -2)
+        add("Close developer tools", "×", -3)
+        scroll.documentView = stack
+        stack.setFrameSize(NSSize(width: 52, height: CGFloat(stack.subviews.count * 44 + 14)))
+        collapsed = true
+        stage.animateInspectorTransition()
+        inspector.unpublished("hide")
+        stage.setInspectorRail(scroll)
+        scroll.contentView.scroll(to: .zero)
+        if NSApp.currentEvent?.type == .keyDown, let first = stack.subviews.first {
+            stage.window?.makeFirstResponder(first)
+        } else {
+            stage.window?.makeFirstResponder(tab?.built)
+        }
+    }
+
+    @objc private func railAction(_ sender: NSButton) {
+        if sender.tag == -3 { closeInspector(); return }
+        expandInspector()
+        if sender.tag == -2 {
+            inspector.unpublished("detach")
+        } else if sender.tag >= 0 {
+            frontend?.evaluateJavaScript("window.moteInspector?.selectTab(\(sender.tag))", completionHandler: nil)
+        }
+    }
+
+    private func styleFrontend() {
+        guard let view = inspector.unpublishedObject("extensionHostWebView") as? WKWebView,
+            let cssURL = Bundle.main.url(forResource: "InspectorTheme", withExtension: "css"),
+            let scriptURL = Bundle.main.url(forResource: "InspectorTheme", withExtension: "js"),
+            let css = try? String(contentsOf: cssURL, encoding: .utf8),
+            let script = try? String(contentsOf: scriptURL, encoding: .utf8)
+        else { return }
+        frontend = view
+        view.configuration.userContentController.add(self, name: "moteInspector")
+        view.callAsyncJavaScript("return " + script, arguments: ["moteCSS": css], in: nil, in: .page) { [weak self] result in
+            if case .failure(let error) = result {
+                self?.failure = "Inspector appearance unavailable: \(error.localizedDescription)"
+            } else if (try? result.get()) as? Bool != true {
+                self?.failure = "This WebKit frontend does not support the Mote inspector appearance."
+            }
+        }
+    }
+
     func closeInspector() {
+        collapsed = false
+        (tab?.built?.superview as? StageView)?.setInspectorRail(nil)
         resetFrontend()
         inspector.unpublished("close")
     }
@@ -124,6 +220,11 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
             let url = tab.shownAddress, ResponsiveSession.allows(url)
         else { return }
         let session = ResponsiveSession(store: tab.store)
+        if let responsiveState {
+            session.apply(responsiveState.viewports)
+            session.scale = responsiveState.scale
+            session.syncing = responsiveState.syncing
+        }
         do { try session.navigate(url.absoluteString) } catch {
             session.close()
             fail(error.localizedDescription)
@@ -148,7 +249,7 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled, let self else { return }
-                if inspector.unpublishedFlag("isVisible") != true {
+                if !collapsed, inspector.unpublishedFlag("isVisible") != true {
                     resetFrontend()
                     return
                 }
@@ -157,10 +258,14 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
     }
 
     func stop() {
+        expandInspector()
         changes = nil
         visibility?.cancel()
         visibility = nil
         let session = tab?.responsive
+        if let session {
+            responsiveState = (session.panes.map(\.profile), session.scale, session.syncing)
+        }
         tab?.responsive = nil
         canvas?.removeFromSuperview()
         canvas = nil
@@ -173,11 +278,14 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
     }
 
     func dispose() {
+        if collapsed { closeInspector() }
         stop()
         generation += 1
         selecting = false
         selected = false
         setDelegate(nil, on: inspector)
+        frontend?.configuration.userContentController.removeScriptMessageHandler(forName: "moteInspector")
+        frontend = nil
         host?.configuration.userContentController.removeScriptMessageHandler(forName: "moteResponsivePanel")
         host = nil
         panelURL = nil
@@ -220,11 +328,14 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
         // extension IDs and pending callbacks, regardless of native view identity.
         resetFrontend()
         ready = true
+        styleFrontend()
         installIfReady()
     }
 
     private func resetFrontend() {
         stop()
+        frontend?.configuration.userContentController.removeScriptMessageHandler(forName: "moteInspector")
+        frontend = nil
         host?.configuration.userContentController.removeScriptMessageHandler(forName: "moteResponsivePanel")
         host = nil
         panelReady = false
@@ -263,6 +374,21 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "moteInspector" {
+            guard message.webView === frontend, message.frameInfo.isMainFrame,
+                let body = message.body as? [String: Any], let action = body["action"] as? String
+            else { return }
+            switch action {
+            case "collapse":
+                if let value = body["value"] as? Bool {
+                    if value { collapseInspector(body["tabs"] as? [[String: Any]] ?? []) }
+                    else { expandInspector() }
+                }
+            case "close": closeInspector()
+            default: break
+            }
+            return
+        }
         guard message.webView === host, message.frameInfo.request.url == panelURL,
             let body = message.body as? [String: Any],
             JSONSerialization.isValidJSONObject(body),
@@ -318,5 +444,68 @@ final class ResponsiveInspector: NSObject, WKScriptMessageHandler {
         let callback: Callback = { error, result in MainActor.assumeIsolated { completion(error, result) } }
         unsafeBitCast(object.method(for: selector), to: Call.self)(
             object, selector, script as NSString, tabIdentifier as NSString, callback)
+    }
+}
+
+/// Flipped coordinates keep tools at the top; window controls stay at the bottom.
+final class InspectorRailButton: NSButton {
+    var selectedTool = false { didSet { updateStyle() } }
+    private var hovering = false
+    private var pointerTracking: NSTrackingArea?
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if isEnabled { addCursorRect(bounds, cursor: .pointingHand) }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerTracking { removeTrackingArea(pointerTracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        pointerTracking = area
+        updateStyle()
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true; updateStyle() }
+    override func mouseExited(with event: NSEvent) { hovering = false; updateStyle() }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateStyle() }
+
+    private func updateStyle() {
+        wantsLayer = true
+        guard let layer else { return }
+        let active = hovering || selectedTool
+        let color = (active ? Palette.NS.ground : .clear).cgColor
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let animation = CABasicAnimation(keyPath: "backgroundColor")
+            animation.fromValue = layer.presentation()?.backgroundColor ?? layer.backgroundColor
+            animation.toValue = color
+            animation.duration = 0.12
+            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer.add(animation, forKey: "hover")
+        }
+        layer.cornerRadius = 10
+        layer.backgroundColor = color
+        layer.borderWidth = 1
+        layer.borderColor = (active ? Palette.NS.edge : .clear).cgColor
+        contentTintColor = active ? Palette.NS.ink : Palette.NS.muted
+        if image == nil {
+            attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: contentTintColor!, .font: font ?? NSFont.systemFont(ofSize: 18)])
+        }
+    }
+}
+
+private final class InspectorRailView: NSView {
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        let tools = max(0, subviews.count - 2)
+        for (index, button) in subviews.enumerated() {
+            let y: CGFloat = index < tools
+                ? 10 + CGFloat(index * 44)
+                : max(10 + CGFloat(tools * 44), bounds.height - 92) + CGFloat((index - tools) * 44)
+            button.frame = NSRect(x: 7, y: y, width: 38, height: 38)
+        }
     }
 }

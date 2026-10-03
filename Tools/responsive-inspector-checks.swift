@@ -25,7 +25,8 @@ final class Tab {
 final class ResponsiveSession: ObservableObject {
     @Published var syncing = true
     @Published var scale = 0.5
-    @Published var panes: [Int] = []
+    struct Pane { let profile: ResponsiveViewport }
+    @Published var panes: [Pane] = []
     var saved: [ResponsiveLayout] = []
     var notice: String?
     var address = ""
@@ -35,7 +36,7 @@ final class ResponsiveSession: ObservableObject {
     func reload() { fatalError() }
     func add(_ profile: ResponsiveViewport) { fatalError() }
     func save(name: String) throws { fatalError() }
-    func apply(_ profiles: [ResponsiveViewport]) { fatalError() }
+    func apply(_ profiles: [ResponsiveViewport]) { panes = profiles.map { Pane(profile: $0) } }
     func deleteSaved(_ id: UUID) { fatalError() }
     func close() { panes = [] }
 }
@@ -173,6 +174,21 @@ struct LifecycleChecks {
             check(canvas.frame == NSRect(x: 0, y: 350, width: 1200, height: 550), "Inspector resize reduces available canvas height")
             dock.frame = NSRect(x: 800, y: 0, width: 400, height: 900)
             check(canvas.frame == NSRect(x: 0, y: 0, width: 800, height: 900), "Right dock reduces available canvas width")
+            page.testInspector.isVisible = false
+            dock.removeFromSuperview()
+            let rail = NSView()
+            stage.setInspectorRail(rail)
+            check(rail.frame.width == 52 && page.frame.width == 1148 && canvas.frame == page.frame, "Collapse reserves only the native activity rail and preserves the canvas")
+            check(dock.superview == nil, "Collapsed layout never resizes a WebKit inspector")
+            stage.frame.size.width = 1000
+            stage.layout()
+            check(rail.frame.maxX == 1000 && canvas.frame.width == 948, "Collapsed rail follows window resizing")
+            stage.setInspectorRail(nil)
+            check(rail.superview == nil && canvas.frame.width == 1000, "Removing the rail restores the page before WebKit reattaches")
+            stage.frame.size.width = 1200
+            stage.layout()
+            page.testInspector.isVisible = true
+            stage.addSubview(dock)
             dock.frame = NSRect(x: 0, y: 0, width: 500, height: 900)
             check(canvas.frame == NSRect(x: 500, y: 0, width: 700, height: 900), "Left dock offsets and narrows the canvas")
             stage.show(nil)
