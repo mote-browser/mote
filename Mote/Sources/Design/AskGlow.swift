@@ -18,7 +18,9 @@ enum Glow {
 
     /// Asking begins: the logo gathers its light and lets a drop of it fall,
     /// which lands on the composer this long after, lighting its border.
-    static var impact: CFTimeInterval { stillness ? 0 : 0.8 }
+    static let release: CFTimeInterval = 0.28
+    static let fall: CFTimeInterval = 0.3
+    static var impact: CFTimeInterval { stillness ? 0 : release + fall }
 
     /// The halo's colours round the circle, a cream highlight in the clay, and
     /// back to where they began so there is no seam.
@@ -309,9 +311,8 @@ struct AskAura: NSViewRepresentable {
 }
 
 /// The pebble from the app icon: the same outline, filled with the same four
-/// soft lights. While `alive` it flows gently from shape to shape like a drop
-/// and its lights swirl inside it, starting slowly; let go, it settles back
-/// into the pebble. Drawn `spill` points beyond its frame, for its shadow.
+/// soft lights. Grey at rest, it springs and colourizes when Ask starts,
+/// then stays still. Drawn `spill` points beyond its frame, for its shadow.
 struct MoteLogo: NSViewRepresentable {
     var alive = false
     static let spill: CGFloat = 20
@@ -328,35 +329,14 @@ struct MoteLogo: NSViewRepresentable {
             (Glow.clay, CGPoint(x: 384.0 / 564, y: 490.0 / 550), 330.0 / 564),
             (Glow.sand, CGPoint(x: 84.0 / 564, y: 450.0 / 550), 290.0 / 564),
         ]
-        /// Shapes the outline flows through: how far out each corner goes,
-        /// and how full the curves between them are (see `Logomark.bends`).
-        private static let shapes: [(bends: [CGFloat], handles: [CGFloat])] = [
-            ([1.05, 0.95, 1.04, 0.96], [1.12, 0.9, 1.08, 0.95]),
-            ([0.96, 1.05, 0.95, 1.04], [0.92, 1.1, 0.95, 1.12]),
-            ([1.03, 0.97, 1.06, 0.95], [1.05, 1.15, 0.9, 1.05]),
-            ([0.97, 1.04, 0.98, 1.05], [1.15, 0.95, 1.1, 0.9]),
-        ]
-        /// Seconds for the outline to go through its shapes, and for the lights to go round.
-        private static let flow: CFTimeInterval = 7
-        private static let swirl: CFTimeInterval = 6
-        /// Seconds to come to life, and to settle again.
-        private static let waking: CFTimeInterval = 1.8
-        private static let settling: CFTimeInterval = 0.8
-
+        /// Scales the whole pebble from its base during the opening spring.
+        private let spring = CALayer()
         private let body = CALayer()
         private let pebble = CALayer()
         private let outline = CAShapeLayer()
         private let drifting = CALayer()
         /// Light filling the pebble as it gathers itself to let its drop fall.
         private let flash = CAGradientLayer()
-        /// The composer's halo, first round the pebble: it closes in on the
-        /// pebble's lowest point, where the drop falls from.
-        private let ring = CALayer()
-        /// Holds the ring's mask, inside `ring`, which glows: a mask would clip the glow.
-        private let ringLine = CALayer()
-        private let ringSweep = CAGradientLayer()
-        private let ringMask = CALayer()
-        private let ringHalves = [CAShapeLayer(), CAShapeLayer()]
         private var spots: [CAGradientLayer] = []
         private var rest = CGMutablePath() as CGPath
         private var drawn: CGSize = .zero
@@ -365,8 +345,9 @@ struct MoteLogo: NSViewRepresentable {
         override init(frame: NSRect) {
             super.init(frame: frame)
             wantsLayer = true
-            body.shadowColor = NSColor(srgbRed: 0.55, green: 0.33, blue: 0.22, alpha: 1).cgColor
-            body.shadowOpacity = 0.18
+            spring.anchorPoint = CGPoint(x: 0.5, y: 0)
+            body.shadowColor = Glow.clay.cgColor
+            body.shadowOpacity = 0
             body.shadowRadius = 10
             body.shadowOffset = CGSize(width: 0, height: -5)
             pebble.backgroundColor = Glow.base.cgColor
@@ -379,31 +360,9 @@ struct MoteLogo: NSViewRepresentable {
             flash.locations = [0, 0.55, 1]
             flash.opacity = 0
             pebble.addSublayer(flash)
-            ringSweep.type = .conic
-            ringSweep.startPoint = CGPoint(x: 0.5, y: 0.5)
-            ringSweep.endPoint = CGPoint(x: 0.5, y: 0)
-            ringSweep.colors = Glow.sweep
-            ringSweep.locations = Glow.sweepStops
-            for half in ringHalves {
-                half.fillColor = nil
-                half.strokeColor = NSColor.white.cgColor
-                half.lineWidth = 2.5
-                half.lineCap = .round
-                half.strokeEnd = 0
-                ringMask.addSublayer(half)
-            }
-            ringLine.addSublayer(ringSweep)
-            ringLine.mask = ringMask
-            ring.addSublayer(ringLine)
-            ring.opacity = 0
-            ring.shadowColor = Glow.clay.cgColor
-            // A glow behind it.
-            ring.shadowOpacity = 1
-            ring.shadowRadius = 9
-            ring.shadowOffset = .zero
-            layer!.addSublayer(ring)
             body.addSublayer(pebble)
-            layer!.addSublayer(body)
+            spring.addSublayer(body)
+            layer!.addSublayer(spring)
             for light in Self.lights {
                 let spot = CAGradientLayer()
                 spot.type = .radial
@@ -416,6 +375,7 @@ struct MoteLogo: NSViewRepresentable {
                 drifting.addSublayer(spot)
                 spots.append(spot)
             }
+            colourize(false, animated: false)
             setAccessibilityElement(false)
         }
 
@@ -440,24 +400,14 @@ struct MoteLogo: NSViewRepresentable {
             let frame = bounds.insetBy(dx: MoteLogo.spill, dy: MoteLogo.spill)
             rest = outline(in: frame.size)
             let box = rest.boundingBox
-            body.frame = frame
+            spring.frame = frame
+            body.frame = spring.bounds
             // No shadow path: the shadow follows the outline as it flows.
             pebble.frame = body.bounds
             outline.frame = body.bounds
             outline.path = rest
             drifting.frame = body.bounds
             flash.frame = body.bounds.insetBy(dx: -body.bounds.width * 0.2, dy: -body.bounds.height * 0.2)
-            ring.frame = bounds
-            ringLine.frame = bounds
-            ringMask.frame = bounds
-            let side = hypot(bounds.width, bounds.height)
-            ringSweep.frame = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
-            // On the pebble's edge, just outside it, in the layer's upward coordinates.
-            var up = CGAffineTransform(translationX: 0, y: bounds.height).scaledBy(x: 1, y: -1)
-            for (half, forward) in zip(ringHalves, [true, false]) {
-                half.frame = bounds
-                half.path = Logomark.round(in: frame.insetBy(dx: -1.25, dy: -1.25), forward: forward).cgPath.copy(using: &up)
-            }
             for (spot, light) in zip(spots, Self.lights) {
                 let side = light.radius * box.width * 2
                 // pebble.svg counts down from the top too.
@@ -465,151 +415,119 @@ struct MoteLogo: NSViewRepresentable {
                 spot.position = CGPoint(x: box.minX + light.centre.x * box.width, y: box.maxY - light.centre.y * box.height)
             }
             CATransaction.commit()
-            if alive { wake() }
         }
 
         func live(_ alive: Bool) {
             guard alive != self.alive else { return }
             self.alive = alive
+            colourize(alive, animated: !Glow.stillness)
             guard !Glow.stillness, drawn != .zero else { return }
-            if alive { gather() }
-            alive ? wake() : settle()
+            alive ? gather() : settle()
         }
 
-        /// Seconds from asking to the ring round the pebble having closed on its
-        /// lowest point, where the drop leaves.
-        static let release: CFTimeInterval = 0.5
+        private func colourize(_ on: Bool, animated: Bool) {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                let from = pebble.presentation()?.backgroundColor ?? pebble.backgroundColor
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                pebble.backgroundColor = on ? Glow.base.cgColor : Palette.NS.composer.cgColor
+                drifting.opacity = 1
+                pebble.removeAnimation(forKey: "colour")
+                if animated {
+                    let colour = CABasicAnimation(keyPath: "backgroundColor")
+                    colour.fromValue = from
+                    colour.toValue = pebble.backgroundColor
+                    colour.duration = on ? 0.8 : 0.3
+                    colour.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 0, 0.2, 1)
+                    pebble.add(colour, forKey: "colour")
+                }
+                // Warmth blooms from the lower sand into peach, clay, then cream.
+                let delays: [CFTimeInterval] = [0.2, 0.07, 0.12, 0]
+                for (index, spot) in spots.enumerated() {
+                    let opacity = spot.presentation()?.opacity ?? spot.opacity
+                    spot.removeAnimation(forKey: "colour")
+                    spot.opacity = on ? 1 : 0
+                    if animated {
+                        let bloom = CABasicAnimation(keyPath: "opacity")
+                        bloom.fromValue = opacity
+                        bloom.toValue = spot.opacity
+                        bloom.duration = on ? 0.72 : 0.3
+                        bloom.beginTime = spot.convertTime(CACurrentMediaTime(), from: nil) + (on ? delays[index] : 0)
+                        bloom.fillMode = .backwards
+                        bloom.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0, 0.2, 1)
+                        spot.add(bloom, forKey: "colour")
+                    }
+                }
+                CATransaction.commit()
+            }
+        }
 
-        /// Gathers itself to let its drop fall: it fills with light as the
-        /// halo comes round it; the halo closes in both ways on its lowest
-        /// point, and as it does it crouches and springs, letting the drop go.
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            colourize(alive, animated: false)
+        }
+
+        /// The promo's opening: a crouch and spring from the pebble's base,
+        /// with a flash inside it as the drop leaves at maximum compression.
         private func gather() {
+            spring.removeAllAnimations()
             let now = layer!.convertTime(CACurrentMediaTime(), from: nil)
             let light = CAKeyframeAnimation(keyPath: "opacity")
-            light.values = [0, 0.85, 0.85, 0]
-            light.keyTimes = [0, 0.25, 0.55, 1]
-            light.duration = 0.85
+            light.values = [0, 0.38, 0.16, 0]
+            light.keyTimes = [0, NSNumber(value: Glow.release / 0.95), NSNumber(value: 0.55 / 0.95), 1]
+            light.duration = 0.95
+            light.timingFunctions = [
+                CAMediaTimingFunction(controlPoints: 0.45, 0, 0.7, 1),
+                CAMediaTimingFunction(controlPoints: 0.15, 0.7, 0.3, 1),
+                CAMediaTimingFunction(name: .easeOut),
+            ]
             flash.add(light, forKey: "light")
-            // The halo appears round the pebble, turns a little, then closes in on the bottom.
-            let shown = CAKeyframeAnimation(keyPath: "opacity")
-            shown.values = [0, 1, 1]
-            shown.keyTimes = [0, 0.25, 1]
-            shown.duration = Self.release
-            ring.add(shown, forKey: "shown")
-            let turn = CABasicAnimation(keyPath: "transform.rotation.z")
-            turn.fromValue = 0
-            turn.toValue = -Double.pi * 0.4
-            turn.duration = Self.release
-            ringSweep.add(turn, forKey: "turn")
-            for half in ringHalves {
-                let close = CAKeyframeAnimation(keyPath: "strokeEnd")
-                // Over half each: the pebble isn't symmetric, so its top isn't halfway round.
-                close.values = [0.62, 0.62, 0]
-                close.keyTimes = [0, 0.4, 1]
-                close.timingFunctions = [CAMediaTimingFunction(name: .linear), CAMediaTimingFunction(controlPoints: 0.5, 0, 0.75, 0.6)]
-                close.duration = Self.release
-                half.add(close, forKey: "close")
-            }
-            // It crouches as the halo closes, and springs as the drop leaves.
-            for (path, values) in [("transform.scale.y", [0, -0.07, 0.06, 0]), ("transform.scale.x", [0, 0.05, -0.04, 0])]
+            // The drop leaves at the lowest point of the crouch, before the rebound.
+            for (path, values) in [
+                ("transform.scale.y", [1, 1.025, 0.80, 1.11, 0.985, 1]),
+                ("transform.scale.x", [1, 0.99, 1.14, 0.94, 1.01, 1]),
+            ]
                 as [(String, [Double])]
             {
                 let crouch = CAKeyframeAnimation(keyPath: path)
                 crouch.values = values
-                crouch.keyTimes = [0, 0.5, 0.75, 1]
-                crouch.beginTime = now + Self.release - 0.22
-                crouch.duration = 0.45
-                crouch.isAdditive = true
-                crouch.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: 3)
-                body.add(crouch, forKey: "crouch." + path)
+                crouch.keyTimes = [0, 0.08, Glow.release, 0.41, 0.59, 0.78].map { NSNumber(value: $0 / 0.78) }
+                crouch.beginTime = now
+                crouch.duration = 0.78
+                crouch.timingFunctions = [
+                    CAMediaTimingFunction(controlPoints: 0.25, 0, 0.4, 1),
+                    CAMediaTimingFunction(controlPoints: 0.45, 0, 0.7, 0.45),
+                    CAMediaTimingFunction(controlPoints: 0.12, 0.65, 0.22, 1),
+                    CAMediaTimingFunction(controlPoints: 0.3, 0, 0.25, 1),
+                    CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.3, 1),
+                ]
+                spring.add(crouch, forKey: "crouch." + path)
             }
-            let still = body.shadowColor
             for (path, values) in [
-                ("shadowColor", [still as Any, Glow.clay.cgColor, still as Any]), ("shadowOpacity", [0.18, 0.6, 0.18]),
-                ("shadowRadius", [10.0, 16.0, 10.0]),
+                ("shadowOpacity", [0.0, 0.5, 0.24, 0.0]),
+                ("shadowRadius", [10.0, 17.0, 14.0, 10.0]),
             ] as [(String, [Any])] {
                 let flare = CAKeyframeAnimation(keyPath: path)
                 flare.values = values
-                flare.keyTimes = [0, 0.3, 1]
-                flare.duration = 0.9
+                flare.keyTimes = [0, NSNumber(value: Glow.release / 1.05), NSNumber(value: 0.6 / 1.05), 1]
+                flare.duration = 1.05
+                flare.timingFunctions = light.timingFunctions
                 body.add(flare, forKey: "flare." + path)
             }
         }
 
-        /// Every movement: the layer, its key, what it moves, and where it rests.
-        private var movements: [(layer: CALayer, key: String, path: String, rest: Any)] {
-            [
-                (outline, "flow", "path", rest), (drifting, "swirl", "transform.rotation.z", 0.0),
-                (body, "squash", "transform.scale.x", 1.0), (body, "stretch", "transform.scale.y", 1.0),
-                (body, "sway", "transform.rotation.z", 0.0),
-            ]
-        }
-
-        /// Starts from the pebble at rest: every loop begins where it rests and
-        /// eases out of it, and the lights speed up to their pace.
-        private func wake() {
-            guard !Glow.stillness else { return }
-            let size = body.bounds.size
-            let ease = CAMediaTimingFunction(name: .easeInEaseOut)
-            // The outline flows from shape to shape like a drop.
-            let flow = CAKeyframeAnimation(keyPath: "path")
-            flow.values = [rest] + Self.shapes.map { outline(in: size, bends: $0.bends, handles: $0.handles) } + [rest]
-            flow.duration = Self.flow
-            flow.repeatCount = .infinity
-            flow.timingFunctions = Array(repeating: ease, count: Self.shapes.count + 1)
-            outline.add(flow, forKey: "flow")
-            // It squashes and stretches like jelly, a beat apart from its outline.
-            for (key, path, values) in [
-                ("squash", "transform.scale.x", [1, 1.025, 0.98, 1.015, 1]), ("stretch", "transform.scale.y", [1, 0.98, 1.025, 0.985, 1]),
-                ("sway", "transform.rotation.z", [0, 0.05, 0, -0.05, 0]),
-            ] as [(String, String, [Double])] {
-                let move = CAKeyframeAnimation(keyPath: path)
-                move.values = values
-                move.duration = key == "sway" ? 7 : 3.5
-                move.repeatCount = .infinity
-                move.timingFunctions = Array(repeating: ease, count: values.count - 1)
-                body.add(move, forKey: key)
-            }
-            // The lights begin to turn slowly, then go round at an even pace.
-            let start = (drifting.presentation()?.value(forKeyPath: "transform.rotation.z") as? Double) ?? 0
-            let speeding = CABasicAnimation(keyPath: "transform.rotation.z")
-            speeding.fromValue = start
-            speeding.toValue = start - .pi / 2
-            speeding.duration = Self.waking
-            speeding.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            let round = CABasicAnimation(keyPath: "transform.rotation.z")
-            round.fromValue = start - .pi / 2
-            round.toValue = start - .pi / 2 - .pi * 2
-            round.duration = Self.swirl
-            round.repeatCount = .infinity
-            then(drifting, speeding, round, key: "swirl")
-        }
-
-        /// `first`, held at its end, then `after` from then on, under `key`.
-        private func then(_ layer: CALayer, _ first: CABasicAnimation, _ after: CAAnimation, key: String) {
-            let now = layer.convertTime(CACurrentMediaTime(), from: nil)
-            first.fillMode = .forwards
-            first.isRemovedOnCompletion = false
-            after.beginTime = now + first.duration
-            layer.add(first, forKey: key + ".start")
-            layer.add(after, forKey: key)
-        }
-
         /// Goes back to the pebble from wherever it has got to.
         private func settle() {
-            for half in ringHalves { half.removeAnimation(forKey: "close") }
-            ring.removeAnimation(forKey: "shown")
-            for movement in movements {
-                let layer = movement.layer
-                let from = layer.presentation()?.value(forKeyPath: movement.path)
-                layer.removeAnimation(forKey: movement.key)
-                layer.removeAnimation(forKey: movement.key + ".start")
-                let back = CABasicAnimation(keyPath: movement.path)
-                back.fromValue = from
-                back.toValue = movement.rest
-                back.duration = Self.settling
-                back.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                layer.add(back, forKey: movement.key)
+            let from = spring.presentation()?.transform ?? spring.transform
+            spring.removeAllAnimations()
+            let back = CABasicAnimation(keyPath: "transform")
+            back.fromValue = NSValue(caTransform3D: from)
+            back.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            back.duration = 0.25
+            spring.add(back, forKey: "settle")
+            flash.removeAnimation(forKey: "light")
+            for path in ["shadowColor", "shadowOpacity", "shadowRadius"] {
+                body.removeAnimation(forKey: "flare." + path)
             }
         }
     }

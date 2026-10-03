@@ -1,50 +1,12 @@
 import MoteAI
 import SwiftUI
 
-/// The latest few chats under the new tab's composer, and the way to all of
-/// them. A chat opens in the tab.
-struct RecentChats: View {
-    let browser: Browser
-    @State private var undo = ChatUndo()
-
-    private static let few = 3
-    private var archive: ChatArchive { Assistant.shared.chats }
-
-    var body: some View {
-        if !archive.entries.isEmpty || undo.chat != nil {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("Recent chats")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Palette.muted)
-                    Spacer()
-                    if undo.chat != nil {
-                        UndoLink(undo: undo)
-                    } else {
-                        TextLink(archive.entries.count > Self.few ? "All \(archive.entries.count) chats" : "All chats", arrow: true) {
-                            browser.showChats()
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 20)
-                ForEach(archive.entries.prefix(Self.few)) { entry in
-                    ChatRow(entry: entry) {
-                        browser.open(chat: entry.id)
-                    } delete: {
-                        undo.delete(entry.id)
-                    }
-                }
-            }
-            .animation(Motion.quick, value: archive.entries.prefix(Self.few).map(\.id))
-        }
-    }
-}
-
 /// Every kept chat, in a tab of its own: a search over them, and the chats
 /// by when they were last used.
 struct ChatsPage: View {
     let browser: Browser
+    var inPanel = false
+    var didOpen: () -> Void = {}
     @State private var query = ""
     @State private var undo = ChatUndo()
     @FocusState private var searching: Bool
@@ -54,7 +16,7 @@ struct ChatsPage: View {
     var body: some View {
         let found = archive.entries(matching: query)
         let periods = ChatArchive.periods(of: found)
-        ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Chats").font(.system(size: 22, weight: .semibold)).foregroundStyle(Palette.ink)
@@ -66,35 +28,43 @@ struct ChatsPage: View {
                 .padding(.bottom, 14)
                 SearchField(text: $query, prompt: "Search chats", focus: $searching)
                     .padding(.bottom, 18)
-                if periods.isEmpty {
-                    Text(archive.entries.isEmpty ? "No chats yet. Ask from a new tab with ⌘J." : "No chat matches.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.muted)
-                        .padding(.horizontal, 10)
-                }
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    ForEach(periods, id: \.name) { period in
-                        Text(period.name)
-                            .font(.system(size: 11.5, weight: .medium))
+            }
+            .frame(maxWidth: 640)
+            .padding(.horizontal, inPanel ? 14 : 32)
+            .padding(.top, inPanel ? 18 : 56)
+            .frame(maxWidth: .infinity)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if periods.isEmpty {
+                        Text(archive.entries.isEmpty ? "No chats yet. Ask from a new tab with ⌘J." : "No chat matches.")
+                            .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
                             .padding(.horizontal, 10)
-                            .padding(.top, period.name == periods.first?.name ? 0 : 18)
-                            .padding(.bottom, 4)
-                        ForEach(period.entries) { entry in
-                            ChatRow(entry: entry, showsTime: false) {
-                                browser.open(chat: entry.id)
-                            } delete: {
-                                undo.delete(entry.id)
+                    }
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(periods, id: \.name) { period in
+                            Text(period.name)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Palette.muted)
+                                .padding(.horizontal, 10)
+                                .padding(.top, period.name == periods.first?.name ? 0 : 18)
+                                .padding(.bottom, 4)
+                            ForEach(period.entries) { entry in
+                                ChatRow(entry: entry, showsTime: false) {
+                                    browser.open(chat: entry.id)
+                                    didOpen()
+                                } delete: {
+                                    undo.delete(entry.id)
+                                }
                             }
                         }
                     }
                 }
+                .frame(maxWidth: 640)
+                .padding(.horizontal, inPanel ? 14 : 32)
+                .padding(.bottom, inPanel ? 18 : 40)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: 640)
-            .padding(.horizontal, 32)
-            .padding(.top, 56)
-            .padding(.bottom, 40)
-            .frame(maxWidth: .infinity)
         }
         .background(Palette.ground)
         .onAppear { searching = true }

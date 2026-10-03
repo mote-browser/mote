@@ -52,7 +52,7 @@ public struct ChromeLayout: Equatable, Sendable {
     ///   - panelWidth: the docked chat panel's width; the card gives it up.
     public init(
         window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, chatting: Bool = false,
-        panelWidth: CGFloat = ChromeLayout.panel
+        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks
     ) {
         let whole = CGRect(origin: .zero, size: window)
         guard !immersed else {
@@ -93,7 +93,7 @@ public struct ChromeLayout: Equatable, Sendable {
         let card = CGRect(x: left, y: top, width: right - left, height: bottom - top)
         self.init(
             card: card, corner: ChromeLayout.corner, toolbar: ChromeLayout.toolbar,
-            bookmarks: bookmarked ? ChromeLayout.bookmarks : 0, sidebar: sidebar, strip: strip, chatPanel: chatPanel)
+            bookmarks: bookmarked ? bookmarksHeight : 0, sidebar: sidebar, strip: strip, chatPanel: chatPanel)
     }
 
     private init(

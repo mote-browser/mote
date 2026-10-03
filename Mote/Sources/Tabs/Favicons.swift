@@ -29,8 +29,10 @@ final class Favicons {
 
     /// A site's icon if one is kept, without fetching: the dark one in dark
     /// mode when there is one.
-    func cached(_ host: String) -> NSImage? {
-        (Self.dark ? image(Self.name(host, dark: true)) : nil) ?? image(host)
+    func cached(_ host: String) -> NSImage? { cached(host, dark: Self.dark) }
+
+    func cached(_ host: String, dark: Bool) -> NSImage? {
+        (dark ? image(Self.name(host, dark: true)) : nil) ?? image(host)
     }
 
     private func image(_ name: String) -> NSImage? {
@@ -83,7 +85,7 @@ final class Favicons {
         tab.web.callAsyncJavaScript(Self.probe, arguments: [:], in: nil, in: .page) { [weak self, weak tab] result in
             guard let self else { return }
             let declared = ((try? result.get()) as? [[String: String]] ?? []).compactMap(IconChoice.Declared.init)
-            let wantsDark = dark && IconChoice.offersDark(declared)
+            let wantsDark = dark && (IconChoice.offersDark(declared) || host == "github.com")
             let name = Self.name(host, dark: wantsDark)
             // No dark variant, and the plain icon is recent.
             if !wantsDark, let kept = recent(name) {
@@ -102,22 +104,29 @@ final class Favicons {
     /// kept one, or else its /favicon.ico, held in memory only. Kept apart
     /// from tabs' fetching, so a miss here never stops a tab finding the
     /// icon its page declares.
-    func icon(for host: String) async -> NSImage? {
-        if let kept = cached(host) { return kept }
-        if let asking = lookups[host] { return await asking.value }
+    func icon(for host: String, dark: Bool? = nil) async -> NSImage? {
+        let dark = dark ?? Self.dark
+        let wantsDark = dark && host == "github.com"
+        let name = Self.name(host, dark: wantsDark)
+        if let kept = wantsDark ? image(name) : cached(host, dark: dark) { return kept }
+        let lookup = Self.name(host, dark: dark)
+        if let asking = lookups[lookup] { return await asking.value }
         guard let root = URL(string: "https://\(host)") else { return nil }
         let asking = Task { @MainActor [weak self] () -> NSImage? in
-            for url in [root.appending(path: "favicon.ico"), root.appending(path: "apple-touch-icon.png")] {
+            let candidates = IconChoice.candidates([], page: root, dark: dark) + [root.appending(path: "apple-touch-icon.png")]
+            for url in candidates {
                 guard let (data, response) = try? await Self.session.data(from: url),
                     (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
                     (61..<2_000_000).contains(data.count), let image = await Self.square(data)
                 else { continue }
-                self?.loaded[host] = image
+                // Keep the ordinary fallback separate if the dark variant failed.
+                let key = wantsDark && url.pathExtension == "svg" ? name : host
+                self?.keep(image, as: key, host: host, onDisk: false)
                 return image
             }
             return nil
         }
-        lookups[host] = asking
+        lookups[lookup] = asking
         return await asking.value
     }
 

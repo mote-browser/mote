@@ -26,6 +26,7 @@ struct Reorderable: ViewModifier {
     func body(content: Content) -> some View {
         let held = drag?.id == id
         let following = held && drag?.landed == false
+        let frozenOrigin = drag == nil ? nil : originX
         content
             .offset(drag?.offset(of: id, at: index, in: lattice) ?? .zero)
             // The held tab follows the pointer without animation, even as the
@@ -33,9 +34,9 @@ struct Reorderable: ViewModifier {
             .transaction { if following { $0.animation = nil } }
             .zIndex(held ? 1 : 0)
             .shadow(color: .black.opacity(following ? 0.14 : 0), radius: 12, y: 4)
-            .onGeometryChange(for: CGFloat.self) { proxy in
+            .onGeometryChange(for: CGFloat.self) { [space, frozenOrigin] proxy in
                 let x = proxy.frame(in: .named(space)).minX
-                return drag == nil ? x : originX ?? x
+                return frozenOrigin ?? x
             } action: {
                 originX = $0
             }

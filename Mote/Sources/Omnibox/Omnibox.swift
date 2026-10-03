@@ -41,8 +41,8 @@ struct NewTabPage: View {
     /// Times the logo has let a drop of light fall onto the composer.
     @State private var drops = 0
 
-    private static let logo = CGSize(width: 58, height: 57)
-    private static let gap: CGFloat = 26
+    private static let logo = CGSize(width: 72, height: 70)
+    private static let gap: CGFloat = 28
 
     var body: some View {
         GeometryReader { geo in
@@ -50,8 +50,19 @@ struct NewTabPage: View {
                 MoteLogo(alive: browser.field.asksAssistant)
                     .padding(-MoteLogo.spill)
                     .frame(width: Self.logo.width, height: Self.logo.height)
+                    .overlay {
+                        Logomark().stroke(Palette.hairline, lineWidth: 1)
+                            .opacity(browser.field.asksAssistant ? 0 : 1)
+                            .animation(.easeOut(duration: 0.15), value: browser.field.asksAssistant)
+                            .allowsHitTesting(false)
+                    }
+                    .background {
+                        Breath(pulsing: false, warm: browser.field.asksAssistant)
+                            .opacity(browser.field.asksAssistant ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.3), value: browser.field.asksAssistant)
+                    }
                 Composer(browser: browser, compact: false)
-                    .frame(width: min(Metrics.fieldWidth, max(280, geo.size.width - 64)))
+                    .frame(width: min(650, max(280, geo.size.width - 64)))
                     // An overlay rather than a stack, so the list appearing or growing
                     // never moves the composer.
                     .overlay(alignment: .top) {
@@ -61,12 +72,6 @@ struct NewTabPage: View {
                             SuggestionList(browser: browser)
                                 .offset(y: Composer.height(for: browser) + 8)
                                 .transition(.opacity.combined(with: .offset(y: -4)))
-                        } else if browser.field.typed.isEmpty, browser.active?.shy != true {
-                            // Past chats, out of the way once typing starts.
-                            RecentChats(browser: browser)
-                                .padding(.horizontal, 6)
-                                .offset(y: Composer.height(for: browser) + 22)
-                                .transition(.opacity)
                         }
                     }
                     .animation(Motion.quick, value: browser.field.offers.isEmpty)
@@ -80,7 +85,7 @@ struct NewTabPage: View {
                 if asking, !Glow.stillness { drops += 1 }
             }
             // Above centre: exact centre looks low under the toolbar.
-            .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
+            .position(x: geo.size.width / 2, y: geo.size.height * 0.46)
         }
         .background { DragStrip(click: { browser.field.askFocus() }) }
     }
@@ -103,7 +108,7 @@ private struct LightDrop: View {
         var stretch: CGFloat = 1
     }
 
-    private static let side: CGFloat = 10
+    nonisolated private static let side: CGFloat = 10
 
     var body: some View {
         Circle()
@@ -120,28 +125,27 @@ private struct LightDrop: View {
                     .opacity(fall.opacity)
                     .offset(y: fall.y - Self.side / 2)
             } keyframes: { _ in
-                // It leaves as the halo round the logo closes on its lowest point
-                // (`LogoView.release`) and lands at `Glow.impact`.
+                // It leaves at maximum compression and lands at `Glow.impact`.
                 KeyframeTrack(\.y) {
-                    LinearKeyframe(from, duration: 0.5)
-                    LinearKeyframe(to, duration: 0.3, timingCurve: .easeIn)
+                    LinearKeyframe(from, duration: Glow.release)
+                    LinearKeyframe(to, duration: Glow.fall, timingCurve: .easeIn)
                     LinearKeyframe(to, duration: 0.2)
                 }
                 KeyframeTrack(\.opacity) {
-                    LinearKeyframe(0, duration: 0.47)
+                    LinearKeyframe(0, duration: Glow.release - 0.03)
                     LinearKeyframe(1, duration: 0.03)
-                    LinearKeyframe(1, duration: 0.3)
+                    LinearKeyframe(1, duration: Glow.fall)
                     LinearKeyframe(0, duration: 0.2, timingCurve: .easeOut)
                 }
                 KeyframeTrack(\.size) {
-                    LinearKeyframe(0.4, duration: 0.5)
+                    LinearKeyframe(0.4, duration: Glow.release)
                     LinearKeyframe(1, duration: 0.15, timingCurve: .easeOut)
                     LinearKeyframe(0.8, duration: 0.15)
                     LinearKeyframe(2.2, duration: 0.2, timingCurve: .easeOut)
                 }
                 KeyframeTrack(\.stretch) {
-                    LinearKeyframe(1, duration: 0.5)
-                    LinearKeyframe(1.8, duration: 0.3, timingCurve: .easeIn)
+                    LinearKeyframe(1, duration: Glow.release)
+                    LinearKeyframe(1.8, duration: Glow.fall, timingCurve: .easeIn)
                     LinearKeyframe(0.35, duration: 0.2, timingCurve: .easeOut)
                 }
             }
@@ -158,7 +162,8 @@ struct Composer: View {
     let compact: Bool
 
     static let compactHeight: CGFloat = 52
-    static let fullHeight: CGFloat = 104
+    static let fullHeight: CGFloat = 112
+    private var inputHeight: CGFloat { compact ? Self.compactHeight : 58 }
 
     @State private var shake: CGFloat = 0
     @State private var refused = false
@@ -218,20 +223,20 @@ struct Composer: View {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
                     .contentTransition(.symbolEffect(.replace))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: compact ? 13 : 14, weight: .medium))
                     .foregroundStyle(Palette.muted)
                     .frame(width: 16)
                 AddressField(
-                    browser: browser, size: 15,
+                    browser: browser, size: compact ? 15 : 16,
                     placeholder: placeholder,
                     moveSelection: moveMentionSelection,
                     choose: confirmMention,
                     escape: dismissMentionPicker
                 )
-                .frame(height: 22)
+                .frame(height: compact ? 22 : 28)
             }
-            .padding(.horizontal, 16)
-            .frame(height: Composer.compactHeight)
+            .padding(.horizontal, compact ? 16 : 20)
+            .frame(height: inputHeight)
 
             if !compact {
                 if showStagedContexts { stagedContexts.frame(height: Self.contextHeight) }
@@ -262,18 +267,17 @@ struct Composer: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 11)
                 .padding(.bottom, 10)
-                .frame(height: contentHeight - Composer.compactHeight - (showStagedContexts ? Self.contextHeight : 0), alignment: .bottom)
+                .frame(height: contentHeight - inputHeight - (showStagedContexts ? Self.contextHeight : 0), alignment: .bottom)
             }
         }
         .frame(height: contentHeight)
         .background {
             ZStack {
                 if !compact {
-                    Breath().opacity(leads ? 0 : 1)
                     AskAura(on: leads).padding(-AskAura.spill)
                 }
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Palette.ground)
+                    .fill(compact ? Palette.ground : Palette.composer)
                     .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
                     .shadow(color: .black.opacity(0.07), radius: 24, y: 10)
             }
@@ -504,23 +508,28 @@ struct SuggestionList: View {
 /// animated by Core Animation. The animation runs in the render server; a
 /// SwiftUI animation would redraw on the main thread every frame.
 private struct Breath: NSViewRepresentable {
+    var pulsing = true
+    var warm = false
     /// Shadow opacity. A shadow renders at about 0.7x the darkness of an
     /// equally opaque blurred fill, so 7% matches a 5% fill with a 26 pt blur.
     static let strength: Swift.Float = 0.07
 
-    func makeNSView(context: Context) -> NSView { Lung() }
-    func updateNSView(_ view: NSView, context: Context) {}
+    func makeNSView(context: Context) -> NSView { Lung(pulsing: pulsing) }
+    func updateNSView(_ view: NSView, context: Context) { (view as? Lung)?.setWarm(warm) }
 
     private final class Lung: NSView {
         private let glow = CALayer()
+        private let pulsing: Bool
+        private var warm = false
         private var breathed: CGSize = .zero
 
-        override init(frame: NSRect) {
-            super.init(frame: frame)
+        init(pulsing: Bool) {
+            self.pulsing = pulsing
+            super.init(frame: .zero)
             wantsLayer = true
-            glow.shadowOpacity = Breath.strength
+            glow.shadowOpacity = pulsing ? Breath.strength : 0.02
             glow.shadowOffset = .zero
-            glow.shadowRadius = 26
+            glow.shadowRadius = pulsing ? 26 : 12
             layer?.addSublayer(glow)
         }
 
@@ -529,10 +538,34 @@ private struct Breath: NSViewRepresentable {
 
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+        func setWarm(_ warm: Bool) {
+            guard warm != self.warm else { return }
+            self.warm = warm
+            let from = glow.presentation()?.shadowColor ?? glow.shadowColor
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            tint()
+            if !Glow.stillness {
+                let colour = CABasicAnimation(keyPath: "shadowColor")
+                colour.fromValue = from
+                colour.toValue = glow.shadowColor
+                colour.duration = 0.8
+                colour.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0, 0.2, 1)
+                glow.add(colour, forKey: "colour")
+            }
+            CATransaction.commit()
+        }
+
+        private func tint() {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                glow.shadowColor = warm ? Glow.clay.cgColor : Palette.NS.ink.cgColor
+            }
+        }
+
         /// Re-resolves the ink color for the current appearance.
         override func viewDidChangeEffectiveAppearance() {
             super.viewDidChangeEffectiveAppearance()
-            effectiveAppearance.performAsCurrentDrawingAppearance { glow.shadowColor = Palette.NS.ink.cgColor }
+            tint()
         }
 
         override func layout() {
@@ -544,8 +577,9 @@ private struct Breath: NSViewRepresentable {
             glow.bounds = bounds
             glow.position = CGPoint(x: bounds.midX, y: bounds.midY)
             glow.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 26, cornerHeight: 26, transform: nil)
-            effectiveAppearance.performAsCurrentDrawingAppearance { glow.shadowColor = Palette.NS.ink.cgColor }
+            tint()
             CATransaction.commit()
+            guard pulsing, !Glow.stillness else { return }
             // Scale 0.97–1.03 and opacity 0.65–1.0, 2.6 s each way, repeating.
             let size = CABasicAnimation(keyPath: "transform.scale")
             size.fromValue = 0.97
