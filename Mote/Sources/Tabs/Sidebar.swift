@@ -51,6 +51,10 @@ struct Sidebar: View {
         }
         .frame(width: prefs.sideWidth)
         .frame(maxHeight: .infinity)
+        .overlay(alignment: .topLeading) {
+            TrafficLights(showing: showing, inset: browser.folded ? ChromeLayout.gap : 0)
+                .frame(width: Metrics.lights, height: Self.top)
+        }
         // Pages sliding in from other spaces stay inside.
         .clipped()
         .onAppear { SpaceSwipe.shared.start(for: browser) }

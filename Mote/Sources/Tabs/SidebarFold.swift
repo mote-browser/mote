@@ -19,7 +19,6 @@ struct SidebarFold: View {
 
     /// Folded, with the page not full screen.
     private var folding: Bool { browser.folded && browser.active?.immersed != true }
-    private var lightsOff: Bool { browser.folded && !browser.peeking }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -38,7 +37,7 @@ struct SidebarFold: View {
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: 0)
                 if folding, prefs.sidebar, browser.peeking {
-                    floatingSidebar.padding(ChromeLayout.gap).transition(.move(edge: .leading).combined(with: .opacity))
+                    floatingSidebar.padding(ChromeLayout.gap).transition(.move(edge: .leading))
                 }
             }
             .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -46,32 +45,32 @@ struct SidebarFold: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         .onAppear {
-            slideLights()
             watch()
         }
-        .onDisappear { pointer.stop() }
-        // The sidebar can start folded before the window exists; hide the lights once it does.
+        .onDisappear {
+            pointer.stop()
+            timers.cancelShow()
+            timers.cancelHide()
+        }
         .background(
             WindowSetup { window in
-                Self.window = window
-                Self.lightsWanted = lightsOff
-                window.standardWindowButton(.closeButton)?.superview?.isHidden = lightsOff
-                Self.holdLights()
                 pointer.window = window
                 watch()
             }
         )
-        .onChange(of: lightsOff) { slideLights() }
-        .onChange(of: folding) { watch() }
-        // Changing layout puts the fold back to what the settings say.
+        .onChange(of: folding) {
+            timers.cancelShow()
+            timers.cancelHide()
+            inside = false
+            watch()
+        }
+        // Each layout owns its persisted fold; a temporary peek never carries over.
         .onChange(of: prefs.sidebar) {
-            browser.folded = prefs.sidebar && prefs.sideHides
             browser.peeking = false
         }
-        .onChange(of: prefs.sideHides) { _, hides in
+        .onChange(of: prefs.sideHides) {
             guard prefs.sidebar else { return }
             browser.peeking = false
-            withAnimation(Motion.fold) { browser.folded = hides }
         }
         // Hiding waits while a tab is being renamed; once that ends, hide if the pointer left.
         .onChange(of: browser.editingTab) { _, editing in
@@ -142,109 +141,15 @@ struct SidebarFold: View {
 
     private func show() {
         timers.cancelHide()
-        if !browser.peeking { browser.peek(true) }
+        if folding, !browser.peeking { browser.peek(true) }
     }
 
     /// After a grace period counted from when the pointer left, not from its
     /// latest move; not while a tab is being renamed.
     private func hide() {
         timers.hideAfter(EdgeReveal.grace) {
-            if browser.editingTab == nil { browser.peek(false) }
+            if folding, browser.editingTab == nil { browser.peek(false) }
         }
-    }
-
-    /// The title bar view holds the traffic lights and their stand-ins for
-    /// when the app is in the background (see RestingLights); moving it moves both.
-    private func slideLights() {
-        // Without a title bar yet, kept for when it turns up (see `holdLights`).
-        guard let bar = Self.titlebar else { return Self.lightsWanted = lightsOff }
-        if prefs.sidebar {
-            Self.slide(bar, off: lightsOff, by: prefs.sideWidth + ChromeLayout.gap)
-        } else {
-            Self.slide(bar, off: lightsOff, by: ChromeLayout.band(for: .strip), up: true)
-        }
-    }
-
-    /// The window the fold is in, once it exists.
-    private static weak var window: NSWindow?
-
-    static var titlebar: NSView? { (window ?? AppDelegate.window)?.standardWindowButton(.closeButton)?.superview }
-
-    /// Counts slides, so an interrupted one's end doesn't hide the lights.
-    private static var slides = 0
-    /// Whether the lights should be away, once no slide is under way.
-    private static var lightsWanted: Bool?
-
-    /// The title bar whose `hidden` is watched, and the watch.
-    private static weak var watchedBar: NSView?
-    private static var hiddenWatch: NSKeyValueObservation?
-
-    /// Puts the lights back where the fold wants them when something else
-    /// (AppKit laying the title bar out again, or showing it, say) moved them
-    /// in between.
-    static func holdLights() {
-        guard let bar = titlebar else { return }
-        watchHidden(bar)
-        guard let wanted = lightsWanted, bar.layer?.animation(forKey: "fold") == nil, bar.isHidden != wanted else { return }
-        bar.isHidden = wanted
-    }
-
-    /// AppKit can show the title bar again while the tabs are folded, without
-    /// laying anything out that TrafficLights would hear; it's hidden again.
-    private static func watchHidden(_ bar: NSView) {
-        guard bar !== watchedBar else { return }
-        watchedBar = bar
-        hiddenWatch = bar.observe(\.isHidden) { _, _ in
-            // Once AppKit's own change has finished.
-            DispatchQueue.main.async { MainActor.assumeIsolated { holdLights() } }
-        }
-    }
-
-    /// The end of a slide: the lights where they were going, the animation gone.
-    private static func land(_ bar: NSView, off: Bool, turn: Int) {
-        guard turn == slides else { return }
-        bar.layer?.removeAnimation(forKey: "fold")
-        bar.isHidden = off
-    }
-
-    /// Slides the traffic lights off (left, or `up`) or back, on the tabs'
-    /// own spring, picking up from where they are if a slide is under way.
-    static func slide(_ bar: NSView, off: Bool, by distance: CGFloat, up: Bool = false) {
-        slides += 1
-        let turn = slides
-        lightsWanted = off
-        guard let layer = bar.layer else { return bar.isHidden = off }
-        // Up is +y in a superview that isn't flipped, -y in one that is.
-        let path = up ? "transform.translation.y" : "transform.translation.x"
-        let away = up && bar.superview?.isFlipped != true ? distance : -distance
-        // A slide on the other axis (the layout changed midway) is dropped.
-        if (layer.animation(forKey: "fold") as? CABasicAnimation)?.keyPath != path { layer.removeAnimation(forKey: "fold") }
-        let from =
-            layer.animation(forKey: "fold") != nil
-            ? layer.presentation()?.value(forKeyPath: path) as? CGFloat ?? 0 : bar.isHidden ? away : 0
-        let to: CGFloat = off ? away : 0
-        guard from != to else {
-            layer.removeAnimation(forKey: "fold")
-            return bar.isHidden = off
-        }
-        let curve = SpringCurve(response: Motion.foldResponse, dampingFraction: 1)
-        let spring = CASpringAnimation(keyPath: path)
-        spring.mass = curve.mass
-        spring.stiffness = curve.stiffness
-        spring.damping = curve.damping
-        spring.fromValue = from
-        spring.toValue = to
-        spring.duration = spring.settlingDuration
-        spring.fillMode = .forwards
-        spring.isRemovedOnCompletion = false
-        bar.isHidden = false
-        CATransaction.begin()
-        CATransaction.setCompletionBlock { MainActor.assumeIsolated { land(bar, off: off, turn: turn) } }
-        layer.add(spring, forKey: "fold")
-        CATransaction.commit()
-        // Core Animation can drop the completion (the layer rebuilt midway):
-        // the slide lands anyway once it should have ended.
-        DispatchQueue.main.asyncAfter(deadline: .now() + spring.duration + 0.1) { land(bar, off: off, turn: turn) }
     }
 }
 

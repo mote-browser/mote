@@ -14,6 +14,7 @@ final class MoteUITests: XCTestCase {
         app.launchEnvironment["MOTE_PROBE"] = "ui-tests"
         // Property-list values, so settings read as booleans see booleans rather than strings.
         app.launchArguments += ["-welcomed", "YES", "-sidebar", sidebar ? "<true/>" : "<false/>", "-sidebar.hides", "<false/>"]
+        app.launchArguments += ["-sidebar.folded", "<false/>", "-strip.folded", "<false/>"]
         app.launch()
         return app
     }
@@ -22,6 +23,53 @@ final class MoteUITests: XCTestCase {
     func testLaunchShowsTheBrowserWindow() {
         let app = launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testTrafficLightsAreDrawnInBothLayouts() throws {
+        for sidebar in [true, false] {
+            let app = launch(sidebar: sidebar)
+            let window = app.windows.firstMatch
+            XCTAssertTrue(window.waitForExistence(timeout: 10))
+            let controls = window.buttons.allElementsBoundByIndex.filter {
+                $0.frame.width <= 20 && $0.frame.height <= 20 && $0.frame.minX - window.frame.minX < 100
+            }
+            XCTAssertEqual(controls.count, 3, "There must be exactly one set of native window controls")
+            let centerY: CGFloat = sidebar ? 27 : 21.5
+            XCTAssertTrue(
+                controls.allSatisfy { abs($0.frame.midY - window.frame.minY - centerY) < 1 }, "Native controls must align with their header"
+            )
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)).hover()
+            let shot = window.screenshot()
+            let attachment = XCTAttachment(screenshot: shot)
+            attachment.name = "lights-\(sidebar ? "sidebar" : "strip")"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            controls[0].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).hover()
+            Thread.sleep(forTimeInterval: 0.2)
+            let hovered = window.screenshot()
+            let hoverAttachment = XCTAttachment(screenshot: hovered)
+            hoverAttachment.name = "lights-hover-\(sidebar ? "sidebar" : "strip")"
+            hoverAttachment.lifetime = .keepAlways
+            add(hoverAttachment)
+            let before = try XCTUnwrap(NSBitmapImageRep(data: shot.pngRepresentation))
+            let after = try XCTUnwrap(NSBitmapImageRep(data: hovered.pngRepresentation))
+            let scale = CGFloat(before.pixelsWide) / window.frame.width
+            let center = CGPoint(x: controls[0].frame.midX, y: controls[0].frame.midY)
+            let x = Int((center.x - window.frame.minX) * scale)
+            let y = Int((center.y - window.frame.minY) * scale)
+            var symbolDifference: CGFloat = 0
+            let radius = Int(3 * scale)
+            for pixelY in (y - radius)...(y + radius) {
+                for pixelX in (x - radius)...(x + radius) {
+                    let plain = try XCTUnwrap(before.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.sRGB))
+                    let symbol = try XCTUnwrap(after.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.sRGB))
+                    symbolDifference = max(symbolDifference, plain.redComponent - symbol.redComponent)
+                }
+            }
+            XCTAssertGreaterThan(symbolDifference, 0.06, "Native hover must draw the close symbol, including Graphite appearance")
+            app.terminate()
+        }
     }
 
     /// Pastes the address rather than typing it: synthesized typing drops
@@ -154,12 +202,45 @@ final class MoteUITests: XCTestCase {
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).hover()
         window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).hover()
         XCTAssertTrue(newTab.waitForExistence(timeout: 5), "The sidebar didn't come out at the left edge")
+        let lights = window.buttons.allElementsBoundByIndex.filter {
+            $0.frame.width <= 20 && $0.frame.height <= 20 && $0.frame.minX - window.frame.minX < 100
+        }
+        XCTAssertEqual(lights.count, 3, "The revealed panel must contain one complete group of window controls")
+        XCTAssertTrue(lights.allSatisfy { abs($0.frame.midY - window.frame.minY - 27) < 1 }, "Peeking must preserve header alignment")
+        let peek = XCTAttachment(screenshot: window.screenshot())
+        peek.name = "sidebar-peek-with-native-controls"
+        peek.lifetime = .keepAlways
+        add(peek)
 
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).hover()
         XCTAssertTrue(waitUntilGone(newTab), "The sidebar stayed out after the pointer left it")
 
         app.buttons["Show Sidebar"].firstMatch.click()
         XCTAssertTrue(newTab.waitForExistence(timeout: 5), "The sidebar didn't come back")
+    }
+
+    @MainActor
+    func testSidebarFoldSurvivesRelaunch() {
+        let app = XCUIApplication()
+        let world = "ui-fold-" + UUID().uuidString.lowercased()
+        app.launchEnvironment["MOTE_PROBE"] = world
+        app.launchArguments = ["-welcomed", "YES", "-sidebar", "<true/>", "-sidebar.hides", "<false/>"]
+        defer {
+            app.terminate()
+            UserDefaults.standard.removePersistentDomain(forName: "io.github.mote-browser.mote.test.\(world)")
+        }
+        app.launch()
+        XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Hide Sidebar"].firstMatch.click()
+        XCTAssertTrue(app.buttons["Show Sidebar"].firstMatch.waitForExistence(timeout: 5))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Show Sidebar"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Show Sidebar"].firstMatch.click()
+        XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 5))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 10))
     }
 
     /// ⌘L on a page edits the address in the toolbar, with the address selected;

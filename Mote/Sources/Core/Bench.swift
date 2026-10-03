@@ -272,7 +272,7 @@ struct BenchCall {
 
     /// Traffic lights as [left, centre from the top], in window points.
     static func lights(of window: NSWindow) -> [[Int]] {
-        [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { kind in
+        return [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { kind in
             guard let button = window.standardWindowButton(kind) else { return nil }
             let frame = button.convert(button.bounds, to: nil)
             return [Int(frame.minX.rounded()), Int((window.frame.height - frame.midY).rounded())]

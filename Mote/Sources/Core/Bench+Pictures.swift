@@ -131,15 +131,10 @@ extension Bench {
                 frame.cacheDisplay(in: corner, to: picture)
                 pictures.append(picture)
             }
-            if let bar = SidebarFold.titlebar {
-                let now = bar.layer?.presentation()
-                let moved = now?.value(forKeyPath: "transform.translation.x") as? CGFloat ?? 0
-                let lifted = now?.value(forKeyPath: "transform.translation.y") as? CGFloat ?? 0
-                shot["lights"] = [
-                    "hidden": bar.isHidden, "x": Int(moved.rounded()), "y": Int(lifted.rounded()),
-                    "flipped": bar.superview?.isFlipped ?? false,
-                ]
-            }
+            shot["lights"] = [
+                "hidden": !TrafficLights.visible(in: window),
+                "frames": BenchCall.lights(of: window),
+            ]
             shots.append(shot)
             DispatchQueue.main.asyncAfter(deadline: .now() + every) { take(index + 1) }
         }
