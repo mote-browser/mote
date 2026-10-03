@@ -1,0 +1,104 @@
+/* Palette and radii mirror Sources/Design/{Palette,TextStyle}. */
+body.mote-inspector {
+    --mote-ground: #fff;
+    --mote-frame: #e8e8e8;
+    --mote-ink: #171717;
+    --mote-muted: #8c8c8c;
+    --mote-edge: #00000016;
+    --mote-wash: #efefef;
+    --background-color: var(--mote-ground);
+    --text-color: var(--mote-ink);
+    --border-color: var(--mote-edge);
+    --panel-background-color: var(--mote-ground);
+    --panel-border-color: var(--mote-edge);
+    --glyph-color: var(--mote-muted);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--mote-ground);
+    color: var(--mote-ink);
+}
+@media (prefers-color-scheme: dark) {
+    body.mote-inspector {
+        --mote-ground: #1c1c1c;
+        --mote-frame: #242424;
+        --mote-ink: #ededed;
+        --mote-muted: #949494;
+        --mote-edge: #ffffff12;
+        --mote-wash: #2d2d2d;
+    }
+}
+/* Keep WebKit's content layout; the activity rail stays on the window's right edge. */
+body.mote-inspector > :is(#tab-bar, #main) {
+    margin-right: 52px;
+    max-width: calc(100% - 52px);
+}
+#mote-inspector-rail {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 1000;
+    box-sizing: border-box;
+    width: 52px;
+    padding: 10px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    border-left: 1px solid var(--mote-edge);
+    background: var(--mote-frame);
+    overflow: auto;
+}
+#mote-inspector-rail button {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    padding: 9px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--mote-muted);
+    font: 18px -apple-system, sans-serif;
+    cursor: pointer;
+    transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) { #mote-inspector-rail button { transition: none; } }
+#mote-inspector-rail button:hover,
+#mote-inspector-rail button[aria-pressed="true"] {
+    background: var(--mote-ground);
+    color: var(--mote-ink);
+    border-color: var(--mote-edge);
+}
+#mote-inspector-rail button:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+#mote-inspector-rail button img, #mote-inspector-rail button svg { width: 18px; height: 18px; }
+#mote-inspector-rail button img { filter: brightness(0); opacity: .65; }
+@media (prefers-color-scheme: dark) {
+    #mote-inspector-rail button img { filter: brightness(0) invert(1); }
+}
+#mote-inspector-rail button[hidden] { display: none !important; }
+.mote-inspector-tabs { display: flex; flex-direction: column; gap: 6px; }
+#mote-inspector-rail .mote-inspector-popout { margin-top: auto; }
+/* The native dock divider must receive pointer input ahead of the activity rail. */
+body.mote-inspector.docked.right #docked-resizer {
+    z-index: 1001;
+    width: 6px;
+    cursor: col-resize;
+}
+body.mote-collapsed > :not(#mote-inspector-rail) { visibility: hidden !important; pointer-events: none !important; }
+body.mote-collapsed #docked-resizer { display: none !important; }
+body.mote-inspector .dock-left,
+body.mote-inspector .dock-bottom,
+body.mote-inspector .dock-right,
+body.mote-inspector .undock,
+body.mote-inspector .dock-close { display: none !important; }
+body.mote-inspector .tab-bar {
+    background: var(--mote-ground);
+    border-bottom: 1px solid var(--mote-edge);
+}
+body.mote-inspector .tab-bar > .tabs { display: none; }
+#mote-inspector-title { padding-inline: 12px; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: center; }
+body.mote-inspector .tab-bar-item { border-radius: 8px; }
+body.mote-inspector .tab-bar-item.selected { background: var(--mote-wash); }
+body.mote-inspector .navigation-bar { background: var(--mote-ground); border-color: var(--mote-edge); }
+body.mote-inspector :is(input:not([type="checkbox"]), select) { border-radius: 8px; }
+@media (max-width: 420px) {
+    #mote-inspector-rail { padding-top: 6px; gap: 4px; }
+    #mote-inspector-rail button { height: 34px; }
+}

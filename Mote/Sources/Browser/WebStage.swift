@@ -20,6 +20,25 @@ final class StageView: NSView {
     private var previousFrameNotifications = false
     private weak var observedInspector: NSView?
     private var previousInspectorNotifications = false
+    private var inspectorRail: NSView?
+
+    func animateInspectorTransition() {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        wantsLayer = true
+        let transition = CATransition()
+        transition.type = .fade
+        transition.duration = 0.18
+        transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer?.add(transition, forKey: "inspector-transition")
+    }
+
+    /// Folded tools use a native rail after WebKit hides its dock. Never force
+    /// a WKInspector view below WebKit's minimum width: its layout fights back.
+    func setInspectorRail(_ rail: NSView?) {
+        inspectorRail?.removeFromSuperview()
+        inspectorRail = rail
+        settle()
+    }
 
     override func layout() {
         super.layout()
@@ -59,6 +78,7 @@ final class StageView: NSView {
     @objc private func pageFrameChanged(_ notification: Notification) {
         guard let wanted, wanted.superview === self else { return }
         updateOverlayFrame()
+        if observedInspector?.superview === self, wanted.frame != availablePageFrame { needsLayout = true }
     }
 
     private func observeInspector(_ view: NSView?) {
@@ -78,7 +98,11 @@ final class StageView: NSView {
     }
 
     private func updateOverlayFrame() {
-        guard let wanted, let overlay else { return }
+        overlay?.frame = availablePageFrame
+    }
+
+    private var availablePageFrame: NSRect {
+        guard let wanted else { return bounds }
         var available = wanted.frame
         if let dock = observedInspector, dock.superview === self {
             let occupied = dock.frame.intersection(bounds)
@@ -100,7 +124,7 @@ final class StageView: NSView {
                 }
             }
         }
-        overlay.frame = available
+        return available
     }
 
     private func settle() {
@@ -113,7 +137,7 @@ final class StageView: NSView {
         // beside the page and narrows the page to fit, so removing it would leave
         // the page narrow beside an empty space.
         let inspecting = inspectorOpen
-        for view in subviews where view !== wanted && view !== overlay && !(inspecting && isInspector(view)) {
+        for view in subviews where view !== wanted && view !== overlay && view !== inspectorRail && !(inspecting && isInspector(view)) {
             view.removeFromSuperview()
         }
 
@@ -132,7 +156,24 @@ final class StageView: NSView {
         // With the inspector docked, WebKit lays both out; a frame here would cover the inspector.
         let dock = inspecting ? subviews.first(where: isInspector) : nil
         observeInspector(dock)
-        if dock == nil { wanted.frame = bounds }
+        // A sidebar fold changes the stage without a window resize. WebKit's
+        // dock can move first while the page retains its former width.
+        if dock != nil, wanted.frame != availablePageFrame { wanted.frame = availablePageFrame }
+        if dock == nil {
+            var available = bounds
+            if let rail = inspectorRail {
+                let width = min(52, bounds.width)
+                rail.frame = NSRect(x: bounds.maxX - width, y: bounds.minY, width: width, height: bounds.height)
+                if let scroll = rail as? NSScrollView, let document = scroll.documentView {
+                    document.setFrameSize(NSSize(width: width, height: max(scroll.contentSize.height, CGFloat(document.subviews.count * 44 + 14))))
+                    document.needsLayout = true
+                    document.layoutSubtreeIfNeeded()
+                }
+                available.size.width -= width
+                if rail.superview !== self { addSubview(rail) }
+            }
+            wanted.frame = available
+        }
         if let overlay {
             if overlay.superview !== self { addSubview(overlay, positioned: .above, relativeTo: wanted) }
             updateOverlayFrame()
