@@ -11,7 +11,7 @@ extension Browser {
         return active.pageColor
     }
 
-    var chromeGround: Color { chromeColor.map { Color(nsColor: $0) } ?? Palette.ground }
+    var chromeGround: Color { chromeColor.map { Color(nsColor: $0) } ?? (active?.isStart == true ? Palette.start : Palette.ground) }
 
     var chromeScheme: ColorScheme? {
         guard let rgb = chromeColor?.usingColorSpace(.sRGB) else { return nil }
@@ -41,7 +41,8 @@ extension Browser {
     func layout(in window: CGSize) -> ChromeLayout {
         ChromeLayout(
             window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: prefs.sideWidth, folded: folded,
-            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth)
+            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth,
+            bookmarksHeight: ChromeLayout.bookmarks + (active?.isStart == true ? 12 : 0))
     }
 }
 
@@ -245,6 +246,13 @@ private struct PageCard: View {
             }
         }
         .clipShape(shape)
+        .background {
+            // Outside the clip, so the shadow can fall onto the sidebar.
+            if layout.sidebar != nil, layout.corner > 0 {
+                shape.fill(browser.chromeGround)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.08), radius: 7, x: -1, y: 2)
+            }
+        }
         .overlay {
             if layout.corner > 0, layout.strip == nil {
                 shape.strokeBorder(Palette.edge, lineWidth: 1).allowsHitTesting(false)

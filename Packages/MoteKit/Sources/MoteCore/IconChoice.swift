@@ -53,6 +53,10 @@ public enum IconChoice {
             return (url, score(icon, url: url) + (fit == .any ? 0 : 40))
         }
         var urls = ranked.sorted { $0.1 > $1.1 }.map(\.0)
+        // GitHub switches this icon with JavaScript rather than link media.
+        if dark, page.host()?.lowercased() == "github.com" {
+            urls.insert(URL(string: "https://github.githubassets.com/favicons/favicon-dark.svg")!, at: 0)
+        }
         if let host = page.host(), let fallback = URL(string: "\(page.scheme ?? "https")://\(host)/favicon.ico") { urls.append(fallback) }
         var seen = Set<String>()
         return urls.filter { seen.insert($0.absoluteString).inserted }

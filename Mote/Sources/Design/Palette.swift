@@ -6,6 +6,9 @@ import SwiftUI
 enum Palette {
     /// The card the page sits on, and the ground of panels and menus.
     static let ground = Color(nsColor: NS.ground)
+    /// The new tab's canvas and its raised search field.
+    static let start = Color(nsColor: NS.start)
+    static let composer = Color(nsColor: NS.composer)
     /// Around the card: behind the sidebar and the tab strip.
     static let frame = Color(nsColor: NS.frame)
     /// The sidebar's active tab, raised off the frame like the card.
@@ -32,6 +35,8 @@ enum Palette {
     /// The same colours for AppKit.
     enum NS {
         static let ground = gray(light: 1, dark: 0.11)
+        static let start = gray(light: 1, dark: 0.085)
+        static let composer = gray(light: 0.965, dark: 0.18)
         static let frame = gray(light: 0.91, dark: 0.14)
         static let lift = gray(light: 1, dark: 0.26)
         static let veil = inkWash(light: 0.055, dark: 0.075)

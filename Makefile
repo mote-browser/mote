@@ -21,7 +21,7 @@ DERIVED   := $(BUILD_DIR)/DerivedData
 APP       := $(BUILD_DIR)/Mote.app
 # Extra build settings, e.g. XCODEBUILD_FLAGS="MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=42".
 XCODEBUILD_FLAGS ?=
-XCODEBUILD = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -derivedDataPath $(DERIVED) $(XCODEBUILD_FLAGS)
+XCODEBUILD = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=macOS,arch=$(shell uname -m)' -derivedDataPath $(DERIVED) $(XCODEBUILD_FLAGS)
 
 # Test worlds keep their own folder, settings and WebKit store (see Store.swift),
 # so nothing here can touch the Mote you use every day.

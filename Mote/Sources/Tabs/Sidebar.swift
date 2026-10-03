@@ -3,19 +3,20 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The tabs down the left, on the window's frame: the traffic lights, the
-/// pinned tabs in a grid, the rest in a list, and spaces and bookmarks at
+/// pinned tabs in a grid, the rest in a list, and spaces and chats at
 /// the foot. The page's own controls are in the toolbar beside it.
 struct Sidebar: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
     /// The sidebar on screen. The docked one stays built while folded; only
-    /// the one showing opens the bookmarks menu.
+    /// the one showing opens the chats menu.
     var showing = true
 
     @Namespace private var ground
     @Namespace private var groundBefore
     @Namespace private var groundAfter
     @State private var dropping = false
+    @State private var chatsOpen = false
     /// A tab being dragged to a new place in the list.
     @State private var drag: ReorderDrag<Tab.ID>?
 
@@ -25,7 +26,7 @@ struct Sidebar: View {
     private static let pinGap: CGFloat = 6
     /// The band at the top that holds the traffic lights.
     static let top: CGFloat = 50
-    private static let footHeight = Metrics.button + 10
+    private static let footHeight: CGFloat = 50
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -189,15 +190,15 @@ struct Sidebar: View {
         Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
     }
 
-    /// The spaces switcher and the bookmarks.
+    /// The spaces switcher and the chat archive.
     private var foot: some View {
         HStack(spacing: 2) {
             if browser.prefs.usesSpaces { SpaceDot(browser: browser) }
-            Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }
-                .menuPanel(isPresented: showing ? $browser.bookmarksOpen : .constant(false), edge: .trailing) {
-                    BookmarksDropdown(browser: browser, bookmarks: browser.bookmarks)
+            Quiet(icon: "bubble.left.and.bubble.right", title: "Chats", height: Self.footHeight - 10) { chatsOpen.toggle() }
+                .menuPanel(isPresented: showing ? $chatsOpen : .constant(false), edge: .trailing) {
+                    ChatsPage(browser: browser, inPanel: true) { chatsOpen = false }
+                        .frame(width: 380, height: 440)
                 }
-            Spacer(minLength: 0)
         }
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
     }

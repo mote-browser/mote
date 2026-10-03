@@ -47,4 +47,11 @@ struct IconChoiceTests {
         #expect(IconChoice.candidates(icons, page: page, dark: false).map(\.absoluteString) == ["https://site.test/favicon.ico"])
         #expect(IconChoice.Declared(["rel": "icon"]) == nil)
     }
+
+    @Test("GitHub uses its official dark variant only in dark mode")
+    func githubAppearance() {
+        let page = URL(string: "https://github.com/mote-browser/mote")!
+        #expect(IconChoice.candidates([], page: page, dark: true).first?.lastPathComponent == "favicon-dark.svg")
+        #expect(IconChoice.candidates([], page: page, dark: false).first?.lastPathComponent == "favicon.ico")
+    }
 }
