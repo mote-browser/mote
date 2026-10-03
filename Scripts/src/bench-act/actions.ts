@@ -53,15 +53,16 @@ function typeInto(element: HTMLElement, value: string, selector: string): string
  * Sets the value through the native setter and dispatches input and change
  * events, so frameworks that track the value (React) notice the change.
  */
-function setValue(
+export function setValue(
   element: HTMLElement,
-  prototype: HTMLInputElement | HTMLTextAreaElement,
+  prototype: object,
   value: string,
+  events: string[] = ['input', 'change'],
 ): void {
   const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
   if (setter) setter.call(element, value);
   else (element as HTMLInputElement).value = value;
-  changed(element);
+  changed(element, events);
 }
 
 /** Selects the option whose value is `wanted`, or else whose text is, alone. */
@@ -76,7 +77,6 @@ function choose(select: HTMLSelectElement, wanted: string, selector: string): st
   return 'ok';
 }
 
-function changed(element: HTMLElement): void {
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-  element.dispatchEvent(new Event('change', { bubbles: true }));
+function changed(element: HTMLElement, events: string[] = ['input', 'change']): void {
+  for (const event of events) element.dispatchEvent(new Event(event, { bubbles: true }));
 }

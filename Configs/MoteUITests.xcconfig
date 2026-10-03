@@ -4,3 +4,5 @@ PRODUCT_NAME = MoteUITests
 PRODUCT_BUNDLE_IDENTIFIER = $(MOTE_BUNDLE_ID).uitests
 GENERATE_INFOPLIST_FILE = YES
 TEST_TARGET_NAME = Mote
+// The responsive UI test serves a local fixture rather than relying on a public website.
+ENABLE_INCOMING_NETWORK_CONNECTIONS = YES

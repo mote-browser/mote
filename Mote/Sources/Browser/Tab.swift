@@ -14,6 +14,8 @@ import WebKit
 @MainActor
 final class Tab: ObservableObject, Identifiable {
     let id = UUID()
+    // Keep WebKit's attachment view and dock together when this tab leaves the window.
+    lazy var stage = StageView()
     /// A private tab: its own cookies, no history, left out of the session.
     let shy: Bool
     /// Opened by a script through the bench: shares the user's store but is
@@ -42,6 +44,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var canGoForward = false
     /// Why the page didn't load, shown in its place.
     @Published var failure: LoadFailure?
+    @Published var responsive: ResponsiveSession?
+    var development: ResponsiveInspector?
     /// The address the toolbar shows: the one that failed while its failure
     /// is up, since WebKit keeps `address` on the page before it.
     var shownAddress: URL? { failure?.url ?? address }
@@ -194,6 +198,11 @@ final class Tab: ObservableObject, Identifiable {
         AdBlocker.shared.protect(controller)
 
         built = web
+        // WebKit's native Inspect Element menu bypasses Browser's commands.
+        // Attach before any inspector entry point can open its frontend.
+        if let inspector = web.unpublishedObject("_inspector") {
+            development = ResponsiveInspector(tab: self, inspector: inspector)
+        }
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
         for relay in [scroll, hider, forms, images, store_, middle, hovered] as [TabRelay] { relay.tab = self }
@@ -732,6 +741,9 @@ final class Tab: ObservableObject, Identifiable {
     /// Removes the web view, and with it the document WebKit would keep in its
     /// back-forward cache. The tab keeps its address; `web` makes a new view.
     private func letPageGo() {
+        development?.dispose()
+        development = nil
+        stage.show(nil)
         stale = false
         pull = nil
         watches = []

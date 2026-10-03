@@ -20,6 +20,7 @@ final class Browser: NSObject, ObservableObject {
         didSet {
             guard oldValue != activeID else { return }
             if let old = oldValue {
+                tab(old)?.development?.stop()
                 linkStatus.dismiss()
                 // Tab sleep measures idle time from the moment a tab stops showing.
                 tab(old)?.touch()
@@ -28,6 +29,7 @@ final class Browser: NSObject, ObservableObject {
             // it takes up its new page (see `syncPageChat`). A tab with a
             // closed panel is left alone.
             syncPageChat()
+            active?.development?.resumeIfSelected()
         }
     }
 

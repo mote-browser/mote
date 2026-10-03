@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Responsive</title>
+<style>
+  :root { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color-scheme: light dark; }
+  body { margin: 0; padding: 24px; line-height: 1.6; }
+  main { max-width: 660px; }
+  h1 { font-size: 17px; margin: 0 0 12px; }
+  p { margin: 8px 0; }
+  .hint { opacity: .7; }
+  fieldset { border: 0; padding: 0; margin: 16px 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  label { display: flex; gap: 6px; align-items: center; }
+  input, button, select { font: inherit; }
+  button, select, input[type="text"] { border: 1px solid #8886; border-radius: 5px; padding: 5px 8px; }
+  input[type="text"] { width: 160px; }
+</style>
+<main>
+  <h1>Responsive preview</h1>
+  <p id="status" role="status">Your viewports appear in the main browser area.</p>
+  <fieldset id="controls" aria-label="Preview settings">
+    <button id="reload" type="button">Reload all views</button>
+    <label><input id="sync" type="checkbox" checked>Sync interactions</label>
+    <label>Max scale <select id="scale"><option value="0.25">25%</option><option value="0.5" selected>50%</option><option value="0.75">75%</option><option value="1">100%</option></select></label>
+    <label>Add view <select id="preset"><option value="0">Phone · 390 × 844</option><option value="1">Tablet · 768 × 1024</option><option value="2">Desktop · 1440 × 900</option></select></label>
+    <button id="add" type="button">Add View</button>
+    <button id="defaults" type="button">Default Views</button>
+    <label>Name <input id="name" type="text" maxlength="80" placeholder="My views"></label>
+    <button id="save" type="button">Save Views</button>
+    <label>Saved views <select id="saved"><option value="">Choose a layout</option></select></label>
+    <button id="load" type="button" disabled>Load</button>
+    <button id="delete" type="button" disabled>Delete</button>
+  </fieldset>
+  <p>Edit, rotate or remove a viewport using its menu above the preview.</p>
+  <p>Previews fit the available browser area up to the selected scale. Device dimensions stay unchanged.</p>
+  <p>Select another inspector tab or close the inspector to return to your original page.</p>
+  <p class="hint">These previews use WebKit on macOS. Viewport dimensions and custom user agents do not emulate a different browser engine, touch gestures, locale or safe areas.</p>
+</main>
+<script>
+  const control = (id) => document.getElementById(id);
+  const send = (action, value) => window.webkit.messageHandlers.moteResponsivePanel.postMessage({ action, ...(value === undefined ? {} : { value }) });
+  for (const action of ["reload", "defaults"]) control(action).onclick = () => send(action);
+  control("sync").onchange = () => send("sync", control("sync").checked);
+  control("scale").onchange = () => send("scale", Number(control("scale").value));
+  control("add").onclick = () => send("add", Number(control("preset").value));
+  control("save").onclick = () => { if (control("name").value.trim()) send("save", control("name").value); };
+  control("name").onkeydown = (event) => { if (event.key === "Enter") control("save").click(); };
+  for (const action of ["load", "delete"]) control(action).onclick = () => send(action, control("saved").value);
+  const updateSaved = () => { for (const id of ["load", "delete"]) control(id).disabled = !control("saved").value; };
+  control("saved").onchange = updateSaved;
+  window.moteResponsivePanel = {
+    render(state) {
+      control("controls").disabled = !state.active;
+      control("status").textContent = state.active ? `${state.count} viewports in the main browser area · CSS pixels` : "Open an HTTP or HTTPS page, then select Responsive to start.";
+      control("sync").checked = state.sync;
+      control("scale").value = String(state.scale);
+      control("add").disabled = state.count >= 6;
+      const selected = control("saved").value;
+      control("saved").replaceChildren(new Option("Choose a layout", ""), ...state.saved.map((layout) => new Option(layout.name, layout.id)));
+      if (state.saved.some((layout) => layout.id === selected)) control("saved").value = selected;
+      updateSaved();
+    }
+  };
+  send("ready");
+</script>
+</html>

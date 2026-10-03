@@ -9,7 +9,9 @@ import WebKit
 extension Browser {
     func zoom(by factor: CGFloat) { active?.magnify(by: factor) }
     func resetZoom() { active?.resetZoom() }
-    func reload() { active?.reload() }
+    func reload() {
+        if let responsive = active?.responsive { responsive.reload() } else { active?.reload() }
+    }
     func back() { active?.back() }
     func forward() { active?.forward() }
 
