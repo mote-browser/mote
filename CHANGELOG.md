@@ -10,6 +10,24 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.3 — 2026-10-03
+
+Easier page-chat closing and hidden window controls when restoring a folded sidebar.
+
+### Added
+
+- A close button inside the page chat, aligned with the toolbar's chat button
+  so the panel can be closed without moving the pointer after opening it.
+
+### Changed
+
+- The page-chat button is last in the toolbar, after bookmarks in the top-tab layout.
+
+### Fixed
+
+- Window controls stay hidden when Mote reopens with the sidebar folded,
+  and return when the sidebar opens.
+
 ## 0.4.2 — 2026-10-03
 
 Reliable sidebar folding, with each tab layout remembering whether its tabs are hidden.

@@ -75,7 +75,7 @@ struct ChromeDetail: View {
                 // the sidebar's own fold spring.
                 if browser.active?.immersed != true, let tab = browser.active, !tab.isBlank || tab.chatOpen {
                     let docked = layout.chatPanel != nil
-                    PageChatPanel(browser: browser, tab: tab)
+                    PageChatPanel(browser: browser, tab: tab, toolbarTop: layout.card.minY)
                         .frame(width: prefs.chatWidth, height: geo.size.height)
                         .offset(x: docked ? geo.size.width - prefs.chatWidth : geo.size.width + ChromeLayout.gap)
                         .allowsHitTesting(docked)

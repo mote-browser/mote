@@ -13,6 +13,7 @@ import SwiftUI
 struct PageChatPanel: View {
     @ObservedObject var browser: Browser
     @ObservedObject var tab: Tab
+    let toolbarTop: CGFloat
 
     /// The brand moment on opening: a short breath of the logo's light.
     @State private var glowing = false
@@ -44,6 +45,19 @@ struct PageChatPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer(minLength: 0)
+                Door(icon: "xmark", help: "Close page chat   ⇧⌘A") {
+                    browser.togglePageChat()
+                }
+            }
+            .controlSize(.large)
+            .padding(.horizontal, 6)
+            .frame(height: ChromeLayout.toolbar)
+            .padding(.top, toolbarTop)
+            .padding(.trailing, ChromeLayout.gap)
+        }
         .background {
             // On the window's frame, like the sidebar it mirrors; the ask glow
             // gathers behind the panel on opening.

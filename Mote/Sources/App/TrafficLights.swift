@@ -35,7 +35,7 @@ struct TrafficLights: NSViewRepresentable {
             mount()
         }
         func mount() {
-            guard showing, let window, !window.styleMask.contains(.fullScreen) else { return }
+            guard let window, !window.styleMask.contains(.fullScreen) else { return }
             let group: NSView
             if let saved = Self.groups.object(forKey: window) {
                 group = saved
@@ -50,6 +50,9 @@ struct TrafficLights: NSViewRepresentable {
                 group.autoresizingMask = []
                 Self.groups.setObject(group, forKey: window)
             }
+            // A restored folded pane must hide the system controls too, even
+            // before there is a visible host to take them up.
+            guard showing else { return }
             if group.superview !== self { addSubview(group) }
             layoutControls()
         }
@@ -80,7 +83,11 @@ struct TrafficLights: NSViewRepresentable {
         }
     }
     @MainActor static func refresh(in window: NSWindow) {
-        for host in Host.hosts.allObjects where host.window === window && host.showing { host.mount() }
+        guard !window.styleMask.contains(.fullScreen) else { return }
+        if Host.groups.object(forKey: window) == nil {
+            window.standardWindowButton(.closeButton)?.superview?.superview?.isHidden = true
+        }
+        for host in Host.hosts.allObjects where host.window === window { host.mount() }
     }
     @MainActor static func visible(in window: NSWindow) -> Bool {
         window.standardWindowButton(.closeButton).map { !$0.isHiddenOrHasHiddenAncestor } ?? false

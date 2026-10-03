@@ -131,6 +131,20 @@ struct ChromeTests {
             controller.update()
             let restored = NativeSidebar.Controller(browser: browser, prefs: browser.prefs)
             #expect(restored.sidebarItem.isCollapsed)
+            let restoredWindow = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1000, height: 640),
+                styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            restoredWindow.contentViewController = restored
+            TrafficLights.refresh(in: restoredWindow)
+            restoredWindow.makeKeyAndOrderFront(nil)
+            defer { restoredWindow.orderOut(nil); restoredWindow.contentViewController = nil }
+            restored.view.layoutSubtreeIfNeeded()
+            #expect(!TrafficLights.visible(in: restoredWindow))
+            browser.toggleFold()
+            restored.update()
+            try await Task.sleep(for: .milliseconds(500))
+            restored.view.layoutSubtreeIfNeeded()
+            #expect(TrafficLights.visible(in: restoredWindow))
         }
     }
 

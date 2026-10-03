@@ -3,8 +3,8 @@ import MoteCore
 import SwiftUI
 
 /// The bar across the top of the card: the sidebar button, back, forward and
-/// reload, the address across the rest of the bar, and extensions (and, above
-/// a strip of tabs, bookmarks) at the far end.
+/// reload, the address across the rest of the bar, extensions, bookmarks above
+/// a strip of tabs, and page chat at the far end.
 struct Toolbar: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
@@ -53,19 +53,19 @@ struct Toolbar: View {
                     Spacer(minLength: 0)
                 }
                 ExtensionSlot()
-                if browser.pageToolsShown {
-                    Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
-                        browser.togglePageChat()
-                    }
-                    .disabled(!browser.pageChatPossible)
-                    .opacity(browser.pageChatPossible ? 1 : 0.3)
-                }
                 // Beside a sidebar, bookmarks live at its foot instead (see Sidebar).
                 if !prefs.sidebar {
                     Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }
                         .menuPanel(isPresented: $browser.bookmarksOpen, edge: .bottom) {
                             BookmarksDropdown(browser: browser, bookmarks: browser.bookmarks)
                         }
+                }
+                if browser.pageToolsShown {
+                    Door(icon: "sparkle", on: browser.chatting, help: "Chat about this page   ⇧⌘A") {
+                        browser.togglePageChat()
+                    }
+                    .disabled(!browser.pageChatPossible)
+                    .opacity(browser.pageChatPossible ? 1 : 0.3)
                 }
             }
             .padding(.horizontal, 6)
