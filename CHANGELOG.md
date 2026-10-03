@@ -10,6 +10,28 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.1 — 2026-10-03
+
+A calmer new tab, smoother Ask animations, and clearer bookmarks and chat access.
+
+### Changed
+
+- A larger mark and wider composer on new tabs, with softer background colors
+  and a warm glow when Ask is active.
+- Ask's mark springs into color and then rests, with a quicker, coordinated
+  transition into the composer.
+- The sidebar's Chats button opens a searchable archive in a panel. Recent
+  chats no longer sit beneath the new-tab composer.
+- Larger bookmark labels and icons on new tabs, with more space above the bar
+  and a softer shadow around the page.
+
+### Fixed
+
+- Bookmark icons load even before their pages have been visited and refresh
+  when the appearance changes. GitHub's icon stays readable in dark mode.
+- Tab dragging keeps its starting position stable while tabs move.
+- Local builds explicitly target the Mac's architecture.
+
 ## 0.4.0 — 2026-10-02
 
 A softer glass frame, colors that follow the page, and smoother tabs across the top.
