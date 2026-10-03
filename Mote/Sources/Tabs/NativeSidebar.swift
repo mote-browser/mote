@@ -112,6 +112,13 @@ struct NativeSidebar: NSViewControllerRepresentable {
     }
 
     private final class DividerlessSplitView: NSSplitView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            // Take the native controls before the first visible frame, including
+            // when collapsed panes have not built a TrafficLights host yet.
+            if let window { TrafficLights.refresh(in: window) }
+        }
+
         override var dividerThickness: CGFloat { 0 }
         override func drawDivider(in rect: NSRect) {}
     }

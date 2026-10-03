@@ -233,14 +233,64 @@ final class MoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 10))
         app.buttons["Hide Sidebar"].firstMatch.click()
         XCTAssertTrue(app.buttons["Show Sidebar"].firstMatch.waitForExistence(timeout: 5))
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)).hover()
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["Show Sidebar"].firstMatch.waitForExistence(timeout: 10))
+        assertLightsStayHidden(in: app.windows.firstMatch)
         app.buttons["Show Sidebar"].firstMatch.click()
         XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.buttons["Hide Sidebar"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func assertLightsStayHidden(in window: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let deadline = Date().addingTimeInterval(4)
+        repeat {
+            let lights = window.buttons.allElementsBoundByIndex.filter {
+                $0.frame.width > 0 && $0.frame.width <= 20 && $0.frame.height <= 20 && $0.frame.minX - window.frame.minX < 100
+            }
+            XCTAssertTrue(
+                lights.isEmpty, "Window controls reappeared after a folded relaunch: \(lights.map(\.frame))", file: file, line: line)
+            Thread.sleep(forTimeInterval: 0.1)
+        } while Date() < deadline
+    }
+
+    @MainActor
+    func testFoldedTopTabsKeepWindowControlsHiddenAtLaunch() {
+        let app = XCUIApplication()
+        let world = "ui-fold-" + UUID().uuidString.lowercased()
+        app.launchEnvironment["MOTE_PROBE"] = world
+        app.launchArguments = ["-welcomed", "YES", "-sidebar", "<false/>", "-strip.folded", "<true/>", "-sidebar.folded", "<true/>"]
+        defer {
+            app.terminate()
+            UserDefaults.standard.removePersistentDomain(forName: "io.github.mote-browser.mote.test.\(world)")
+        }
+        app.launch()
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)).hover()
+        assertLightsStayHidden(in: window)
+        app.typeKey("s", modifierFlags: [.command, .shift])
+        let showSidebar = app.buttons["Show Sidebar"].firstMatch
+        XCTAssertTrue(showSidebar.waitForExistence(timeout: 5))
+        assertLightsStayHidden(in: window)
+        app.typeKey("s", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitUntilGone(showSidebar))
+        assertLightsStayHidden(in: window)
+        app.typeKey("s", modifierFlags: .command)
+        let deadline = Date().addingTimeInterval(5)
+        var lights: [XCUIElement] = []
+        repeat {
+            lights = window.buttons.allElementsBoundByIndex.filter {
+                $0.frame.width > 0 && $0.frame.width <= 20 && $0.frame.height <= 20 && $0.frame.minX - window.frame.minX < 100
+            }
+            if lights.count == 3 { break }
+            Thread.sleep(forTimeInterval: 0.1)
+        } while Date() < deadline
+        XCTAssertEqual(lights.count, 3, "Unfolding the top tabs must restore one complete control group")
     }
 
     /// ⌘L on a page edits the address in the toolbar, with the address selected;

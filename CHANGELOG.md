@@ -10,6 +10,17 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.4 — 2026-10-03
+
+Window controls stay hidden from the first frame when reopening with folded tabs.
+
+### Fixed
+
+- Native window controls no longer flash or reappear after launching with
+  the sidebar or top tabs folded. They are taken out of the system titlebar
+  before the window is displayed and return when the tabs open or peek out.
+- Folded window controls remain hidden when switching between tab layouts.
+
 ## 0.4.3 — 2026-10-03
 
 Easier page-chat closing and hidden window controls when restoring a folded sidebar.

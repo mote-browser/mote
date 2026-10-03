@@ -135,7 +135,7 @@ struct ChromeTests {
                 contentRect: CGRect(x: 0, y: 0, width: 1000, height: 640),
                 styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             restoredWindow.contentViewController = restored
-            TrafficLights.refresh(in: restoredWindow)
+            #expect(!TrafficLights.visible(in: restoredWindow), "Controls must be absent before the first visible frame")
             restoredWindow.makeKeyAndOrderFront(nil)
             defer { restoredWindow.orderOut(nil); restoredWindow.contentViewController = nil }
             restored.view.layoutSubtreeIfNeeded()
@@ -149,6 +149,44 @@ struct ChromeTests {
     }
 
     // MARK: - Address
+
+    @Test("Folded window controls are detached before display and stay absent through startup", arguments: [true, false])
+    func foldedLightsNeverFlash(sidebar: Bool) async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = sidebar
+            browser.folded = true
+            let controller = NativeSidebar.Controller(browser: browser, prefs: browser.prefs)
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1000, height: 640),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            window.contentViewController = controller
+            defer { window.orderOut(nil); window.contentViewController = nil }
+            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap(window.standardWindowButton)
+            #expect(buttons.count == 3)
+            #expect(buttons.allSatisfy { $0.window == nil }, "No native controls may reach the first displayed frame")
+            window.makeKeyAndOrderFront(nil)
+            // Exercise the deferred dressing and native layouts that used to
+            // reveal the titlebar after startup, without touching the tabs.
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            for tick in 0..<180 {
+                if tick == 60 {
+                    window.orderOut(nil)
+                    window.makeKeyAndOrderFront(nil)
+                }
+                controller.view.layoutSubtreeIfNeeded()
+                #expect(!browser.peeking)
+                #expect(buttons.allSatisfy { $0.window == nil }, "Controls appeared during startup at tick \(tick)")
+                try await Task.sleep(for: .milliseconds(16))
+            }
+            browser.toggleFold()
+            controller.update()
+            try await Task.sleep(for: .milliseconds(500))
+            controller.view.layoutSubtreeIfNeeded()
+            #expect(TrafficLights.visible(in: window))
+            #expect(buttons.allSatisfy { $0.window === window && !$0.isHiddenOrHasHiddenAncestor })
+        }
+    }
 
     @Test("Chrome follows the rendered background, live header changes and the active tab")
     func pageColors() async throws {

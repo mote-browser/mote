@@ -36,25 +36,28 @@ struct TrafficLights: NSViewRepresentable {
         }
         func mount() {
             guard let window, !window.styleMask.contains(.fullScreen) else { return }
-            let group: NSView
-            if let saved = Self.groups.object(forKey: window) {
-                group = saved
-            } else {
-                guard let original = window.standardWindowButton(.closeButton)?.superview else { return }
-                // The empty system titlebar must not cover the controls now
-                // hosted in full-size content, or intercept their hover.
-                original.superview?.isHidden = true
-                if let titlebar = original.superview { Self.titlebars.setObject(titlebar, forKey: window) }
-                group = original
-                group.autoresizesSubviews = false
-                group.autoresizingMask = []
-                Self.groups.setObject(group, forKey: window)
-            }
-            // A restored folded pane must hide the system controls too, even
-            // before there is a visible host to take them up.
-            guard showing else { return }
+            guard let group = Self.group(in: window), showing else { return }
             if group.superview !== self { addSubview(group) }
             layoutControls()
+        }
+
+        static func group(in window: NSWindow) -> NSView? {
+            if let saved = Self.groups.object(forKey: window) {
+                return saved
+            }
+            guard let group = window.standardWindowButton(.closeButton)?.superview else { return nil }
+            // AppKit can reveal its titlebar again after SwiftUI finishes opening
+            // the window. Take the controls out even when no pane is showing;
+            // the retained group waits here until a visible host takes it up.
+            if let titlebar = group.superview {
+                titlebar.isHidden = true
+                Self.titlebars.setObject(titlebar, forKey: window)
+            }
+            group.removeFromSuperview()
+            group.autoresizesSubviews = false
+            group.autoresizingMask = []
+            Self.groups.setObject(group, forKey: window)
+            return group
         }
         override func layout() {
             super.layout()
@@ -84,12 +87,10 @@ struct TrafficLights: NSViewRepresentable {
     }
     @MainActor static func refresh(in window: NSWindow) {
         guard !window.styleMask.contains(.fullScreen) else { return }
-        if Host.groups.object(forKey: window) == nil {
-            window.standardWindowButton(.closeButton)?.superview?.superview?.isHidden = true
-        }
+        _ = Host.group(in: window)
         for host in Host.hosts.allObjects where host.window === window { host.mount() }
     }
     @MainActor static func visible(in window: NSWindow) -> Bool {
-        window.standardWindowButton(.closeButton).map { !$0.isHiddenOrHasHiddenAncestor } ?? false
+        window.standardWindowButton(.closeButton).map { $0.window === window && !$0.isHiddenOrHasHiddenAncestor } ?? false
     }
 }
