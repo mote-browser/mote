@@ -6,6 +6,10 @@
         return false;
     if (document.getElementById("mote-inspector-rail")) return true;
 
+    // Use WebKit's own two-pane option instead of forcing sidebar geometry.
+    if (WI.settings?.enableElementsTabIndependentStylesDetailsSidebarPanel)
+        WI.settings.enableElementsTabIndependentStylesDetailsSidebarPanel.value = false;
+
     const style = document.createElement("style");
     style.id = "mote-inspector-theme";
     style.textContent = moteCSS;
@@ -65,6 +69,7 @@
     const loadingIcons = new WeakSet();
     const rebuildTabs = () => {
         tabs.replaceChildren();
+        document.body.classList.toggle("mote-elements", WI.tabBar.selectedTabBarItem?.representedObject?.type === "elements");
         heading.textContent = WI.tabBar.selectedTabBarItem?.displayName || "Developer tools";
         for (const {item, title, index} of toolItems()) {
             const control = document.createElement("button");

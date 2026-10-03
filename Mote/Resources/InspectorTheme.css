@@ -102,3 +102,142 @@ body.mote-inspector :is(input:not([type="checkbox"]), select) { border-radius: 8
     #mote-inspector-rail { padding-top: 6px; gap: 4px; }
     #mote-inspector-rail button { height: 34px; }
 }
+
+/* Elements: theme WebKit's original controls; let WebKit own layout and input. */
+body.mote-elements {
+    --tab-bar-height: 34px;
+    --navigation-bar-height: 28px;
+    --glyph-color-active: var(--mote-ink);
+    --glyph-color-pressed: var(--mote-ink);
+}
+body.mote-elements #mote-inspector-title { font-size: 11px; padding-inline: 6px; }
+body.mote-elements #tab-bar > .navigation-bar { border: 0; }
+body.mote-elements #tab-bar > .border { display: none; }
+body.mote-elements #content { min-height: 0; }
+body.mote-elements #details-sidebar .navigation-bar .item.radio {
+    margin: 2px 1px;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font: 11px -apple-system, sans-serif;
+    color: var(--mote-muted);
+    background: transparent;
+}
+body.mote-elements #details-sidebar .navigation-bar .item.radio:is(:hover, .selected) {
+    background: var(--mote-wash);
+    color: var(--mote-ink);
+}
+body.mote-elements #details-sidebar .navigation-bar .item.radio::before { content: none; }
+body.mote-elements .tree-outline.dom .badge.activated { color: var(--mote-ground); background: var(--mote-ink); }
+body.mote-elements .content-view.dom-tree { padding-block: 3px; background: var(--mote-ground); }
+body.mote-elements .tree-outline.dom { font-size: 12px; line-height: 18px; isolation: isolate; }
+body.mote-elements .tree-outline.dom li.parent { line-height: 18px; }
+body.mote-elements .tree-outline.dom li .selection-area { height: 18px; border-radius: 4px; }
+/* Paint the row immediately; WebKit's .hovered state still handles the page overlay. */
+body.mote-elements .tree-outline.dom li:is(:hover, .hovered):not(.selected) > .selection-area {
+    background: var(--mote-wash);
+    opacity: 1;
+}
+body.mote-elements .spreadsheet-css-declaration {
+    --css-declaration-horizontal-padding: 8px;
+    --css-declaration-vertical-padding: 5px;
+    border-bottom: 1px solid var(--mote-edge);
+    background: var(--mote-ground);
+}
+body.mote-elements .spreadsheet-css-declaration.locked { background: var(--mote-wash); }
+body.mote-elements .spreadsheet-style-declaration-editor { font-size: 12px; line-height: 17px; }
+body.mote-elements .spreadsheet-css-declaration .origin { color: var(--mote-muted); }
+body.mote-elements .details-section > .header { background: var(--mote-wash); border-color: var(--mote-edge); }
+/* Style every original Elements control, preserving its events and keyboard behavior. */
+body.mote-elements :is(#tab-bar, .content-view.elements) .navigation-bar {
+    --image-button-navigation-item-width: 25px;
+    gap: 2px;
+    padding-inline: 4px;
+}
+body.mote-elements :is(#tab-bar, #content) .navigation-bar .item.button {
+    height: 24px;
+    min-height: 24px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--mote-muted);
+    background: transparent;
+}
+body.mote-elements :is(#tab-bar, #content) .navigation-bar .item.button:not(.disabled):is(:hover, .activated, .selected) {
+    color: var(--mote-ink);
+    background: var(--mote-wash);
+    border-color: var(--mote-edge);
+}
+body.mote-elements :is(#tab-bar, #content) .navigation-bar .item.button.disabled { opacity: .35; cursor: default; }
+body.mote-elements .navigation-bar .item.button .glyph { opacity: 1; }
+body.mote-elements .hierarchical-path-component { border-radius: 5px; }
+body.mote-elements .hierarchical-path-component:hover { background: var(--mote-wash); }
+body.mote-elements .hierarchical-path-component > .icon { display: none; }
+body.mote-elements .hierarchical-path-component > .title { padding-inline: 4px; }
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container {
+    height: 34px;
+    padding: 3px 4px;
+    gap: 3px;
+    background: var(--mote-ground);
+}
+body.mote-elements :is(.filter-bar, .search-bar) { background: transparent; }
+body.mote-elements :is(.filter-bar, .search-bar) > input[type="search"] {
+    height: 25px;
+    min-width: 0;
+    margin-block: 1px;
+    border: 1px solid var(--mote-edge);
+    border-radius: 7px;
+    background: var(--mote-wash);
+    color: var(--mote-ink);
+    font: 11px -apple-system, sans-serif;
+}
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container > .toggle {
+    height: 25px;
+    margin: 0;
+    padding: 3px 7px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--mote-muted);
+    font: 11px -apple-system, sans-serif;
+}
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container > .toggle:is(:hover, .selected) {
+    background: var(--mote-wash);
+    border-color: var(--mote-edge);
+    color: var(--mote-ink);
+}
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container > .toggle::before { content: none; }
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container > .new-rule {
+    box-sizing: border-box;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    margin-inline-start: 2px;
+    padding: 4px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .options-container > .new-rule:hover { background: var(--mote-wash); }
+body.mote-elements .sidebar > .panel.details.css-style > .content ~ .forced-pseudo-class-container:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 2px 8px;
+    padding: 5px 8px;
+    max-height: 92px;
+    overflow: auto;
+    font: 11px -apple-system, sans-serif;
+}
+body.mote-elements .forced-pseudo-class-container label { display: flex; align-items: center; min-height: 18px; }
+body.mote-elements input[type="checkbox"] { accent-color: var(--mote-muted); }
+body.mote-elements .details-section .row.box-model .box {
+    margin: 2px;
+    padding: 2px;
+    border-color: var(--mote-muted);
+    border-radius: 4px;
+    font-size: 11px;
+}
+body.mote-elements .quick-console { background: var(--mote-ground); border-color: var(--mote-edge); }
+body.mote-elements .quick-console .navigation-bar .item { border-radius: 6px; }
+body.mote-elements .reference-page-link-container { opacity: .55; }
+body.mote-elements .reference-page-link-container:hover { opacity: 1; }
+/* Do not add motion to editor hover; highlight and focus follow the pointer immediately. */
+body.mote-elements #content :is(.tree-outline, .item, .selection-area, .glyph) { transition: none; }
+body.mote-elements #mote-inspector-rail button { transition: none; }
