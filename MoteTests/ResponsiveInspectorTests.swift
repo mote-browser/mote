@@ -7,6 +7,151 @@ import WebKit
 @Suite("Responsive inspector", .serialized)
 @MainActor
 struct ResponsiveInspectorTests {
+    @Test("Elements keeps native layout and responds to AppKit pointer events")
+    func elements() async throws {
+        let tab = Tab(shy: true)
+        tab.setAddressOptimistically(URL(string: "https://elements.example/test")!)
+        let web = tab.web
+        let cards = (0..<80).map { "<article class='card' data-item='\($0)'><h2>Item \($0)</h2><p>Details</p></article>" }.joined()
+        web.loadHTMLString("<style>#sample { color: rgb(10, 20, 30); display: flex } .card { padding: 12px; border: 1px solid gray }</style><main><button id='sample'>Inspect me</button>\(cards)</main>", baseURL: tab.address)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1500, height: 800),
+            styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        let stage = StageView()
+        window.contentView = stage
+        window.acceptsMouseMovedEvents = true
+        let previousPolicy = NSApp.activationPolicy()
+        let previousApp = NSWorkspace.shared.frontmostApplication
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        stage.show(web)
+        let inspector = try #require(web.unpublishedObject("_inspector"))
+        let development = try #require(tab.development)
+        defer {
+            development.dispose()
+            inspector.unpublished("close")
+            tab.close()
+            window.orderOut(nil)
+            window.contentView = nil
+            NSApp.setActivationPolicy(previousPolicy)
+            previousApp?.activate()
+        }
+        development.prepareToOpen()
+        inspector.unpublished("show")
+        _ = try await eventually { development.tabIdentifier }
+        let frontend = try #require(inspector.unpublishedObject("extensionHostWebView") as? WKWebView)
+        _ = try await eventually { window.isKeyWindow ? true : nil }
+        window.makeFirstResponder(frontend)
+        func waitFor(_ expression: String) async throws {
+            for _ in 0..<100 {
+                if try await frontend.evaluateJavaScript(expression) as? Bool == true { return }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            print("Elements timeout: \(expression)")
+            Issue.record("Inspector condition timed out: \(expression)")
+        }
+        func run(_ body: String) async throws {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                frontend.callAsyncJavaScript(body, arguments: [:], in: nil, in: .page) { result in
+                    continuation.resume(with: result.map { _ in () })
+                }
+            }
+        }
+        func snapshot(_ name: String) async throws {
+            try await Task.sleep(for: .milliseconds(200))
+            let image = try await frontend.takeSnapshot(configuration: nil)
+            let bitmap = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+            let data = try #require(bitmap.representation(using: .png, properties: [:]))
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            try data.write(to: root.appendingPathComponent("build/elements-\(name).png"))
+        }
+        func pointer(_ selector: String, click: Bool = false, dragBy: NSPoint? = nil) async throws {
+            let rect = try #require(try await frontend.evaluateJavaScript("""
+                (() => { const element = [...document.querySelectorAll('\(selector)')].find(element => element.getClientRects().length);
+                const r = element.getBoundingClientRect();
+                return {x: r.left + Math.min(r.width / 2, 30), y: r.top + Math.min(r.height / 2, 8)}; })()
+                """) as? [String: Double])
+            let x = try #require(rect["x"]), y = try #require(rect["y"])
+            let local = NSPoint(x: x, y: frontend.isFlipped ? y : frontend.bounds.height - y)
+            let point = frontend.convert(local, to: nil)
+            let target = try #require(frontend.hitTest(frontend.convert(local, to: frontend.superview)))
+            let types: [NSEvent.EventType] = dragBy != nil ? [.leftMouseDown] + Array(repeating: .leftMouseDragged, count: 6) + [.leftMouseUp] : click ? [.mouseMoved, .leftMouseDown, .leftMouseUp] : [.mouseMoved]
+            for (index, type) in types.enumerated() {
+                let fraction = min(Double(index) / 6, 1)
+                let location = dragBy.map { NSPoint(x: point.x + $0.x * fraction, y: point.y + $0.y * fraction) } ?? point
+                let event = try #require(NSEvent.mouseEvent(
+                    with: type, location: location, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 1, clickCount: click ? 1 : 0, pressure: 0))
+                switch type {
+                case .mouseMoved:
+                    // WKWebView routes tracking through an internal owner, not NSResponder.mouseMoved.
+                    let move = NSSelectorFromString("_simulateMouseMove:")
+                    #expect(frontend.responds(to: move))
+                    frontend.perform(move, with: event)
+                case .leftMouseDown: target.mouseDown(with: event)
+                case .leftMouseDragged: target.mouseDragged(with: event)
+                case .leftMouseUp: target.mouseUp(with: event)
+                default: break
+                }
+                if type == .leftMouseDragged { try await Task.sleep(for: .milliseconds(16)) }
+            }
+        }
+        _ = try await frontend.evaluateJavaScript("WI.tabBrowser.showTabForContentView(WI.tabBar.tabBarItems.find(item => item.representedObject?.type === 'elements').representedObject)")
+        try await waitFor("document.body.classList.contains('mote-elements') && !!WI.tabBrowser.selectedTabContentView.contentBrowser.currentContentView?.domTreeOutline")
+        try await run("""
+            const view = WI.tabBrowser.selectedTabContentView.contentBrowser.currentContentView;
+            const id = await view.domTreeOutline.selectedDOMNode().ownerDocument.querySelector('#sample');
+            view.selectAndRevealDOMNode(WI.domManager.nodeForId(id));
+            """)
+        _ = try await frontend.evaluateJavaScript("InspectorFrontendHost.setAttachedWindowWidth(500)")
+        try await waitFor("document.body.classList.contains('narrow')")
+        #expect(try await frontend.evaluateJavaScript("document.getElementById('tab-browser').getBoundingClientRect().height > 100 && document.getElementById('details-sidebar').getBoundingClientRect().height > 100") as? Bool == true)
+        #expect(try await frontend.evaluateJavaScript("document.getElementById('main').getBoundingClientRect().top <= 35 && !document.getElementById('mote-elements-bar')") as? Bool == true)
+        let selected = try await frontend.evaluateJavaScript("WI.tabBrowser.selectedTabContentView.contentBrowser.currentContentView.domTreeOutline.selectedDOMNode().id") as? Int
+        #expect(selected != nil)
+        try await snapshot("compact")
+        let rulers = try await frontend.evaluateJavaScript("WI.settings.showRulers.value") as? Bool
+        let start = Date()
+        try await pointer(".content-view.elements .item.show-rulers")
+        try await waitFor("document.querySelector('.content-view.elements .item.show-rulers').matches(':hover')")
+        print("Elements native hover observed after \(Date().timeIntervalSince(start) * 1000) ms")
+        try await pointer(".content-view.elements .item.show-rulers", click: true)
+        try await waitFor("WI.settings.showRulers.value !== \(rulers == true ? "true" : "false")")
+        try await pointer(".content-view.elements .item.show-rulers", click: true)
+        try await waitFor("WI.settings.showRulers.value === \(rulers == true ? "true" : "false")")
+        try await pointer("#details-sidebar .item.style-computed", click: true)
+        try await waitFor("WI.tabBrowser.detailsSidebar.selectedSidebarPanel.identifier === 'style-computed'")
+        #expect(try await frontend.evaluateJavaScript("WI.tabBrowser.selectedTabContentView.contentBrowser.currentContentView.domTreeOutline.selectedDOMNode().id") as? Int == selected)
+        try await snapshot("computed")
+        try await pointer("#details-sidebar .item.style-rules", click: true)
+        try await waitFor("WI.tabBrowser.detailsSidebar.selectedSidebarPanel.identifier === 'style-rules'")
+        try await pointer(".tree-outline.dom li:not(.selected)")
+        try await waitFor("!!document.querySelector('.tree-outline.dom li.hovered:not(.selected)')")
+        #expect(try await frontend.evaluateJavaScript("getComputedStyle(document.querySelector('.tree-outline.dom li.hovered > .selection-area')).opacity === '1'") as? Bool == true)
+        let oldHeight = try #require(try await frontend.evaluateJavaScript("document.getElementById('details-sidebar').getBoundingClientRect().height") as? Double)
+        try await pointer("#details-sidebar > .resizer.horizontal-rule", dragBy: NSPoint(x: 0, y: 30))
+        try await waitFor("Math.abs(document.getElementById('details-sidebar').getBoundingClientRect().height - \(oldHeight)) > 20")
+        _ = try await frontend.evaluateJavaScript("WI.tabBrowser.detailsSidebar.height = 280")
+        #expect(try await frontend.evaluateJavaScript("Math.abs(document.getElementById('details-sidebar').getBoundingClientRect().height - 280) < 2") as? Bool == true)
+        frontend.appearance = NSAppearance(named: .aqua)
+        try await waitFor("!matchMedia('(prefers-color-scheme: dark)').matches")
+        try await snapshot("light")
+        frontend.appearance = nil
+        _ = try await frontend.evaluateJavaScript("InspectorFrontendHost.setAttachedWindowWidth(900)")
+        try await waitFor("!document.body.classList.contains('narrow')")
+        #expect(try await frontend.evaluateJavaScript("document.getElementById('tab-browser').getBoundingClientRect().width > 200 && document.getElementById('details-sidebar').getBoundingClientRect().width > 200") as? Bool == true)
+        let oldWidth = try #require(try await frontend.evaluateJavaScript("document.getElementById('details-sidebar').getBoundingClientRect().width") as? Double)
+        try await pointer(".resizer.vertical-rule", dragBy: NSPoint(x: -60, y: 0))
+        try await waitFor("Math.abs(document.getElementById('details-sidebar').getBoundingClientRect().width - \(oldWidth)) > 40")
+        #expect(try await frontend.evaluateJavaScript("WI.tabBrowser.selectedTabContentView.contentBrowser.currentContentView.domTreeOutline.selectedDOMNode().id") as? Int == selected)
+        try await snapshot("wide")
+        inspector.unpublished("showConsole")
+        try await waitFor("!document.body.classList.contains('mote-elements')")
+        #expect(try await web.evaluateJavaScript("typeof window.moteInspector") as? String == "undefined")
+    }
+
     @Test("SwiftUI page keeps the responsive canvas inside the docked inspector's available area")
     func hostedPage() async throws {
         let tab = Tab(shy: true)
