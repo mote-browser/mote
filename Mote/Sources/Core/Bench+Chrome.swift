@@ -28,7 +28,7 @@ extension Bench {
             "key": NSApp.keyWindow.map(describe) ?? "",
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking,
-            "sideHides": browser.prefs.sideHides, "lightsHidden": SidebarFold.titlebar?.isHidden ?? false,
+            "sideHides": browser.prefs.sideHides, "lightsHidden": window.map { !TrafficLights.visible(in: $0) } ?? true,
             "siteCard": SiteCardPanel.isShown,
             "barEditing": browser.editingInBar, "firstResponder": window?.firstResponder.map { String(describing: type(of: $0)) } ?? "",
             "passkeyAccess": passkeyAccess, "passkeyAsks": Passkeys.asked, "passkeyLast": Passkeys.last,

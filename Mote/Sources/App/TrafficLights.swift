@@ -1,84 +1,88 @@
 import AppKit
 import MoteCore
+import SwiftUI
 
-/// The window's traffic lights, placed where a window with a toolbar has
-/// them, without one: on macOS 26 a toolbar also rounds the window's corners
-/// much more (31.5 pt rather than 17.5). AppKit puts them back whenever it
-/// lays out the title bar, so they are placed again each time.
-@MainActor
-final class TrafficLights: NSObject {
-    /// Where the tabs are, which decides where the lights sit (see
-    /// `ChromeLayout.lights`). Changing it moves every window's.
-    static var tabs = ChromeLayout.Tabs.sidebar {
-        didSet { if tabs != oldValue { managed.values.forEach { $0.place() } } }
+/// The original AppKit group is hosted inside the moving pane.
+struct TrafficLights: NSViewRepresentable {
+    var showing: Bool
+    var strip = false
+    var inset: CGFloat = 0
+    func makeNSView(context: Context) -> Host { Host() }
+    func updateNSView(_ host: Host, context: Context) {
+        host.showing = showing
+        host.strip = strip
+        host.inset = inset
+        host.mount()
     }
 
-    /// The close button's centre, from the window's top-left corner.
-    static var centre: CGPoint { ChromeLayout.lights(for: tabs) }
-
-    private static var managed: [ObjectIdentifier: TrafficLights] = [:]
-
-    /// Takes over a window's lights; `moved` hears each time they are placed.
-    static func keep(_ window: NSWindow, moved: @escaping () -> Void) {
-        let key = ObjectIdentifier(window)
-        if managed[key] == nil { managed[key] = TrafficLights(window, moved: moved) }
-    }
-
-    private weak var window: NSWindow?
-    private let moved: () -> Void
-    private var placing = false
-    /// AppKit's gap between buttons, read once: read on every pass, it can
-    /// catch AppKit halfway through a layout after a resize and come out wrong.
-    private let spacing: CGFloat
-
-    private var buttons: [NSButton] {
-        [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { window?.standardWindowButton($0) }
-    }
-
-    private init(_ window: NSWindow, moved: @escaping () -> Void) {
-        self.window = window
-        self.moved = moved
-        let pair = [NSWindow.ButtonType.closeButton, .miniaturizeButton].compactMap(window.standardWindowButton)
-        let gap = pair.count == 2 ? pair[1].frame.minX - pair[0].frame.minX : 0
-        spacing = (16...32).contains(gap) ? gap : 20
-        super.init()
-        let center = NotificationCenter.default
-        let windowChanges: [Notification.Name] = [
-            NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification, NSWindow.didBecomeKeyNotification,
-            NSWindow.didResignKeyNotification, NSWindow.didExitFullScreenNotification, NSWindow.didChangeScreenNotification,
-        ]
-        for name in windowChanges { center.addObserver(self, selector: #selector(place), name: name, object: window) }
-        // The title bar's views changing frame means AppKit laid them out again.
-        if let bar = buttons.first?.superview, let container = bar.superview {
-            for view in [container, bar] + buttons {
-                view.postsFrameChangedNotifications = true
-                center.addObserver(self, selector: #selector(place), name: NSView.frameDidChangeNotification, object: view)
+    @MainActor final class Host: NSView {
+        static let groups = NSMapTable<NSWindow, NSView>.weakToStrongObjects()
+        static let titlebars = NSMapTable<NSWindow, NSView>.weakToWeakObjects()
+        static let hosts = NSHashTable<Host>.weakObjects()
+        var showing = false
+        var strip = false
+        var inset: CGFloat = 0
+        override var isFlipped: Bool { true }
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.masksToBounds = true
+            Self.hosts.add(self)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            mount()
+        }
+        func mount() {
+            guard showing, let window, !window.styleMask.contains(.fullScreen) else { return }
+            let group: NSView
+            if let saved = Self.groups.object(forKey: window) {
+                group = saved
+            } else {
+                guard let original = window.standardWindowButton(.closeButton)?.superview else { return }
+                // The empty system titlebar must not cover the controls now
+                // hosted in full-size content, or intercept their hover.
+                original.superview?.isHidden = true
+                if let titlebar = original.superview { Self.titlebars.setObject(titlebar, forKey: window) }
+                group = original
+                group.autoresizesSubviews = false
+                group.autoresizingMask = []
+                Self.groups.setObject(group, forKey: window)
             }
+            if group.superview !== self { addSubview(group) }
+            layoutControls()
         }
-        place()
+        override func layout() {
+            super.layout()
+            layoutControls()
+        }
+        private func layoutControls() {
+            guard let window, let group = Self.groups.object(forKey: window), group.superview === self else { return }
+            Self.titlebars.object(forKey: window)?.isHidden = true
+            group.frame = bounds
+            let center = ChromeLayout.lights(for: strip ? .strip : .sidebar)
+            for (index, type) in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].enumerated() {
+                guard let button = window.standardWindowButton(type) else { continue }
+                button.autoresizingMask = []
+                let y =
+                    group.isFlipped
+                    ? center.y - inset - button.frame.height / 2 : bounds.height - center.y + inset - button.frame.height / 2
+                button.setFrameOrigin(NSPoint(x: center.x - inset + CGFloat(index) * 20 - button.frame.width / 2, y: y))
+                button.isHidden = false
+                button.updateTrackingAreas()
+            }
+            group.updateTrackingAreas()
+        }
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            let hit = super.hitTest(point)
+            return hit === self ? nil : hit
+        }
     }
-
-    @objc private func place() {
-        // In full screen the title bar is a window of macOS's own.
-        guard !placing, let window, !window.styleMask.contains(.fullScreen) else { return }
-        let buttons = buttons
-        guard buttons.count == 3, let bar = buttons[0].superview, let container = bar.superview else { return }
-        placing = true
-        defer { placing = false }
-        // The title bar as tall as the band the lights sit in, so they can sit lower.
-        let height = ChromeLayout.band(for: Self.tabs)
-        if container.frame.height != height || container.frame.maxY != window.frame.height {
-            container.frame = NSRect(x: container.frame.minX, y: window.frame.height - height, width: container.frame.width, height: height)
-        }
-        for (index, button) in buttons.enumerated() {
-            let size = button.frame.size
-            let origin = NSPoint(
-                x: Self.centre.x - size.width / 2 + CGFloat(index) * spacing, y: bar.bounds.height - Self.centre.y - size.height / 2)
-            if button.frame.origin != origin { button.setFrameOrigin(origin) }
-        }
-        // AppKit laying the title bar out again can show it while the tabs
-        // are folded away.
-        SidebarFold.holdLights()
-        moved()
+    @MainActor static func refresh(in window: NSWindow) {
+        for host in Host.hosts.allObjects where host.window === window && host.showing { host.mount() }
+    }
+    @MainActor static func visible(in window: NSWindow) -> Bool {
+        window.standardWindowButton(.closeButton).map { !$0.isHiddenOrHasHiddenAncestor } ?? false
     }
 }

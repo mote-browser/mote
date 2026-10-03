@@ -44,8 +44,7 @@ enum Motion {
     /// A button sinking under the pointer and coming back.
     static let press = Animation.spring(response: 0.22, dampingFraction: 0.7)
     /// Folding the sidebar or strip away and back, and peeking it out: no
-    /// overshoot, so sidebar, card and page arrive together. The traffic lights
-    /// follow the same curve in Core Animation (see `SidebarFold.slide`).
+    /// overshoot. AppKit uses the same duration for the docked sidebar.
     static let foldResponse: Double = 0.36
     static let fold = Animation.spring(response: foldResponse, dampingFraction: 1)
 }

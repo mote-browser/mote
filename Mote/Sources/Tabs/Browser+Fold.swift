@@ -7,7 +7,9 @@ extension Browser {
     /// Folds the sidebar or strip away, or back.
     func toggleFold() {
         peeking = false
-        dissolvingPage { self.slidingFold { self.folded.toggle() } }
+        // AppKit animates the sidebar. Commit its target immediately so rapid
+        // clicks cannot queue changes behind asynchronous WebKit snapshots.
+        if prefs.sidebar { folded.toggle() } else { slidingFold { folded.toggle() } }
     }
 
     /// Shows or hides the folded tabs over the page.
@@ -15,31 +17,10 @@ extension Browser {
         slidingFold { peeking = out }
     }
 
-    /// Well past the spring's end: a slide not finished by then is stuck.
-    private static let foldLimit: Double = 0.8
-
-    /// Changes the fold on the tabs' spring, making sure it gets drawn.
-    /// SwiftUI has left the sidebar and card on the slide's first frame after
-    /// a click on the sidebar button, while the traffic lights (moved by
-    /// AppKit, see SidebarFold) went, until something else redrew the window.
-    /// Asking the views again doesn't move it on, as nothing they draw has
-    /// changed; a real change without animation does, so a slide that hasn't
-    /// finished well after it should have gets one (see `foldNudge`).
+    /// Overlay peeks, the top tab strip and page chat use SwiftUI; the docked
+    /// sidebar's frame belongs exclusively to NSSplitViewController.
     func slidingFold(_ change: () -> Void) {
-        foldSlides += 1
-        let slide = foldSlides
-        withAnimation(Motion.fold, completionCriteria: .logicallyComplete, change) { [weak self] in
-            guard let self else { return }
-            foldLanded = max(foldLanded, slide)
-        }
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(Self.foldLimit))
-            // Only the latest slide: a newer one takes over from it.
-            guard let self, foldSlides == slide, foldLanded < slide else { return }
-            var still = Transaction()
-            still.disablesAnimations = true
-            withTransaction(still) { foldNudge.toggle() }
-        }
+        withAnimation(Motion.fold, change)
     }
 
     /// Makes a change that resizes the page under a picture of it, which then

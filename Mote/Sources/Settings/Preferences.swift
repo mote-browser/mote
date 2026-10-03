@@ -25,6 +25,9 @@ final class Preferences: ObservableObject {
     /// The sidebar hides unless the pointer is at the left edge, not only
     /// after ⌘S (see SidebarFold.swift).
     @Published var sideHides: Bool
+    /// Last manual fold, stored separately for each tab layout.
+    @Published var sidebarFolded: Bool
+    @Published var stripFolded: Bool
     /// Set by dragging the sidebar's edge.
     @Published var sideWidth: CGFloat
     /// Set by dragging the page chat panel's edge; it docks on the window's
@@ -103,6 +106,8 @@ final class Preferences: ObservableObject {
         // Older versions kept the layout as "manner".
         sidebar = store.object(forKey: "sidebar") as? Bool ?? (store.string(forKey: "manner") == "side")
         sideHides = store.value("sidebar.hides", or: false)
+        sidebarFolded = store.value("sidebar.folded", or: store.value("sidebar.hides", or: false))
+        stripFolded = store.value("strip.folded", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         // Installs from before the welcome existed already have settings, and skip it.
@@ -164,7 +169,11 @@ final class Preferences: ObservableObject {
 
         keep($look, "look") { $0.apply() }
         keep($sidebar, "sidebar")
-        keep($sideHides, "sidebar.hides")
+        keep($sideHides, "sidebar.hides") { [weak self] hides in
+            if self?.sidebar == true { self?.sidebarFolded = hides }
+        }
+        keep($sidebarFolded, "sidebar.folded")
+        keep($stripFolded, "strip.folded")
         keep($sideWidth, "sidebar.width")
         keep($chatWidth, "chat.width")
         keep($glyph, "glyph")

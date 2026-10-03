@@ -46,6 +46,8 @@ struct TabBar: View {
                 }
                 .padding(.leading, Metrics.lights)
                 .coordinateSpace(name: "strip")
+                TrafficLights(showing: !browser.folded || browser.peeking, strip: true)
+                    .frame(width: Metrics.lights, height: ChromeLayout.strip)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }

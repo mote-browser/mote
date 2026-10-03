@@ -17,11 +17,14 @@ struct ChromeTests {
     private func withBrowser(_ body: (Browser) async throws -> Void) async throws {
         let browser = Browser()
         let prefs = browser.prefs
-        let kept = (prefs.sidebar, prefs.sideWidth, prefs.bookmarksBar)
+        let kept = (prefs.sidebar, prefs.sideWidth, prefs.bookmarksBar, prefs.sidebarFolded, prefs.stripFolded, prefs.sideHides)
         defer {
             prefs.sidebar = kept.0
             prefs.sideWidth = kept.1
             prefs.bookmarksBar = kept.2
+            prefs.sidebarFolded = kept.3
+            prefs.stripFolded = kept.4
+            prefs.sideHides = kept.5
             for tab in browser.tabs { tab.close() }
         }
         try await body(browser)
@@ -31,6 +34,104 @@ struct ChromeTests {
         let tab = browser.open(ChromeTests.page, foreground: true)
         _ = try await eventually { tab.address != nil ? true : nil }
         return tab
+    }
+
+    @Test("Manual fold is immediate and survives a new browser in either layout", arguments: [false, true])
+    func foldPersists(sidebar: Bool) async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = sidebar
+            browser.prefs.sideHides = false
+            browser.folded = false
+            browser.peeking = true
+            browser.toggleFold()
+            #expect(browser.folded)
+            #expect(!browser.peeking)
+            let restored = Browser()
+            defer { for tab in restored.tabs { tab.close() } }
+            #expect(restored.folded)
+            #expect(!restored.peeking)
+            // Peeking is temporary and never overwrites the saved fold.
+            browser.peek(true)
+            #expect(sidebar ? Preferences().sidebarFolded : Preferences().stripFolded)
+            for _ in 0..<20 { browser.toggleFold() }
+            #expect(browser.folded)
+            browser.toggleFold()
+            #expect(!browser.folded)
+            #expect(!(sidebar ? Preferences().sidebarFolded : Preferences().stripFolded))
+        }
+    }
+
+    @Test("Native sidebar animates its real frame, lands after rapid clicks and restores collapsed at launch")
+    func nativeFold() async throws {
+        try await withBrowser { browser in
+            browser.prefs.sidebar = true
+            browser.prefs.sideWidth = 260
+            browser.folded = false
+            let controller = NativeSidebar.Controller(browser: browser, prefs: browser.prefs)
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1000, height: 640),
+                styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            window.contentViewController = controller
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+            defer { window.orderOut(nil); window.contentViewController = nil }
+            controller.view.layoutSubtreeIfNeeded()
+            let side = controller.sidebarItem.viewController.view
+            #expect(abs(side.frame.width - 260) < 1)
+            #expect(TrafficLights.visible(in: window))
+            let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap(window.standardWindowButton)
+            let controls = try #require(buttons.first?.superview)
+            #expect(controls.isDescendant(of: side))
+            #expect(buttons.count == 3)
+            for button in buttons {
+                #expect(button.target as? NSWindow === window)
+                #expect(button.action.map { window.responds(to: $0) } == true)
+            }
+            try await Task.sleep(for: .milliseconds(200))
+            let bitmap = try #require(controls.bitmapImageRepForCachingDisplay(in: controls.bounds))
+            controls.cacheDisplay(in: controls.bounds, to: bitmap)
+            #expect(buttons.allSatisfy { !$0.isHiddenOrHasHiddenAncestor })
+            let scale = CGFloat(bitmap.pixelsWide) / controls.bounds.width
+            for button in buttons {
+                let top = controls.isFlipped ? button.frame.midY : controls.bounds.height - button.frame.midY
+                let drawn = try #require(bitmap.colorAt(x: Int(button.frame.midX * scale), y: Int(top * scale)))
+                #expect(drawn.alphaComponent > 0.2, "The active window control must draw visible pixels")
+            }
+
+            browser.toggleFold()
+            controller.update()
+            try await Task.sleep(for: .milliseconds(100))
+            let detail = controller.splitView.subviews.last!
+            let during = detail.layer?.presentation()?.frame.minX ?? detail.frame.minX
+            #expect(during > 0 && during < 260, "native animation must produce intermediate frames: \(during)")
+            try await Task.sleep(for: .milliseconds(500))
+            controller.view.layoutSubtreeIfNeeded()
+            #expect(controller.sidebarItem.isCollapsed)
+            #expect(!TrafficLights.visible(in: window))
+            #expect(abs(controller.splitView.subviews.last!.frame.minX) < 1)
+
+            for _ in 0..<5 {
+                browser.toggleFold()
+                controller.update()
+                try await Task.sleep(for: .milliseconds(35))
+            }
+            try await Task.sleep(for: .milliseconds(500))
+            controller.view.layoutSubtreeIfNeeded()
+            #expect(!controller.sidebarItem.isCollapsed)
+            #expect(abs(side.frame.width - 260) < 1)
+            #expect(TrafficLights.visible(in: window))
+            #expect(buttons.allSatisfy { !$0.isHiddenOrHasHiddenAncestor })
+
+            browser.prefs.sideWidth = 290
+            controller.update()
+            controller.view.layoutSubtreeIfNeeded()
+            #expect(abs(side.frame.width - 290) < 1)
+
+            browser.toggleFold()
+            controller.update()
+            let restored = NativeSidebar.Controller(browser: browser, prefs: browser.prefs)
+            #expect(restored.sidebarItem.isCollapsed)
+        }
     }
 
     // MARK: - Address

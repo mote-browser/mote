@@ -67,15 +67,13 @@ final class Browser: NSObject, ObservableObject {
 
     /// ⌘S collapses the sidebar; `peeking` slides it out over the page while
     /// collapsed (see SidebarFold.swift).
-    @Published var folded = false
+    var folded: Bool {
+        get { prefs.sidebar ? prefs.sidebarFolded : prefs.stripFolded }
+        set {
+            if prefs.sidebar { prefs.sidebarFolded = newValue } else { prefs.stripFolded = newValue }
+        }
+    }
     @Published var peeking = false
-    /// Fold and peek slides started, and the latest SwiftUI finished drawing
-    /// (see `slidingFold`).
-    var foldSlides = 0
-    var foldLanded = 0
-    /// Flipped to make the window draw again when a slide is stuck: the
-    /// window's ground goes a shade less opaque, over the same colour.
-    @Published var foldNudge = false
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?
@@ -255,7 +253,6 @@ final class Browser: NSObject, ObservableObject {
             announce("“Let a script drive Mote” was turned on outside Settings, and stays off")
         }
         welcoming = !prefs.welcomed
-        folded = prefs.sidebar && prefs.sideHides
         Updater.shared.checkIfDue { [weak self] news in self?.tell(news) }
         FormRelay.passkeysOffered = prefs.passkeys
 

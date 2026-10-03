@@ -38,9 +38,9 @@ extension Browser {
         editing && !field.switching && active?.isStart == false
     }
 
-    func layout(in window: CGSize) -> ChromeLayout {
+    func layout(in window: CGSize, nativeSidebar: Bool = false) -> ChromeLayout {
         ChromeLayout(
-            window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: prefs.sideWidth, folded: folded,
+            window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: nativeSidebar ? 0 : prefs.sideWidth, folded: folded,
             immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth,
             bookmarksHeight: ChromeLayout.bookmarks + (active?.isStart == true ? 12 : 0))
     }
@@ -51,22 +51,22 @@ struct Chrome: View {
     @ObservedObject var prefs: Preferences
 
     var body: some View {
-        GeometryReader { geo in
-            let layout = browser.layout(in: geo.size)
-            ZStack(alignment: .topLeading) {
-                // Kept in the tree while folded, just slid off the window: building the
-                // whole list again as it comes back would cost the first frames of the
-                // slide. It slides as one solid panel, beside the card.
-                if prefs.sidebar, browser.active?.immersed != true {
-                    let docked = layout.sidebar != nil
-                    Sidebar(browser: browser, prefs: prefs, showing: docked)
-                        .frame(width: prefs.sideWidth, height: geo.size.height)
-                        .offset(x: docked ? 0 : -prefs.sideWidth - ChromeLayout.gap)
-                        .allowsHitTesting(docked)
-                        .accessibilityHidden(!docked)
-                        .transition(.move(edge: .leading))
-                }
+        NativeSidebar(browser: browser, prefs: prefs)
+            .ignoresSafeArea()
+            .background(Palette.frame.opacity(0.35))
+            .background { WindowMaterial().ignoresSafeArea() }
+    }
+}
 
+/// The page and top tab strip, inside the native split's detail pane.
+struct ChromeDetail: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+
+    var body: some View {
+        GeometryReader { geo in
+            let layout = browser.layout(in: geo.size, nativeSidebar: true)
+            ZStack(alignment: .topLeading) {
                 // The chat about the page, the mirror of the sidebar: full window
                 // height on the trailing edge, outside the card, so the card gives
                 // up the width it takes and keeps its rounded corners. Like the
@@ -93,14 +93,6 @@ struct Chrome: View {
                     TabBar(browser: browser, sharedGround: true)
                         .frame(width: geo.size.width, height: ChromeLayout.strip)
                         .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // Over the card's edge, so the gap beside the page is what resizes the
-                // sidebar; no line is drawn for it.
-                if let side = layout.sidebar {
-                    ResizeGrip(prefs: prefs, edge: .leading) { browser.toggleFold() }
-                        .frame(width: ResizeGrip.width, height: side.height)
-                        .offset(x: side.maxX - ResizeGrip.width + ResizeGrip.over)
                 }
 
                 // The same handle mirrored on the panel's edge: dragging the gap
@@ -138,10 +130,9 @@ struct Chrome: View {
                 }
             }
             // One native material under the shared tab/card surface.
-            .background((layout.corner == 0 ? Color.black : Palette.frame.opacity(0.35)).opacity(browser.foldNudge ? 0.999 : 1))
+            .background(layout.corner == 0 ? Color.black : Color.clear)
         }
         .ignoresSafeArea()
-        .background { WindowMaterial().ignoresSafeArea() }
         .animation(Motion.glide, value: prefs.sidebar)
         .animation(Motion.fold, value: browser.chatting)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)

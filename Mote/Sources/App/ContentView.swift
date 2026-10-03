@@ -9,7 +9,6 @@ struct ContentView: View {
 
     @State private var window: NSWindow?
     @State private var keys = KeyRouter()
-    @State private var lights = LightStandIns()
 
     /// Runs a key through the window's shortcuts, for the bench.
     static var keyHook: ((NSEvent) -> NSEvent?)?
@@ -30,25 +29,16 @@ struct ContentView: View {
             .background(
                 WindowSetup {
                     window = $0
-                    WindowDressing.dress($0) { lights.place(in: $0) }
+                    WindowDressing.dress($0)
                     arrive()
                 }
             )
             .onChange(of: browser.welcoming) { _, on in if on { arrive() } }
-            .onChange(of: browser.prefs.sidebar) { _, sidebar in
-                TrafficLights.tabs = sidebar ? .sidebar : .strip
-                if let window { Task { @MainActor in lights.place(in: window) } }
-            }
-            // macOS draws background traffic lights almost white on a light
-            // window, so Mote draws its own while the app is in the background.
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-                if let window { lights.place(in: window) }
-                lights.show(true)
                 // This window's browser only, so other windows' videos stay put.
                 browser.appLeft()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                lights.show(false)
                 browser.appBack()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
@@ -64,7 +54,6 @@ struct ContentView: View {
             .animation(Motion.settle, value: browser.bookmarking)
             .animation(Motion.settle, value: browser.logins.managing)
             .onAppear {
-                TrafficLights.tabs = browser.prefs.sidebar ? .sidebar : .strip
                 keys.start(for: browser)
                 Self.keyHook = { [keys] in keys.route($0) }
                 browser.field.askFocus()

@@ -107,21 +107,3 @@ struct DragStrip: NSViewRepresentable {
         }
     }
 }
-
-/// Traffic lights drawn by Mote while the app is in the background: the
-/// system's are almost invisible on a light window then. Drawn where the
-/// real buttons are, in the title bar, above the window's content.
-final class RestingLights: NSView {
-    /// The buttons' frames; a redraw only when they change.
-    var spots: [CGRect] = [] {
-        didSet { if spots != oldValue { needsDisplay = true } }
-    }
-
-    override func draw(_ dirty: NSRect) {
-        Palette.NS.resting.setFill()
-        spots.forEach { NSBezierPath(ovalIn: $0).fill() }
-    }
-
-    /// Never hit: the real buttons under it take over once the app is active.
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-}
