@@ -86,7 +86,13 @@ struct SidebarFold: View {
             .frame(maxHeight: .infinity)
             .background(Palette.frame)
             .clipShape(shape)
-            .overlay(shape.strokeBorder(Palette.edge))
+            .overlay(shape.strokeBorder(Palette.ink.opacity(0.12)))
+            // Straddling the edge; the width it sets is the docked sidebar's too.
+            .overlay(alignment: .trailing) {
+                ResizeGrip(prefs: prefs) {}
+                    .frame(width: ResizeGrip.width)
+                    .offset(x: ResizeGrip.width / 2)
+            }
             .background {
                 shape.fill(Palette.frame)
                     .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
@@ -104,6 +110,11 @@ struct SidebarFold: View {
     /// never hears it enter, so never hears it leave.
     private func follow() {
         guard folding, let window = pointer.window, window.isVisible else { return timers.cancelShow() }
+        // A drag begun on the peeking tabs, such as resizing them, keeps them out.
+        if browser.peeking, NSEvent.pressedMouseButtons & 1 != 0 {
+            timers.cancelShow()
+            return show()
+        }
         let screen = NSEvent.mouseLocation
         let point = window.convertPoint(fromScreen: screen)
         let size = window.frame.size
@@ -118,8 +129,9 @@ struct SidebarFold: View {
         let pointer = EdgeReveal.Pointer(
             inWindow: inWindow, onWindow: onWindow, onOwnPanel: near && !onWindow && NSApp.windows.contains { $0.windowNumber == top },
             distance: distance)
-        // The floating sidebar sits in by the card's gap; the strip doesn't.
-        let reach = prefs.sidebar ? prefs.sideWidth + ChromeLayout.gap : ChromeLayout.strip
+        // The floating sidebar sits in by the card's gap, its resize grip just
+        // past its edge; the strip has neither.
+        let reach = prefs.sidebar ? prefs.sideWidth + ChromeLayout.gap + ResizeGrip.width : ChromeLayout.strip
         // The strip always waits, as its edge is crossed on the way to the menu
         // bar; so does a sidebar that hides by itself.
         let waits = !prefs.sidebar || prefs.sideHides

@@ -142,6 +142,13 @@ final class PageView: WKWebView {
         super.mouseDown(with: event)
     }
 
+    /// Tracking areas ignore what lies on top: under the peeking tabs the
+    /// page would still hover.
+    override func mouseMoved(with event: NSEvent) {
+        if Browser.front?.peeking == true { return }
+        super.mouseMoved(with: event)
+    }
+
     /// Side buttons, numbered as most mouse drivers do: 3 back, 4 forward.
     override func otherMouseDown(with event: NSEvent) {
         switch event.buttonNumber {

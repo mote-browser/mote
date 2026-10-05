@@ -83,9 +83,12 @@ struct ChromeDetail: View {
                         .transition(.move(edge: .trailing))
                 }
 
+                // The peeking tabs float over it from another hosting view, so
+                // hovers would reach through them.
                 PageCard(browser: browser, prefs: prefs, layout: layout)
                     .frame(width: layout.card.width, height: layout.card.height)
                     .offset(x: layout.card.minX, y: layout.card.minY)
+                    .allowsHitTesting(!browser.peeking)
 
                 // Over the card, so the active tab covers the card's top edge and the
                 // two read as one surface.
