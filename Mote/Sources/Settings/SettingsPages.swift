@@ -322,7 +322,8 @@ struct AboutSettings: View {
                 SettingRow(updateTitle, updateDetail, symbol: "arrow.triangle.2.circlepath", tint: Tint.blue) { updateControl }
                 RowRule()
                 SettingRow(
-                    "Install on their own", "Off, Mote still checks every day and waits for you", symbol: "square.and.arrow.down.on.square",
+                    "Install on their own", "Off, Mote still checks at launch and daily, and waits for you",
+                    symbol: "square.and.arrow.down.on.square",
                     tint: Tint.green, on: $prefs.installsUpdates)
             } else {
                 SettingRow(
@@ -358,7 +359,7 @@ struct AboutSettings: View {
 
     private var updateTitle: String {
         switch updater.stage {
-        case .none: "Up to date"
+        case .none: updater.checkFailed ? "Couldn't check for updates" : "Up to date"
         case .fetching(let next): "Getting Mote \(next.version)…"
         case .ready(let next): "Mote \(next.version) is ready"
         case .offered(let next), .waiting(let next): "Mote \(next.version) is out"
@@ -366,9 +367,11 @@ struct AboutSettings: View {
     }
 
     private var updateDetail: String {
-        switch updater.stage {
+        if updater.checkFailed { return "Couldn't reach the update feed. Retrying in five minutes; you can also look now." }
+        return switch updater.stage {
         case .none:
-            updater.lastChecked.map { "Looked \($0.formatted(.relative(presentation: .named))); looks again daily" } ?? "Looks once a day"
+            updater.lastChecked.map { "Looked \($0.formatted(.relative(presentation: .named))); checks at launch and daily" }
+                ?? "Checks at launch and daily"
         case .fetching(let next): next.notes ?? "In the background. Your settings and data stay put"
         case .ready(let next): next.notes ?? "It takes over next time Mote opens"
         case .offered(let next): next.notes ?? "Install it from the disk image, as the first time"
@@ -380,7 +383,13 @@ struct AboutSettings: View {
         switch updater.stage {
         case .none:
             Pill(updater.checking ? "Looking…" : "Look Now") {
-                updater.check { if $0 == nil { browser.announce("You have the latest version") } }
+                updater.check { result in
+                    switch result {
+                    case .success(nil): browser.announce("You have the latest version")
+                    case .success: break
+                    case .failure: browser.announce("Couldn't check for updates. Try again when you're online.")
+                    }
+                }
             }
             .disabled(updater.checking)
         case .fetching: Ring(size: 12)
