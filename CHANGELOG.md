@@ -10,6 +10,30 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.5 — 2026-10-05
+
+Updates are found at launch and announced first, and the folded sidebar can be resized while it peeks.
+
+### Added
+
+- The folded sidebar can be resized while it peeks out, from a grip on its
+  edge. The width carries over to the docked sidebar, and the sidebar stays
+  out while the grip is dragged or the pointer rests just past its edge.
+
+### Changed
+
+- Mote checks for updates at every launch as well as daily. A newer version is
+  announced as soon as it is found, before it installs on its own.
+- The floating sidebar has a clearer outline against the page.
+
+### Fixed
+
+- Pages and the new tab page no longer react to the pointer through the
+  peeking sidebar: bookmarks and links behind it stop highlighting.
+- A failed update check says so in Settings instead of showing "Up to date",
+  and tries again after five minutes. Checking by hand while offline says it
+  couldn't check.
+
 ## 0.4.4 — 2026-10-03
 
 Window controls stay hidden from the first frame when reopening with folded tabs.
