@@ -18,6 +18,7 @@ final class Updater: ObservableObject {
 
     @Published private(set) var stage: Stage = .none
     @Published private(set) var checking = false
+    @Published private(set) var checkFailed = false
     /// Shown in Settings.
     @Published private(set) var lastChecked: Date?
 
@@ -44,11 +45,15 @@ final class Updater: ObservableObject {
 
     nonisolated static let installKey = "update.install"
     private static let checkedKey = "update.checked"
-    private var installsOnItsOwn: Bool { Storage.settings.object(forKey: Self.installKey) as? Bool ?? true }
+    private var installsOnItsOwn: Bool { settings.object(forKey: Self.installKey) as? Bool ?? true }
+    private let settings: UserDefaults
+    private let enabled: Bool
+    private let fetch: () async throws -> AppRelease
+    private let installer: @Sendable (AppRelease) async throws -> Void
 
     /// What the window hears about.
     enum News {
-        /// Out, waiting to be installed from Settings.
+        /// A newer release was detected, before any automatic installation.
         case out(AppRelease)
         /// Installed; it takes over when Mote next opens.
         case ready(AppRelease)
@@ -59,49 +64,77 @@ final class Updater: ObservableObject {
     /// Tells the window what happened.
     private var say: ((News) -> Void)?
     private var clock: Timer?
+    private var failedAt: Date?
+    private var announcedBuild: Int?
 
-    private init() {
+    init(
+        settings: UserDefaults = Storage.settings, enabled: Bool = Updater.enabled,
+        latest: @escaping () async throws -> AppRelease = Updater.latest,
+        installer: @escaping @Sendable (AppRelease) async throws -> Void = UpdateInstaller.install
+    ) {
+        self.settings = settings
+        self.enabled = enabled
+        self.fetch = latest
+        self.installer = installer
+        lastChecked = settings.object(forKey: Self.checkedKey) as? Date
         // The previous bundle goes at quit (see UpdateInstaller.sweep).
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { UpdateInstaller.sweep() }
         }
     }
 
-    /// At launch, then every hour: checks when one is due.
+    /// Always checks at launch, then hourly when due; failures retry in five minutes.
     func checkIfDue(then say: @escaping (News) -> Void) {
         self.say = say
         UpdateInstaller.sweep()
-        guard Self.enabled else { return }
+        guard enabled else { return }
         if clock == nil {
             clock = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.checkIfDue() }
             }
             clock?.tolerance = 5 * 60
+            check { _ in }
+        } else {
+            checkIfDue()
         }
-        checkIfDue()
     }
 
     private func checkIfDue() {
-        let last = Storage.settings.object(forKey: Self.checkedKey) as? Date
-        if UpdatePlan.due(last: last, now: Date(), always: Self.testFeed) { check { _ in } }
+        let last = settings.object(forKey: Self.checkedKey) as? Date
+        if UpdatePlan.due(last: last, now: Date(), always: Self.testFeed, failed: failedAt) { check { _ in } }
     }
 
-    /// Checks now. `done` hears the newer release, or nil.
-    func check(then done: @escaping (AppRelease?) -> Void) {
-        guard Self.enabled, !checking else { return done(nil) }
+    /// Checks now. A successful result contains the newer release, or nil.
+    func check(then done: @escaping (Result<AppRelease?, Error>) -> Void) {
+        guard enabled, !checking else { return done(.failure(URLError(.cancelled))) }
         checking = true
         Task {
-            let found = UpdatePlan.newer(await Self.latest(), than: Self.build, system: ProcessInfo.processInfo.operatingSystemVersion)
-            checking = false
-            lastChecked = Date()
-            Storage.settings.set(Date(), forKey: Self.checkedKey)
-            done(found)
-            let (next, step) = UpdatePlan.next(after: found, in: stage, installsOnItsOwn: installsOnItsOwn)
-            stage = next
-            switch step {
-            case .nothing: break
-            case .install(let release): install(release)
-            case .wait(let release): say?(.out(release))
+            do {
+                let found = UpdatePlan.newer(try await fetch(), than: Self.build, system: ProcessInfo.processInfo.operatingSystemVersion)
+                checking = false
+                checkFailed = false
+                failedAt = nil
+                let now = Date()
+                lastChecked = now
+                settings.set(now, forKey: Self.checkedKey)
+                clock?.fireDate = now.addingTimeInterval(60 * 60)
+                clock?.tolerance = 5 * 60
+                if let found, announcedBuild != found.build {
+                    announcedBuild = found.build
+                    say?(.out(found))
+                }
+                let (next, step) = UpdatePlan.next(after: found, in: stage, installsOnItsOwn: installsOnItsOwn)
+                stage = next
+                if case .install(let release) = step { install(release) }
+                done(.success(found))
+            } catch {
+                checking = false
+                checkFailed = true
+                let now = Date()
+                failedAt = now
+                clock?.fireDate = now.addingTimeInterval(5 * 60)
+                clock?.tolerance = 30
+                done(.failure(error))
             }
         }
     }
@@ -114,8 +147,9 @@ final class Updater: ObservableObject {
     private func install(_ release: AppRelease) {
         guard UpdatePlan.canInstall(in: stage) else { return }
         stage = .fetching(release)
+        let installer = installer
         Task {
-            let worked = await Task.detached(priority: .utility) { (try? await UpdateInstaller.install(release)) != nil }.value
+            let worked = await Task.detached(priority: .utility) { (try? await installer(release)) != nil }.value
             guard let landed = UpdatePlan.landed(release, worked: worked, in: stage) else { return }
             stage = landed
             say?(worked ? .ready(release) : .manual(release))
@@ -143,13 +177,15 @@ final class Updater: ObservableObject {
         return ["/usr/bin/open"] + passed + [Bundle.main.bundleURL.path]
     }
 
-    private static func latest() async -> AppRelease? {
-        guard let feed else { return nil }
+    private static func latest() async throws -> AppRelease {
+        guard let feed else { throw URLError(.badURL) }
         let request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 12)
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-            (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true
-        else { return nil }
-        return AppRelease(appcast: data, feed: feed, allowsHTTP: testFeed)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true
+        else { throw URLError(.badServerResponse) }
+        guard let release = AppRelease(appcast: data, feed: feed, allowsHTTP: testFeed)
+        else { throw URLError(.cannotParseResponse) }
+        return release
     }
 }
 

@@ -881,7 +881,7 @@ final class Browser: NSObject, ObservableObject {
         case .out(let release):
             announce(
                 Announcement(
-                    "Mote \(release.version) is here", detail: release.notes ?? "Install it whenever suits you.", symbol: "sparkles",
+                    "Mote \(release.version) is here", detail: release.notes ?? "See its status in Settings.", symbol: "sparkles",
                     action: settings))
         case .ready(let release):
             announce(

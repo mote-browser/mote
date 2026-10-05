@@ -22,6 +22,16 @@ struct UpdatePlanTests {
         #expect(UpdatePlan.due(last: now, now: now, always: true))
     }
 
+    @Test("A failed check retries after five minutes, even after a recent successful check")
+    func retry() {
+        let now = Date()
+        let last = now.addingTimeInterval(-3600)
+        #expect(!UpdatePlan.due(last: last, now: now, always: false, failed: now))
+        #expect(!UpdatePlan.due(last: nil, now: now, always: false, failed: now.addingTimeInterval(-299)))
+        #expect(UpdatePlan.due(last: last, now: now, always: false, failed: now.addingTimeInterval(-300)))
+        #expect(UpdatePlan.due(last: last, now: now, always: true, failed: now))
+    }
+
     @Test("Only a higher build that runs on this system counts")
     func newer() {
         #expect(UpdatePlan.newer(release(5), than: 4, system: macOS26) == release(5))

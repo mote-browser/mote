@@ -24,10 +24,11 @@ public enum UpdatePlan {
         case wait(AppRelease)
     }
 
-    /// Checks happen when 20 hours have passed since the last (always, when a
-    /// test feed is set).
-    public static func due(last: Date?, now: Date, always: Bool) -> Bool {
-        always || now.timeIntervalSince(last ?? .distantPast) > 20 * 60 * 60
+    /// Check at launch, after 20 hours since success, or five minutes after failure.
+    public static func due(last: Date?, now: Date, always: Bool, failed: Date? = nil) -> Bool {
+        if always { return true }
+        if let failed { return now.timeIntervalSince(failed) >= 5 * 60 }
+        return now.timeIntervalSince(last ?? .distantPast) > 20 * 60 * 60
     }
 
     /// Whether a release from the feed is worth anything to this app.
