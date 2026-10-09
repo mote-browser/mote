@@ -10,6 +10,18 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.6 — 2026-10-09
+
+Pages whose header sits in the normal flow now colour the window from their theme colour.
+
+### Fixed
+
+- Pages that declare a theme colour but have no fixed header, such as web
+  apps whose content scrolls under a static top bar, colour the tabs and
+  toolbar from it instead of falling back to the page's white background.
+- The line between the toolbar and the page takes on the page's colour
+  instead of staying a flat gray.
+
 ## 0.4.5 — 2026-10-05
 
 Updates are found at launch and announced first, and the folded sidebar can be resized while it peeks.
