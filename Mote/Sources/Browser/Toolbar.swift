@@ -25,7 +25,8 @@ struct Toolbar: View {
         var body: some View {
             ZStack(alignment: .bottom) {
                 Rectangle()
-                    .fill(Palette.hairline)
+                    // See-through, so it tints with the page's color.
+                    .fill(Palette.edge)
                     .frame(height: 1)
                 LoadLine(tab: tab)
             }

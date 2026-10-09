@@ -251,6 +251,13 @@ struct ChromeTests {
                 _ = try await eventually { tab.pageColor?.matches(header) == true ? true : nil }
                 _ = try await tab.web.evaluateJavaScript("document.querySelector('header').style.background = 'rgb(240,230,220)'")
                 _ = try await eventually { tab.pageColor?.matches(changed) == true ? true : nil }
+                // A header in the flow isn't sampled; its theme-color beats the body.
+                _ = try await tab.web.evaluateJavaScript(
+                    """
+                    document.body.innerHTML = '<main></main>';
+                    document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#1e3c5a">')
+                    """)
+                _ = try await eventually { tab.pageColor?.matches(header) == true ? true : nil }
             }
             browser.newTab()
             #expect(browser.chromeColor == nil)

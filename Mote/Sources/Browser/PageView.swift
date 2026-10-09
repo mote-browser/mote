@@ -34,7 +34,9 @@ final class PageView: WKWebView {
             typealias Setter = @convention(c) (AnyObject, Selector, CGFloat) -> Void
             unsafeBitCast(method(for: overflow), to: Setter.self)(self, overflow, 1)
         }
-        colorKeys = ["_sampledTopFixedPositionContentColor", "underPageBackgroundColor"]
+        // A header in the normal flow is never sampled, so a declared
+        // theme-color comes before the body's background.
+        colorKeys = ["_sampledTopFixedPositionContentColor", "themeColor", "underPageBackgroundColor"]
             .filter { responds(to: NSSelectorFromString($0)) }
         for key in colorKeys { addObserver(self, forKeyPath: key, options: [], context: nil) }
         reportColor()
